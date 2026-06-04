@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Splash Animation Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: sans-serif;
+  }
+  .stage {
+    width: 400px;
+    height: 400px;
+    background: #fff;
+    border-radius: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .logo-container {
+    width: 300px;
+    height: 190px;
+    position: relative;
+  }
+  .shape {
+    position: absolute;
+    background: #000;
+  }
+  .top-left {
+    width: 85px;
+    height: 75px;
+    top: 7.5px;
+    left: 32.6px;
+    transform: skewX(28deg);
+  }
+  .top-right {
+    width: 85px;
+    height: 75px;
+    top: 7.5px;
+    right: 32.6px;
+    transform: skewX(-28deg);
+  }
+  .bottom-left {
+    width: 59px;
+    height: 52px;
+    bottom: 25px;
+    left: 93px;
+    transform: skewX(28deg);
+  }
+  .bottom-right {
+    width: 59px;
+    height: 52px;
+    bottom: 25px;
+    right: 233.8px;
+    transform: skewX(28deg);
+  }
+  .center-dot {
+    position: absolute;
+    left: 137px;
+    top: 82px;
+    width: 25px;
+    height: 25px;
+    background: #000;
+  }
+  .replay-btn {
+    margin-top: 20px;
+    padding: 12px 32px;
+    background: #fff;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .replay-btn:hover { background: #eee; }
+  .wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="stage" id="stage">
+    <div class="logo-container">
+      <div class="shape top-left" id="tl"></div>
+      <div class="shape top-right" id="tr"></div>
+      <div class="shape bottom-left" id="bl"></div>
+      <div class="shape bottom-right" id="br"></div>
+      <div class="center-dot"></div>
+    </div>
+  </div>
+  <button class="replay-btn" onclick="replay()">重播动画</button>
+</div>
+
+<script>
+function animate() {
+  const tl = document.getElementById('tl');
+  const tr = document.getElementById('tr');
+  const bl = document.getElementById('bl');
+  const br = document.getElementById('br');
+
+  [tl, tr, bl, br].forEach(el => {
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    el.style.transform = el.classList.contains('top-left') ? 'skewX(28deg) translate(-200px, -200px) scale(0.5)' :
+                          el.classList.contains('top-right') ? 'skewX(-28deg) translate(200px, -200px) scale(0.5)' :
+                          el.classList.contains('bottom-left') ? 'skewX(-28deg) translate(-200px, 200px) scale(0.5)' :
+                          'skewX(28deg) translate(200px, 200px) scale(0.5)';
+  });
+
+  requestAnimationFrame(() => {
+    [tl, tr, bl, br].forEach(el => {
+      el.style.transition = 'all 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      el.style.opacity = '1';
+      el.style.transform = el.classList.contains('top-left') ? 'skewX(28deg) translate(0,0) scale(1)' :
+                            el.classList.contains('top-right') ? 'skewX(-28deg) translate(0,0) scale(1)' :
+                            el.classList.contains('bottom-left') ? 'skewX(-28deg) translate(0,0) scale(1)' :
+                            'skewX(28deg) translate(0,0) scale(1)';
+    });
+  });
+
+  setTimeout(() => {
+    tl.style.transition = 'opacity 0.5s';
+    tr.style.transition = 'opacity 0.5s';
+    bl.style.transition = 'opacity 0.5s';
+    br.style.transition = 'opacity 0.5s';
+    tl.style.opacity = '0';
+    tr.style.opacity = '0';
+    bl.style.opacity = '0';
+    br.style.opacity = '0';
+  }, 2500);
+}
+
+function replay() {
+  animate();
+}
+
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logo 静态预览</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #ffffff;
+    }
+    .logo-container {
+      position: relative;
+      width: 300px;
+      height: 190px;
+    }
+    .shape {
+      position: absolute;
+      background: #000000;
+    }
+    .top-left {
+      width: 85px;
+      height: 75px;
+      left: 32.6px;
+      top: 7.5px;
+      transform: skewX(28deg);
+      transform-origin: center center;
+    }
+    .top-right {
+      width: 85px;
+      height: 75px;
+      right: 32.6px;
+      top: 7.5px;
+      transform: skewX(-28deg);
+      transform-origin: center center;
+    }
+    .bottom-left {
+      width: 59px;
+      height: 52px;
+      left: 93px;
+      bottom: 25px;
+      transform: skewX(28deg);
+      transform-origin: center center;
+    }
+    .bottom-right {
+      width: 59px;
+      height: 52px;
+      right: 233.8px;\n      /* left: 约7.2px */
+      bottom: 25px;
+      transform: skewX(-28deg);
+      transform-origin: center center;
+    }
+    .center-dot {
+      width: 25px;
+      height: 25px;
+      background: #000000;
+      position: absolute;
+      left: 137.5px;
+      top: 82.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo-container">
+    <div class="shape top-left"></div>
+    <div class="shape top-right"></div>
+    <div class="shape bottom-left"></div>
+    <div class="shape bottom-right"></div>
+    <div class="center-dot"></div>
+  </div>
+</body>
+</html>

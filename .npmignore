@@ -1,0 +1,35 @@
+# Documentation
+**/*.md
+!**/package.json
+
+# Source files (not needed in production)
+**/*.ts
+**/*.tsx
+!*.config.js
+!*.config.ts
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# Git
+.git
+
+# Logs
+**/logs
+**/*.log
+
+# Tests
+**/__tests__
+**/test
+**/tests
+
+# CI
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# heroui docs
+client/heroui/**/*.md
+!client/heroui/package.json

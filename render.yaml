@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: word-voyage-api
+    runtime: node
+    plan: free
+    buildCommand: cd server && pnpm install && pnpm run build
+    startCommand: cd server && pnpm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: COZE_SUPABASE_URL
+        sync: false
+      - key: COZE_SUPABASE_ANON_KEY
+        sync: false
+      - key: COZE_SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ALIBABA_CLOUD_ACCESS_KEY_ID
+        sync: false
+      - key: ALIBABA_CLOUD_ACCESS_KEY_SECRET
+        sync: false
+      - key: ALIBABA_CLOUD_SMS_SIGN_NAME
+        sync: false
+      - key: ALIBABA_CLOUD_SMS_TEMPLATE_CODE
+        sync: false
