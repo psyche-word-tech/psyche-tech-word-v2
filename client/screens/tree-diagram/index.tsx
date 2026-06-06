@@ -243,7 +243,7 @@ export default function TreeDiagramPage() {
 
   const handleSubPress = (sub: SubNode) => {
     if (sub.id === '1-1') {
-      router.push('/subcategory-words', { table: '111', title: '头~颈' });
+      router.push('/mindmap-word-list', { title: '头~颈' });
     } else {
       router.push('/word-preview', { category: sub.label, subCategoryId: sub.id });
     }
