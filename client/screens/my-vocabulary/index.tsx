@@ -223,9 +223,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    marginTop: 200,
+    marginTop: 20,
     alignSelf: 'center',
     marginLeft: 60,
+    zIndex: 10,
   },
   oldSchoolText: {
     fontSize: 12,
