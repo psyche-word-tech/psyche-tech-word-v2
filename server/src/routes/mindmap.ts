@@ -8,7 +8,7 @@ router.get('/', async (req, res) => {
   try {
     const client = getSupabaseClient(); // 使用 service role key 直接连接数据库
     const { data, error } = await client
-      .from('mindmap_vocab')
+      .from('mindmap_111')
       .select('*')
       .order('id');
 
@@ -30,7 +30,7 @@ router.get('/categories', async (req, res) => {
   try {
     const client = getSupabaseClient();
     const { data, error } = await client
-      .from('mindmap_vocab')
+      .from('mindmap_111')
       .select('category')
       .order('category');
 
