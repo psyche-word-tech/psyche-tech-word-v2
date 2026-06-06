@@ -13,6 +13,7 @@ import exampleImagesRouter from "./routes/example-images";
 import grammarCheckRouter from "./routes/grammar-check";
 import speechEvalRouter from "./routes/speech-eval";
 import ttsRouter from "./routes/tts";
+import mindmapRouter from "./routes/mindmap";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -132,6 +133,7 @@ app.use('/api/v1/example-images', exampleImagesRouter);
 app.use('/api/v1/grammar-check', grammarCheckRouter);
 app.use('/api/v1/speech-eval', speechEvalRouter);
 app.use('/api/v1/tts', ttsRouter);
+app.use('/api/v1/mindmap', mindmapRouter);
 
 // 全局未捕获异常处理 - 防止进程崩溃退出
 process.on('uncaughtException', (err) => {
