@@ -272,6 +272,18 @@ import { Screen } from '../../../components/Screen';
 - 技术项目目录：`/workspace/projects/client`
 - 预览脚本：`scripts/coze-preview-run.sh`
 - 预览端口：`5000`（IPv4 全接口 `0.0.0.0:5000`）
+- 后端端口：`9091`
+
+### 服务启动命令
+**重要**：每次重新打开沙箱/电脑后，需要先启动服务：
+
+```bash
+# 方式一：一键启动（推荐）
+bash start.sh
+
+# 方式二：前台运行预览
+bash scripts/coze-preview-run.sh
+```
 
 ### 预览入口
 ```bash
@@ -289,6 +301,7 @@ cd client && npx expo export --platform web
 ```
 
 ### 注意事项
+- **服务重启问题**：沙箱重启后，后端服务（9091）不会自动启动，必须手动运行 `bash start.sh`
 - 后端服务运行在 `9091` 端口，不影响前端预览
 - 前端预览使用预导出的静态文件，无需启动 Metro bundler
 
