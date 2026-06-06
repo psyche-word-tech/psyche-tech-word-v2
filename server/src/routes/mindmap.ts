@@ -12,7 +12,7 @@ async function querySQL(sql: string): Promise<any[]> {
   if (error || !data) {
     // 降级方案：使用 REST API 直接查询
     const response = await fetch(
-      `${process.env.COZE_SUPABASE_URL}/rest/v1/mindmap_111?select=*&order=id.asc`,
+      `${process.env.COZE_SUPABASE_URL}/rest/v1/mindmap?select=*&order=id.asc`,
       {
         headers: {
           'apikey': process.env.COZE_SUPABASE_SERVICE_ROLE_KEY || '',
@@ -28,12 +28,12 @@ async function querySQL(sql: string): Promise<any[]> {
   return data;
 }
 
-// GET /api/v1/mindmap_111 - 获取所有思维导图词汇
+// GET /api/v1/mindmap - 获取所有思维导图词汇
 router.get('/', async (req, res) => {
   try {
     // 使用 Supabase REST API 直接查询，绕过 schema cache
     const response = await fetch(
-      `${process.env.COZE_SUPABASE_URL || 'https://hmkkynldaiypuhhlpjxd.supabase.co'}/rest/v1/mindmap_111?select=*&order=id.asc`,
+      `${process.env.COZE_SUPABASE_URL || 'https://hmkkynldaiypuhhlpjxd.supabase.co'}/rest/v1/mindmap?select=*&order=id.asc`,
       {
         headers: {
           'apikey': process.env.COZE_SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhta2t5bmxkYWl5cHVoaGxwanhkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzAyNTQxMywiZXhwIjoyMDkyNjAxNDEzfQ.lDYVf0H2OK_Z7nmDYybHC93DtDroD5m8eRJpE25776o',
@@ -53,17 +53,17 @@ router.get('/', async (req, res) => {
     const data = await response.json();
     res.json({ data });
   } catch (err) {
-    console.error('Error fetching mindmap_111:', err);
+    console.error('Error fetching mindmap:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /api/v1/mindmap_111/categories - 获取所有分类
+// GET /api/v1/mindmap/categories - 获取所有分类
 router.get('/categories', async (req, res) => {
   try {
     // 使用 Supabase REST API 直接查询
     const response = await fetch(
-      `${process.env.COZE_SUPABASE_URL || 'https://hmkkynldaiypuhhlpjxd.supabase.co'}/rest/v1/mindmap_111?select=category&order=category.asc`,
+      `${process.env.COZE_SUPABASE_URL || 'https://hmkkynldaiypuhhlpjxd.supabase.co'}/rest/v1/mindmap?select=category&order=category.asc`,
       {
         headers: {
           'apikey': process.env.COZE_SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhta2t5bmxkYWl5cHVoaGxwanhkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzAyNTQxMywiZXhwIjoyMDkyNjAxNDEzfQ.lDYVf0H2OK_Z7nmDYybHC93DtDroD5m8eRJpE25776o',
@@ -88,13 +88,13 @@ router.get('/categories', async (req, res) => {
   }
 });
 
-// GET /api/v1/mindmap_111/:category - 按分类获取词汇
+// GET /api/v1/mindmap/:category - 按分类获取词汇
 router.get('/:category', async (req, res) => {
   try {
     const { category } = req.params;
     const client = getSupabaseClient();
     const { data, error } = await client
-      .from('mindmap_111_words')
+      .from('mindmap_words')
       .select('*')
       .eq('category', category)
       .order('id');
@@ -106,7 +106,7 @@ router.get('/:category', async (req, res) => {
 
     res.json({ data });
   } catch (err) {
-    console.error('Error fetching mindmap_111 by category:', err);
+    console.error('Error fetching mindmap by category:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
