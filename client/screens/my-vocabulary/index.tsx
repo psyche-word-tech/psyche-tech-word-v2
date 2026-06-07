@@ -136,14 +136,14 @@ export default function MyVocabularyPage() {
             </View>
           ) : boughtBooks.length > 0 ? (
             boughtBooks.map((book: WordBook, index: number) => (
-              <View key={book.id} style={[styles.bookItem]}>
+              <View key={book.id} style={[styles.bookItem, index === 1 && { marginLeft: -60 }, index === 2 && { marginLeft: -60 }]}>
                 <View style={styles.tagContainer}>
                   {book.name.split('').map((char, i) => (
                     <Text key={i} style={styles.tagText}>{char}</Text>
                   ))}
                 </View>
                 
-                <TouchableOpacity style={[styles.learnButton, index === 0 && styles.firstLearnButton]} onPress={() => handleLearnPress(book)}>
+                <TouchableOpacity style={styles.learnButton} onPress={() => handleLearnPress(book)}>
                   <View style={styles.learnTextContainer}>
                     <Text style={styles.learnText}>开</Text>
                     <Text style={styles.learnText}>始</Text>
@@ -223,10 +223,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    marginTop: 20,
+    marginTop: 200,
     alignSelf: 'center',
     marginLeft: 60,
-    zIndex: 10,
   },
   oldSchoolText: {
     fontSize: 12,
@@ -267,11 +266,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     minWidth: 40,
-    zIndex: 1,
-  },
-  firstLearnButton: {
-    zIndex: 100,
-    elevation: 100,
   },
   learnTextContainer: {
     alignItems: 'center',
