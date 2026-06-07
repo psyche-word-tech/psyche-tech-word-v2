@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd client && npx expo export --platform web",
-  "outputDirectory": "client/web-static",
-  "installCommand": "pnpm install",
+  "buildCommand": "npx expo export --platform web",
+  "outputDirectory": "web-static",
+  "installCommand": "cd client && pnpm install",
   "framework": null,
   "rewrites": [
     {
