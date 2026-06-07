@@ -1,7 +1,4 @@
 {
   "buildCommand": "cd client && npx expo export --platform web",
-  "outputDirectory": "client/dist",
-  "installCommand": "cd client && npm install",
-  "framework": null,
-  "nodeVersion": "20"
+  "outputDirectory": "client/dist"
 }
