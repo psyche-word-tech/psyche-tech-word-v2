@@ -1,0 +1,12 @@
+{
+  "buildCommand": "cd client && npx expo export --platform web",
+  "outputDirectory": "client/web-static",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://word-voyage-api-production.up.railway.app/api/:path*"
+    }
+  ]
+}
