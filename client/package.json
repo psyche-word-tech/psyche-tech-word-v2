@@ -6,7 +6,7 @@
   "proxy": "http://localhost:9091",
   "scripts": {
     "check-deps": "npx depcheck",
-    "postinstall": "npm run install-missing",
+    "postinstall": "echo 'Skipping postinstall in CI'",
     "install-missing": "node ./scripts/install-missing-deps.js",
     "lint": "tsc --noEmit; eslint ./ -f ./scripts/formatter.mjs --quiet",
     "start": "expo start --web --clear",
