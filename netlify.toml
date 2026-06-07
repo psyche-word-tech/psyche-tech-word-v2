@@ -1,0 +1,21 @@
+[build]
+  command = "cd client && npx expo export --platform web"
+  publish = "client/web-static"
+
+[build.environment]
+  NODE_VERSION = "20"
+  EXPO_PUBLIC_BACKEND_BASE_URL = "https://YOUR_RAILWAY_URL.up.railway.app"
+
+# API 代理到后端
+[[redirects]]
+  from = "/api/*"
+  to = "https://YOUR_RAILWAY_URL.up.railway.app/api/:splat"
+  status = 200
+  force = true
+  headers = {Cache-Control = "no-cache"}
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
