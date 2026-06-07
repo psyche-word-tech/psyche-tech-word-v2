@@ -1,6 +1,7 @@
 {
   "buildCommand": "cd client && npx expo export --platform web",
   "outputDirectory": "client/web-static",
+  "installCommand": "",
   "framework": "other",
   "rewrites": [
     {
