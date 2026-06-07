@@ -6,10 +6,13 @@ const router = express.Router();
 // 直接执行 SQL 查询，绕过 PostgREST schema cache
 async function querySQL(sql: string): Promise<any[]> {
   const client = getSupabaseClient();
-  // 使用 rpc 调用自定义函数来执行 SQL（如果支持）
-  // 或者直接使用 supabase 客户端查询已存在的表
-  const { data, error } = await client.rpc('exec', { sql_query: sql }).catch(() => null);
-  if (error || !data) {
+  try {
+    const { data, error } = await client.rpc('exec', { sql_query: sql });
+    if (error || !data) {
+      throw error;
+    }
+    return data as any[];
+  } catch {
     // 降级方案：使用 REST API 直接查询
     const response = await fetch(
       `${process.env.COZE_SUPABASE_URL}/rest/v1/mindmap?select=*&order=id.asc`,
@@ -21,11 +24,10 @@ async function querySQL(sql: string): Promise<any[]> {
       }
     );
     if (response.ok) {
-      return await response.json();
+      return await response.json() as any[];
     }
     return [];
   }
-  return data;
 }
 
 // GET /api/v1/mindmap - 获取所有思维导图词汇
@@ -78,9 +80,9 @@ router.get('/categories', async (req, res) => {
       return;
     }
     
-    const data = await response.json();
+    const data = (await response.json()) as any[];
     // 去重
-    const categories = [...new Set(data?.map((item: any) => item.category) || [])];
+    const categories = [...new Set((data || []).map((item: any) => item.category))];
     res.json({ data: categories });
   } catch (err) {
     console.error('Error fetching categories:', err);
