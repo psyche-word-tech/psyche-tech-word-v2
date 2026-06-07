@@ -1,6 +1,6 @@
 [build]
-  command = "cd client && npx expo export --platform web"
-  publish = "client/web-static"
+  command = "npx expo export --platform web"
+  publish = "web-static"
 
 [build.environment]
   NODE_VERSION = "20"
