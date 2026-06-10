@@ -136,7 +136,7 @@ export default function MyVocabularyPage() {
             </View>
           ) : boughtBooks.length > 0 ? (
             boughtBooks.map((book: WordBook, index: number) => (
-              <View key={book.id} style={[styles.bookItem, index === 1 && { marginLeft: -60 }, index === 2 && { marginLeft: -60 }]}>
+              <View key={book.id} style={styles.bookItem}>
                 <View style={styles.tagContainer}>
                   {book.name.split('').map((char, i) => (
                     <Text key={i} style={styles.tagText}>{char}</Text>
@@ -225,7 +225,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginTop: 200,
     alignSelf: 'center',
-    marginLeft: 60,
   },
   oldSchoolText: {
     fontSize: 12,
