@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Alert, Pressable } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { useApiConfig } from '@/contexts/ApiConfigContext';
@@ -143,14 +143,14 @@ export default function MyVocabularyPage() {
                   ))}
                 </View>
                 
-                <TouchableOpacity style={styles.learnButton} onPress={() => handleLearnPress(book)}>
+                <Pressable style={styles.learnButton} onPress={() => handleLearnPress(book)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <View style={styles.learnTextContainer}>
                     <Text style={styles.learnText}>开</Text>
                     <Text style={styles.learnText}>始</Text>
                     <Text style={styles.learnText}>学</Text>
                     <Text style={styles.learnText}>习</Text>
                   </View>
-                </TouchableOpacity>
+                </Pressable>
                 
                 {index === 1 && (
                   <TouchableOpacity style={styles.oldSchoolButton} onPress={() => router.push('/tree-diagram')}>
@@ -235,15 +235,17 @@ const styles = StyleSheet.create({
   gridContainer: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'flex-start',
     paddingTop: 60,
-    paddingHorizontal: 40,
+    paddingHorizontal: 20,
   },
   bookItem: {
     alignItems: 'center',
     position: 'relative',
     justifyContent: 'center',
+    minWidth: 60,
+    paddingHorizontal: 4,
   },
   tagContainer: {
     backgroundColor: '#EBEBEB',
@@ -261,10 +263,10 @@ const styles = StyleSheet.create({
   },
   learnButton: {
     backgroundColor: '#EBEBEB',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 6,
-    minWidth: 40,
+    minWidth: 48,
   },
   learnTextContainer: {
     alignItems: 'center',
