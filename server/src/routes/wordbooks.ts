@@ -312,17 +312,12 @@ router.get('/:table', async (req, res) => {
     const client = getSupabaseClient();
     // 表名映射：前端传入的 table 参数映射到实际的 Supabase 表名
     const tableMap: Record<string, string> = {
-      '111': 'mindmap',
+      '111': 'vocab_111',
     };
     const dbTable = tableMap[table] || table;
-
-    // 对于 mindmap 表，需要按 category 过滤头颈数据
-    let query = client.from(dbTable).select('*');
-    if (dbTable === 'mindmap') {
-      query = query.eq('category', '头~颈');
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await client
+      .from(dbTable)
+      .select('*');
 
     if (error) {
       res.status(500).json({ error: error.message });

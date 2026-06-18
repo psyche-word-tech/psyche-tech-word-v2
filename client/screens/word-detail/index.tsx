@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Image, Modal, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Image, Modal, Dimensions } from 'react-native';
 import { Video } from 'expo-av';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
@@ -26,7 +26,6 @@ interface Word {
 	image_url?: string;
 	example_audio_url?: string;
 	noun_phrase?: string;
-	phrase_image_url?: string;
 }
 
 interface Comment {
@@ -1087,42 +1086,29 @@ export default function WordDetailPage() {
 					)}
 
 					{/* 配图 */}
-					{(word.example_image_url || word.image_url || word.phrase_image_url) && (
+					{(word.example_image_url || word.image_url) && (
 						<View style={styles.section}>
 							<View style={styles.divider} />
 							<Text style={[styles.sectionLabel, { marginTop: 16 }]}>配图</Text>
 							<View style={styles.exampleImageContainer}>
 								{(() => {
-									const imgUrl = word.phrase_image_url || word.example_image_url || word.image_url || '';
-										if (imgUrl.includes('word-videos') || imgUrl.endsWith('.mp4')) {
-											return (
-												<Video
-													source={{ uri: imgUrl }}
-													style={styles.exampleImage}
-													shouldPlay={true}
-													isLooping={true}
-													isMuted={true}
-													useNativeControls={false}
-												/>
-											);
-										}
-										if (Platform.OS === 'web') {
-											return (
-												// eslint-disable-next-line @next/next/no-img-element
-												<img
-													src={imgUrl}
-													alt={word.word}
-													style={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 12 }}
-												/>
-											);
-										}
-										return (
-											<Image
-												source={{ uri: imgUrl }}
-												style={styles.exampleImage}
-												resizeMode="cover"
-											/>
-										);
+									const imgUrl = word.example_image_url || word.image_url || '';
+									return imgUrl.includes('word-videos') || imgUrl.endsWith('.mp4') ? (
+										<Video
+											source={{ uri: imgUrl }}
+											style={styles.exampleImage}
+											shouldPlay={true}
+											isLooping={true}
+											isMuted={true}
+											useNativeControls={false}
+										/>
+									) : (
+										<Image
+											source={{ uri: imgUrl }}
+											style={styles.exampleImage}
+											resizeMode="cover"
+										/>
+									);
 								})()}
 							</View>
 						</View>
@@ -1250,7 +1236,6 @@ export default function WordDetailPage() {
 							maximumTrackTintColor="#E0E0E0"
 							thumbTintColor="#4CAF50"
 						/>
-									})()}
 					</View>
 
 					{/* Comments Section */}
