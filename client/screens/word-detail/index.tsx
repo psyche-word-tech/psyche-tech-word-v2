@@ -1083,10 +1083,12 @@ export default function WordDetailPage() {
 					{word.noun_phrase && (
 						<View style={styles.section}>
 							<Text style={styles.sectionLabel}>名词短语</Text>
-							<Text style={styles.nounPhraseText}>{word.noun_phrase}</Text>
-							{word.phrase_translation && (
-								<Text style={styles.phraseTranslationText}>{word.phrase_translation}</Text>
-							)}
+							<View style={styles.nounPhraseRow}>
+								<Text style={styles.nounPhraseText}>{word.noun_phrase}</Text>
+								{word.phrase_translation && (
+									<Text style={styles.phraseTranslationInline}>{word.phrase_translation}</Text>
+								)}
+							</View>
 							{word.phrase_image_url && (
 								<View style={styles.phraseImageContainer}>
 									<Image
@@ -1647,11 +1649,16 @@ const styles = StyleSheet.create({
 		paddingVertical: 8,
 		borderRadius: 8,
 	},
-	phraseTranslationText: {
+	nounPhraseRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		flexWrap: 'wrap',
+		gap: 8,
+	},
+	phraseTranslationInline: {
 		fontSize: 14,
 		color: '#666666',
-		marginTop: 8,
-		lineHeight: 20,
+		lineHeight: 24,
 	},
 	phraseImageContainer: {
 		marginTop: 12,
