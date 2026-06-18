@@ -26,6 +26,7 @@ interface Word {
 	image_url?: string;
 	example_audio_url?: string;
 	noun_phrase?: string;
+	phrase_image_url?: string;
 }
 
 interface Comment {
@@ -1086,13 +1087,13 @@ export default function WordDetailPage() {
 					)}
 
 					{/* 配图 */}
-					{(word.example_image_url || word.image_url) && (
+					{(word.example_image_url || word.image_url || word.phrase_image_url) && (
 						<View style={styles.section}>
 							<View style={styles.divider} />
 							<Text style={[styles.sectionLabel, { marginTop: 16 }]}>配图</Text>
 							<View style={styles.exampleImageContainer}>
 								{(() => {
-									const imgUrl = word.example_image_url || word.image_url || '';
+									const imgUrl = word.phrase_image_url || word.example_image_url || word.image_url || '';
 									return imgUrl.includes('word-videos') || imgUrl.endsWith('.mp4') ? (
 										<Video
 											source={{ uri: imgUrl }}
