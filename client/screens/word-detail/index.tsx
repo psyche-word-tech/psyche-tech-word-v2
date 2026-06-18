@@ -140,11 +140,11 @@ export default function WordDetailPage() {
 
 		try {
 			if (params.from === 'mindmap') {
-				// 按钮传入的是 words_x/y/z，后端 move-mindmap 只接受 x1/y1/z1
+				// 按钮传入的是 x/y/z，映射到 m1/m2/m3
 				const targetMap: Record<string, string> = {
-					words_x: 'm1',
-					words_y: 'm2',
-					words_z: 'm3',
+					x: 'm1',
+					y: 'm2',
+					z: 'm3',
 				};
 				const mindmapTarget = targetMap[targetTable];
 				if (!mindmapTarget) {
@@ -325,7 +325,7 @@ export default function WordDetailPage() {
 		// 映射到实际表名
 		let tableName = targetTable;
 		if (params.from === 'mindmap') {
-			const map: Record<string, string> = { words_x: 'm1', words_y: 'm2', words_z: 'm3' };
+			const map: Record<string, string> = { x: 'm1', y: 'm2', z: 'm3' };
 			tableName = map[targetTable] || targetTable;
 		}
 
