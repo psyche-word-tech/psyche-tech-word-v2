@@ -1079,25 +1079,17 @@ export default function WordDetailPage() {
 						<Text style={styles.meaningText}>{word.meaning}</Text>
 					</View>
 
-					{/* Noun Phrase */}
-					{word.noun_phrase && (
+					{/* Noun Phrase Image */}
+					{word.phrase_image_url && (
 						<View style={styles.section}>
 							<Text style={styles.sectionLabel}>名词短语</Text>
-							<View style={styles.nounPhraseRow}>
-								<Text style={styles.nounPhraseText}>{word.noun_phrase}</Text>
-								{word.phrase_translation && (
-									<Text style={styles.phraseTranslationInline}>{word.phrase_translation}</Text>
-								)}
+							<View style={styles.phraseImageContainer}>
+								<Image
+									source={{ uri: word.phrase_image_url }}
+									style={styles.phraseImage}
+									resizeMode="cover"
+								/>
 							</View>
-							{word.phrase_image_url && (
-								<View style={styles.phraseImageContainer}>
-									<Image
-										source={{ uri: word.phrase_image_url }}
-										style={styles.phraseImage}
-										resizeMode="cover"
-									/>
-								</View>
-							)}
 						</View>
 					)}
 
