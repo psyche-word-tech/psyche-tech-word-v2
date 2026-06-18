@@ -13,8 +13,13 @@ function getApiBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
   if (envUrl) return envUrl;
 
-  // 2. Web 环境：使用 Vercel 环境变量或 Railway
+  // 2. Web 环境
   if (typeof window !== 'undefined') {
+    // 本地预览（扣子编程 / localhost）使用本地后端
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:9091';
+    }
+    // Vercel 部署环境
     const vercelUrl = process.env.VERCEL_URL;
     if (vercelUrl) return `https://${vercelUrl}`;
     return PROD_API_URL; // 回退到 Railway
