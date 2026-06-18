@@ -312,7 +312,7 @@ router.get('/:table', async (req, res) => {
     const client = getSupabaseClient();
     // 表名映射：前端传入的 table 参数映射到实际的 Supabase 表名
     const tableMap: Record<string, string> = {
-      '111': 'vocab_111',
+      '111': 'mindmap',
     };
     const dbTable = tableMap[table] || table;
     const { data, error } = await client
