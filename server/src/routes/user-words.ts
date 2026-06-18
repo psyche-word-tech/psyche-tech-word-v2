@@ -216,7 +216,7 @@ router.get('/category/:table', async (req, res) => {
     const { table } = req.params;
 
     // 验证表名
-    const validTables = ['words_b', 'words_x', 'words_y', 'words_z', 'x1', 'y1', 'z1', 'mu', 'x', 'y', 'z', 'a', 'b', 'c', 'd'];
+    const validTables = ['words_b', 'words_x', 'words_y', 'words_z', 'x1', 'y1', 'z1', 'm1', 'm2', 'm3', 'mu', 'x', 'y', 'z', 'a', 'b', 'c', 'd'];
     if (!validTables.includes(table)) {
       res.status(400).json({ error: 'Invalid table name' });
       return;
@@ -258,7 +258,7 @@ router.get('/category/:table/count', async (req, res) => {
     const { table } = req.params;
 
     // 验证表名
-    const validTables = ['words_b', 'words_x', 'words_y', 'words_z', 'x1', 'y1', 'z1', 'mu', 'x', 'y', 'z', 'a', 'b', 'c', 'd'];
+    const validTables = ['words_b', 'words_x', 'words_y', 'words_z', 'x1', 'y1', 'z1', 'm1', 'm2', 'm3', 'mu', 'x', 'y', 'z', 'a', 'b', 'c', 'd'];
     if (!validTables.includes(table)) {
       res.status(400).json({ error: 'Invalid table name' });
       return;
@@ -303,7 +303,7 @@ router.post('/move-mindmap', async (req, res) => {
       return;
     }
 
-    const validTargets = ['x1', 'y1', 'z1'];
+    const validTargets = ['m1', 'm2', 'm3'];
     if (!validTargets.includes(targetTable)) {
       res.status(400).json({ error: 'Invalid target table' });
       return;
@@ -311,9 +311,15 @@ router.post('/move-mindmap', async (req, res) => {
 
     const client = getSupabaseClient();
 
+    // 表名映射：前端传入的 sourceTable 映射到实际的 Supabase 表名
+    const tableMap: Record<string, string> = {
+      '111': 'mindmap',
+    };
+    const dbSourceTable = tableMap[sourceTable] || sourceTable;
+
     // 从源表获取单词详情
     const { data: wordData, error: fetchError } = await client
-      .from(sourceTable)
+      .from(dbSourceTable)
       .select('*')
       .eq('word', word)
       .single();
@@ -390,12 +396,12 @@ router.post('/move-mindmap', async (req, res) => {
   }
 });
 
-// GET /api/v1/user-words/mindmap-counts - 获取 x1/y1/z1 的单词数量
+// GET /api/v1/user-words/mindmap-counts - 获取 m1/m2/m3 的单词数量
 router.get('/mindmap-counts', async (req, res) => {
   try {
     const client = getSupabaseClient();
 
-    const tables = ['x1', 'y1', 'z1'];
+    const tables = ['m1', 'm2', 'm3'];
     const counts: Record<string, number> = {};
 
     for (const table of tables) {

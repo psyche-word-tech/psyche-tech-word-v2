@@ -142,9 +142,9 @@ export default function WordDetailPage() {
 			if (params.from === 'mindmap') {
 				// 按钮传入的是 words_x/y/z，后端 move-mindmap 只接受 x1/y1/z1
 				const targetMap: Record<string, string> = {
-					words_x: 'x1',
-					words_y: 'y1',
-					words_z: 'z1',
+					words_x: 'm1',
+					words_y: 'm2',
+					words_z: 'm3',
 				};
 				const mindmapTarget = targetMap[targetTable];
 				if (!mindmapTarget) {
@@ -159,9 +159,9 @@ export default function WordDetailPage() {
 					// 重新获取最新的过滤列表
 					const [listRes, x1Res, y1Res, z1Res] = await Promise.all([
 						fetch(`${API_BASE_URL}/api/v1/wordbooks/${params.table || '111'}`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/x1`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/y1`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/z1`),
+						fetch(`${API_BASE_URL}/api/v1/wordbooks/m1`),
+						fetch(`${API_BASE_URL}/api/v1/wordbooks/m2`),
+						fetch(`${API_BASE_URL}/api/v1/wordbooks/m3`),
 					]);
 					const [listData, x1Data, y1Data, z1Data] = await Promise.all([
 						listRes.json(), x1Res.json(), y1Res.json(), z1Res.json(),
@@ -286,9 +286,9 @@ export default function WordDetailPage() {
 	const fetchMindmapCounts = useCallback(async () => {
 		try {
 			const [xRes, yRes, zRes] = await Promise.all([
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/x1/count`),
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/y1/count`),
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/z1/count`),
+				fetch(`${API_BASE_URL}/api/v1/user-words/category/m1/count`),
+				fetch(`${API_BASE_URL}/api/v1/user-words/category/m2/count`),
+				fetch(`${API_BASE_URL}/api/v1/user-words/category/m3/count`),
 			]);
 			const [xData, yData, zData] = await Promise.all([xRes.json(), yRes.json(), zRes.json()]);
 			setMindmapCounts({
@@ -315,7 +315,7 @@ export default function WordDetailPage() {
 		// 映射到实际表名
 		let tableName = targetTable;
 		if (params.from === 'mindmap') {
-			const map: Record<string, string> = { words_x: 'x1', words_y: 'y1', words_z: 'z1' };
+			const map: Record<string, string> = { words_x: 'm1', words_y: 'm2', words_z: 'm3' };
 			tableName = map[targetTable] || targetTable;
 		}
 
@@ -388,9 +388,9 @@ export default function WordDetailPage() {
 					// 导图模式：获取过滤后的列表（111中但不在x1/y1/z1中的单词）
 					if (params.from === 'mindmap' && sourceTable === '111') {
 						const [x1Res, y1Res, z1Res] = await Promise.all([
-							fetch(`${API_BASE_URL}/api/v1/wordbooks/x1`),
-							fetch(`${API_BASE_URL}/api/v1/wordbooks/y1`),
-							fetch(`${API_BASE_URL}/api/v1/wordbooks/z1`),
+							fetch(`${API_BASE_URL}/api/v1/wordbooks/m1`),
+							fetch(`${API_BASE_URL}/api/v1/wordbooks/m2`),
+							fetch(`${API_BASE_URL}/api/v1/wordbooks/m3`),
 						]);
 						const [x1Data, y1Data, z1Data] = await Promise.all([
 							x1Res.json(), y1Res.json(), z1Res.json(),
@@ -1496,12 +1496,12 @@ export default function WordDetailPage() {
 												]}
 												onPress={() => {
 													setCategoryModalVisible(false);
-													const tableMap: Record<string, string> = { words_x: params.from === 'mindmap' ? 'x1' : 'x', words_y: params.from === 'mindmap' ? 'y1' : 'y', words_z: params.from === 'mindmap' ? 'z1' : 'z' };
+													const tableMap: Record<string, string> = { words_x: params.from === 'mindmap' ? 'm1' : 'x', words_y: params.from === 'mindmap' ? 'm2' : 'y', words_z: params.from === 'mindmap' ? 'm3' : 'z' };
 													// 根据当前弹窗标题推断表名
 													let targetTable = sourceTable;
-													if (categoryModalTitle === '已会') targetTable = params.from === 'mindmap' ? 'x1' : 'x';
-													else if (categoryModalTitle === '模糊') targetTable = params.from === 'mindmap' ? 'y1' : 'y';
-													else if (categoryModalTitle === '不会') targetTable = params.from === 'mindmap' ? 'z1' : 'z';
+													if (categoryModalTitle === '已会') targetTable = params.from === 'mindmap' ? 'm1' : 'x';
+													else if (categoryModalTitle === '模糊') targetTable = params.from === 'mindmap' ? 'm2' : 'y';
+													else if (categoryModalTitle === '不会') targetTable = params.from === 'mindmap' ? 'm3' : 'z';
 													router.push('/word-detail', {
 														word: JSON.stringify(item),
 														table: targetTable,
