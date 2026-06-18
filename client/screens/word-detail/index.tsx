@@ -26,6 +26,8 @@ interface Word {
 	image_url?: string;
 	example_audio_url?: string;
 	noun_phrase?: string;
+	phrase_translation?: string;
+	phrase_image_url?: string;
 }
 
 interface Comment {
@@ -1082,6 +1084,18 @@ export default function WordDetailPage() {
 						<View style={styles.section}>
 							<Text style={styles.sectionLabel}>名词短语</Text>
 							<Text style={styles.nounPhraseText}>{word.noun_phrase}</Text>
+							{word.phrase_translation && (
+								<Text style={styles.phraseTranslationText}>{word.phrase_translation}</Text>
+							)}
+							{word.phrase_image_url && (
+								<View style={styles.phraseImageContainer}>
+									<Image
+										source={{ uri: word.phrase_image_url }}
+										style={styles.phraseImage}
+										resizeMode="cover"
+									/>
+								</View>
+							)}
 						</View>
 					)}
 
@@ -1632,6 +1646,23 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 12,
 		paddingVertical: 8,
 		borderRadius: 8,
+	},
+	phraseTranslationText: {
+		fontSize: 14,
+		color: '#666666',
+		marginTop: 8,
+		lineHeight: 20,
+	},
+	phraseImageContainer: {
+		marginTop: 12,
+		borderRadius: 12,
+		overflow: 'hidden',
+		backgroundColor: '#F5F5F5',
+	},
+	phraseImage: {
+		width: '100%',
+		height: 200,
+		borderRadius: 12,
 	},
 	divider: {
 		height: 1,
