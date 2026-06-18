@@ -210,8 +210,18 @@ export default function WordDetailPage() {
 				// 刷新计数
 				fetchMindmapCountsRef.current();
 
-				// 显示成功提示，不自动跳转页面
-				Alert.alert('成功', `已将单词"${word.word}"标记为"${status}"`);
+				// 自动跳转到 mindmap 中下一个未被分类的单词
+				if (nextWordData) {
+					router.push('/word-detail', {
+						word: JSON.stringify(nextWordData),
+						table: params.table || '111',
+						from: 'mindmap',
+					});
+				} else {
+					// 没有更多单词，返回上一页
+					Alert.alert('提示', 'mindmap 中已无更多未分类单词');
+					router.back();
+				}
 				return;
 			}
 
