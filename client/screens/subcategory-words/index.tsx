@@ -15,7 +15,7 @@ interface WordItem {
   phrase_translation?: string;
   phrase_phonetic?: string;
   phrase_image_url?: string;
-  status?: 'x1' | 'y1' | 'z1' | 'none';
+  status?: 'm1' | 'm2' | 'm3' | 'none';
 }
 
 export default function SubcategoryWordsPage() {
@@ -50,27 +50,27 @@ export default function SubcategoryWordsPage() {
           return;
         }
 
-        // For table 111, fetch x1/y1/z1 to mark classification status
+        // For table 111, fetch m1/m2/m3 to mark classification status
         if (table === '111') {
-          const [x1Res, y1Res, z1Res] = await Promise.all([
-            fetch(`${API_BASE_URL}/api/v1/wordbooks/x1`),
-            fetch(`${API_BASE_URL}/api/v1/wordbooks/y1`),
-            fetch(`${API_BASE_URL}/api/v1/wordbooks/z1`),
+          const [m1Res, m2Res, m3Res] = await Promise.all([
+            fetch(`${API_BASE_URL}/api/v1/wordbooks/m1`),
+            fetch(`${API_BASE_URL}/api/v1/wordbooks/m2`),
+            fetch(`${API_BASE_URL}/api/v1/wordbooks/m3`),
           ]);
-          const [x1Data, y1Data, z1Data] = await Promise.all([
-            x1Res.json(),
-            y1Res.json(),
-            z1Res.json(),
+          const [m1Data, m2Data, m3Data] = await Promise.all([
+            m1Res.json(),
+            m2Res.json(),
+            m3Res.json(),
           ]);
 
-          const x1Words = new Set((Array.isArray(x1Data) ? x1Data : []).map((w: any) => w.word));
-          const y1Words = new Set((Array.isArray(y1Data) ? y1Data : []).map((w: any) => w.word));
-          const z1Words = new Set((Array.isArray(z1Data) ? z1Data : []).map((w: any) => w.word));
+          const m1Words = new Set((Array.isArray(m1Data) ? m1Data : []).map((w: any) => w.word));
+          const m2Words = new Set((Array.isArray(m2Data) ? m2Data : []).map((w: any) => w.word));
+          const m3Words = new Set((Array.isArray(m3Data) ? m3Data : []).map((w: any) => w.word));
 
           const markedData = data.map((w: WordItem) => {
-            if (x1Words.has(w.word)) return { ...w, status: 'x1' as const };
-            if (y1Words.has(w.word)) return { ...w, status: 'y1' as const };
-            if (z1Words.has(w.word)) return { ...w, status: 'z1' as const };
+            if (m1Words.has(w.word)) return { ...w, status: 'm1' as const };
+            if (m2Words.has(w.word)) return { ...w, status: 'm2' as const };
+            if (m3Words.has(w.word)) return { ...w, status: 'm3' as const };
             return { ...w, status: 'none' as const };
           });
           setWords(markedData);
@@ -169,9 +169,9 @@ export default function SubcategoryWordsPage() {
             {words.map((item, index) => {
               const getButtonColor = () => {
                 switch (item.status) {
-                  case 'x1': return '#22c55e';
-                  case 'y1': return '#f97316';
-                  case 'z1': return '#ef4444';
+                  case 'm1': return '#22c55e';
+                  case 'm2': return '#f97316';
+                  case 'm3': return '#ef4444';
                   default: return '#9ca3af';
                 }
               };
