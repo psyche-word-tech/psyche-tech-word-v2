@@ -116,10 +116,7 @@ export default function SubcategoryWordsPage() {
                 const url = `/word-detail?__safeRouterPayload__=${encodeURIComponent(encoded)}`;
                 console.log('[SubcategoryWords] Navigating to:', url);
                 if (typeof window !== 'undefined') {
-                  alert('即将跳转到: ' + url);
                   window.location.href = url;
-                } else {
-                  alert('window is undefined');
                 }
               } catch (err: any) {
                 console.error('[SubcategoryWords] Navigation failed:', err);

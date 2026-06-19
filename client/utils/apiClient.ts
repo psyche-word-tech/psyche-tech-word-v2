@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './apiConfig';
+import { getApiBaseUrl } from './apiConfig';
 
 /**
  * 带超时和自动重试的 fetch 包装
@@ -11,7 +11,7 @@ export async function fetchWithRetry(
   maxRetries = 2,
   baseUrl?: string
 ): Promise<Response> {
-  const apiBase = baseUrl || API_BASE_URL;
+  const apiBase = baseUrl || getApiBaseUrl();
   const url = path.startsWith('http') ? path : `${apiBase}${path}`;
   const timeout = 30000; // 30 秒超时，给 Railway 冷启动留足时间
 
