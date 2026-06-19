@@ -75,7 +75,7 @@ interface EvaluationResult {
 
 export default function WordDetailPage() {
 	const router = useSafeRouter();
-	const params = useSafeSearchParams<{ word: string; table?: string; from?: string; index?: string }>();
+	const params = useSafeSearchParams<{ word: string; table?: string; from?: string; index?: string; unclassifiedList?: string; unclassifiedIndex?: string }>();
 	
 	const [word, setWord] = useState<Word>(() => {
 		if (params.word) {
@@ -126,8 +126,33 @@ export default function WordDetailPage() {
 	const lastDropTapRef = useRef<{ table: string; time: number } | null>(null);
 	const dropTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+	// 看词分类弹窗（显示未分类单词详情）
+	const [unclassifiedModalVisible, setUnclassifiedModalVisible] = useState(false);
+	const [unclassifiedWords, setUnclassifiedWords] = useState<Word[]>([]);
+	const [currentUnclassifiedIndex, setCurrentUnclassifiedIndex] = useState(0);
+	const [unclassifiedLoading, setUnclassifiedLoading] = useState(false);
+
 	const sourceTable = params.table || 'b';
 	const isInitialized = useRef(false);
+
+	// 解析未分类单词列表（来自"看词分类"按钮）
+	const unclassifiedList = useMemo(() => {
+		if (params.unclassifiedList) {
+			try {
+				return JSON.parse(params.unclassifiedList) as Word[];
+			} catch {
+				return [];
+			}
+		}
+		return [];
+	}, [params.unclassifiedList]);
+	const unclassifiedIndex = useMemo(() => {
+		if (params.unclassifiedIndex) {
+			const idx = parseInt(params.unclassifiedIndex, 10);
+			return isNaN(idx) ? 0 : idx;
+		}
+		return 0;
+	}, [params.unclassifiedIndex]);
 
 	// 移动单词到目标分类，并自动显示当前表中的下一个单词
 	const handleDrop = useCallback(async (targetTable: string, status: string) => {
@@ -1063,8 +1088,63 @@ export default function WordDetailPage() {
 
 				{/* Content */}
 				<ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-					{/* Word Card */}
-					<View style={styles.wordCard}>
+					{/* 未分类单词翻页导航 */}
+					{unclassifiedList.length > 0 && (
+						<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12 }}>
+							<TouchableOpacity
+								onPress={() => {
+									if (unclassifiedIndex > 0) {
+										const prevIdx = unclassifiedIndex - 1;
+										const prevWord = unclassifiedList[prevIdx];
+										router.replace('/word-detail', {
+											word: JSON.stringify(prevWord),
+											table: params.table || '111',
+											from: params.from || 'mindmap',
+											unclassifiedList: params.unclassifiedList,
+											unclassifiedIndex: prevIdx.toString(),
+										});
+									}
+								}}
+								disabled={unclassifiedIndex <= 0}
+								style={{ opacity: unclassifiedIndex <= 0 ? 0.3 : 1 }}
+							>
+									<View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#4F46E5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+										<Ionicons name="chevron-back" size={16} color="#fff" />
+										<Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>上一个</Text>
+									</View>
+								</TouchableOpacity>
+
+								<Text style={{ fontSize: 14, color: '#6B7280', fontWeight: '500' }}>
+									{unclassifiedIndex + 1} / {unclassifiedList.length}
+								</Text>
+
+								<TouchableOpacity
+									onPress={() => {
+										if (unclassifiedIndex < unclassifiedList.length - 1) {
+											const nextIdx = unclassifiedIndex + 1;
+											const nextWord = unclassifiedList[nextIdx];
+											router.replace('/word-detail', {
+												word: JSON.stringify(nextWord),
+												table: params.table || '111',
+												from: params.from || 'mindmap',
+												unclassifiedList: params.unclassifiedList,
+												unclassifiedIndex: nextIdx.toString(),
+											});
+										}
+									}}
+									disabled={unclassifiedIndex >= unclassifiedList.length - 1}
+									style={{ opacity: unclassifiedIndex >= unclassifiedList.length - 1 ? 0.3 : 1 }}
+								>
+									<View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#4F46E5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+										<Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>下一个</Text>
+										<Ionicons name="chevron-forward" size={16} color="#fff" />
+									</View>
+								</TouchableOpacity>
+							</View>
+						)}
+
+						{/* Word Card */}
+						<View style={styles.wordCard}>
 						<View style={styles.wordRow}>
 							<Text style={styles.wordText}>{word.word}</Text>
 							<TouchableOpacity 

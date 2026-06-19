@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Modal, Image } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { FontAwesome6 } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '@/utils/apiConfig';
 
 interface WordItem {
@@ -10,6 +11,10 @@ interface WordItem {
   word: string;
   phonetic: string;
   meaning: string;
+  noun_phrase?: string;
+  phrase_translation?: string;
+  phrase_phonetic?: string;
+  phrase_image_url?: string;
   status?: 'x1' | 'y1' | 'z1' | 'none';
 }
 
@@ -18,6 +23,10 @@ export default function SubcategoryWordsPage() {
   const { table, title } = useSafeSearchParams<{ table: string; title: string }>();
   const [words, setWords] = useState<WordItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 看词分类弹窗状态
+  const [unclassifiedModalVisible, setUnclassifiedModalVisible] = useState(false);
+  const [currentUnclassifiedIndex, setCurrentUnclassifiedIndex] = useState(0);
 
   const pageTitle = title || '单词列表';
 
@@ -100,14 +109,15 @@ export default function SubcategoryWordsPage() {
         <View className="px-4 pb-3 bg-white">
           <TouchableOpacity
             onPress={() => {
-              // 找到第一个未分类的单词（status === 'none'）
-              const firstUnclassified = words.find((w) => w.status === 'none');
-              if (firstUnclassified) {
+              const unclassified = words.filter((w) => w.status === 'none');
+              if (unclassified.length > 0) {
+                const firstWord = unclassified[0];
                 router.push('/word-detail', {
-                  word: JSON.stringify(firstUnclassified),
+                  word: JSON.stringify(firstWord),
                   table,
                   from: 'mindmap',
-                  index: words.indexOf(firstUnclassified).toString(),
+                  unclassifiedList: JSON.stringify(unclassified),
+                  unclassifiedIndex: '0',
                 });
               }
             }}
