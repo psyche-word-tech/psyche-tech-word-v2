@@ -110,12 +110,20 @@ export default function SubcategoryWordsPage() {
         <View className="px-4 pb-3 bg-white">
           <TouchableOpacity
             onPress={() => {
-              const unclassified = words.filter((w) => w.status === 'none');
-              if (unclassified.length > 0) {
-                router.push('/word-detail', {
-                  table,
-                  from: 'mindmap',
-                });
+              try {
+                const payload = { table, from: 'mindmap' };
+                const encoded = Base64.encode(JSON.stringify(payload));
+                const url = `/word-detail?__safeRouterPayload__=${encodeURIComponent(encoded)}`;
+                console.log('[SubcategoryWords] Navigating to:', url);
+                if (typeof window !== 'undefined') {
+                  alert('即将跳转到: ' + url);
+                  window.location.href = url;
+                } else {
+                  alert('window is undefined');
+                }
+              } catch (err: any) {
+                console.error('[SubcategoryWords] Navigation failed:', err);
+                alert('导航失败: ' + (err?.message || String(err)));
               }
             }}
             className="flex-row items-center justify-center py-3 rounded-xl"
