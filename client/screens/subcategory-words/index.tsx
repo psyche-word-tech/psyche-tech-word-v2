@@ -110,18 +110,7 @@ export default function SubcategoryWordsPage() {
         <View className="px-4 pb-3 bg-white">
           <TouchableOpacity
             onPress={() => {
-              try {
-                const payload = { table, from: 'mindmap' };
-                const encoded = Base64.encode(JSON.stringify(payload));
-                const url = `/word-detail?__safeRouterPayload__=${encodeURIComponent(encoded)}`;
-                console.log('[SubcategoryWords] Navigating to:', url);
-                if (typeof window !== 'undefined') {
-                  window.location.href = url;
-                }
-              } catch (err: any) {
-                console.error('[SubcategoryWords] Navigation failed:', err);
-                alert('导航失败: ' + (err?.message || String(err)));
-              }
+              router.push('/word-detail', { table, from: 'mindmap' });
             }}
             className="flex-row items-center justify-center py-3 rounded-xl"
             style={{ backgroundColor: '#4F46E5' }}
