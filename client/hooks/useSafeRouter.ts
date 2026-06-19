@@ -96,18 +96,26 @@ export function useSafeRouter() {
 
   const push = (pathname: string, params: Record<string, unknown> = {}) => {
     const encodedPayload = serializeParams(params);
-    router.push({
-      pathname: pathname as `/${string}`,
-      params: { [PAYLOAD_KEY]: encodedPayload },
-    });
+    if (typeof window !== 'undefined') {
+      window.location.assign(`${pathname}?${PAYLOAD_KEY}=${encodeURIComponent(encodedPayload)}`);
+    } else {
+      router.push({
+        pathname: pathname as `/${string}`,
+        params: { [PAYLOAD_KEY]: encodedPayload },
+      });
+    }
   };
 
   const replace = (pathname: string, params: Record<string, unknown> = {}) => {
     const encodedPayload = serializeParams(params);
-    router.replace({
-      pathname: pathname as `/${string}`,
-      params: { [PAYLOAD_KEY]: encodedPayload },
-    });
+    if (typeof window !== 'undefined') {
+      window.location.replace(`${pathname}?${PAYLOAD_KEY}=${encodeURIComponent(encodedPayload)}`);
+    } else {
+      router.replace({
+        pathname: pathname as `/${string}`,
+        params: { [PAYLOAD_KEY]: encodedPayload },
+      });
+    }
   };
 
   const navigate = (pathname: string, params: Record<string, unknown> = {}) => {

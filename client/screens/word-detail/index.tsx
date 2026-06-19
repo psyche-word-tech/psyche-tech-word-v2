@@ -135,24 +135,67 @@ export default function WordDetailPage() {
 	const sourceTable = params.table || 'b';
 	const isInitialized = useRef(false);
 
-	// 解析未分类单词列表（来自"看词分类"按钮）
-	const unclassifiedList = useMemo(() => {
-		if (params.unclassifiedList) {
+	// 未分类单词列表（来自"看词分类"按钮或动态获取）
+	const [unclassifiedList, setUnclassifiedList] = useState<Word[]>([]);
+	const [unclassifiedIndex, setUnclassifiedIndex] = useState(0);
+
+	// 动态获取未分类列表（当从"看词分类"进入且没有传入完整列表时）
+	useEffect(() => {
+		if (params.from === 'mindmap' && !params.unclassifiedList) {
+			setUnclassifiedLoading(true);
+			const fetchUnclassified = async () => {
+				try {
+					const [allRes, m1Res, m2Res, m3Res] = await Promise.all([
+						fetch(`${API_BASE_URL}/api/v1/wordbooks/${params.table || '111'}`),
+						fetch(`${API_BASE_URL}/api/v1/wordbooks/m1`),
+						fetch(`${API_BASE_URL}/api/v1/wordbooks/m2`),
+						fetch(`${API_BASE_URL}/api/v1/wordbooks/m3`),
+					]);
+					const [allData, m1Data, m2Data, m3Data] = await Promise.all([
+						allRes.json(),
+						m1Res.json(),
+						m2Res.json(),
+						m3Res.json(),
+					]);
+					const classifiedWords = new Set([
+						...(Array.isArray(m1Data) ? m1Data : []).map((w: any) => w.word),
+						...(Array.isArray(m2Data) ? m2Data : []).map((w: any) => w.word),
+						...(Array.isArray(m3Data) ? m3Data : []).map((w: any) => w.word),
+					]);
+					const list = (Array.isArray(allData) ? allData : []).filter((w: any) => !classifiedWords.has(w.word));
+					setUnclassifiedList(list);
+					// 找到当前单词在未分类列表中的索引
+					const currentWord = params.word ? JSON.parse(params.word) : null;
+					const idx = currentWord ? list.findIndex((w: Word) => w.word === currentWord.word) : -1;
+					setUnclassifiedIndex(idx >= 0 ? idx : 0);
+				} catch (err) {
+					console.error('Failed to fetch unclassified words:', err);
+				} finally {
+					setUnclassifiedLoading(false);
+				}
+			};
+			fetchUnclassified();
+		} else if (params.unclassifiedList) {
+			// 使用传入的列表
 			try {
-				return JSON.parse(params.unclassifiedList) as Word[];
+				const list = JSON.parse(params.unclassifiedList) as Word[];
+				setUnclassifiedList(list);
+				const idx = params.unclassifiedIndex ? parseInt(params.unclassifiedIndex, 10) : 0;
+				setUnclassifiedIndex(isNaN(idx) ? 0 : idx);
 			} catch {
-				return [];
+				setUnclassifiedList([]);
+				setUnclassifiedIndex(0);
 			}
 		}
-		return [];
-	}, [params.unclassifiedList]);
-	const unclassifiedIndex = useMemo(() => {
-		if (params.unclassifiedIndex) {
-			const idx = parseInt(params.unclassifiedIndex, 10);
-			return isNaN(idx) ? 0 : idx;
+	}, [params.from, params.table, params.word, params.unclassifiedList, params.unclassifiedIndex]);
+
+	// 当从"看词分类"进入且 word 为空时，自动加载第一个未分类单词
+	useEffect(() => {
+		if (params.from === 'mindmap' && !word.word && unclassifiedList.length > 0) {
+			setWord(unclassifiedList[0]);
+			setUnclassifiedIndex(0);
 		}
-		return 0;
-	}, [params.unclassifiedIndex]);
+	}, [params.from, word.word, unclassifiedList]);
 
 	// 移动单词到目标分类，并自动显示当前表中的下一个单词
 	const handleDrop = useCallback(async (targetTable: string, status: string) => {
@@ -453,16 +496,24 @@ export default function WordDetailPage() {
 
 	// 导图模式：如果从"进入导图单词"按钮进入（没有传入具体单词），自动切换到第一个未分类的单词
 	useEffect(() => {
-		if (params.from !== 'mindmap' || filteredWordsList.length === 0 || !word.word) return;
+		if (params.from !== 'mindmap' || filteredWordsList.length === 0) return;
 		// 如果用户点击了具体单词进入，始终显示该单词，不自动切换
 		if (params.word) return;
+		// 如果当前单词为空或已不在未分类列表中，自动切换到第一个未分类单词
+		if (!word.word) {
+			setWord(filteredWordsList[0]);
+			setCurrentIndex(0);
+			setUnclassifiedIndex(0);
+			return;
+		}
 		const exists = filteredWordsList.find((w) => w.word === word.word);
 		if (!exists) {
 			console.log(`[WordDetail AutoSwitch] ${word.word} already classified, switching to ${filteredWordsList[0].word}`);
 			setWord(filteredWordsList[0]);
 			setCurrentIndex(0);
+			setUnclassifiedIndex(0);
 		}
-	}, [filteredWordsList, word.word, params.from, params.word]);
+	}, [filteredWordsList, word, params.from, params.word]);
 
 	// 获取评论列表
 	const fetchComments = useCallback(async (wordId: number) => {
@@ -1089,25 +1140,20 @@ export default function WordDetailPage() {
 				{/* Content */}
 				<ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 					{/* 未分类单词翻页导航 */}
-					{unclassifiedList.length > 0 && (
-						<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12 }}>
-							<TouchableOpacity
-								onPress={() => {
-									if (unclassifiedIndex > 0) {
-										const prevIdx = unclassifiedIndex - 1;
-										const prevWord = unclassifiedList[prevIdx];
-										router.replace('/word-detail', {
-											word: JSON.stringify(prevWord),
-											table: params.table || '111',
-											from: params.from || 'mindmap',
-											unclassifiedList: params.unclassifiedList,
-											unclassifiedIndex: prevIdx.toString(),
-										});
-									}
-								}}
-								disabled={unclassifiedIndex <= 0}
-								style={{ opacity: unclassifiedIndex <= 0 ? 0.3 : 1 }}
-							>
+						{unclassifiedList.length > 0 && (
+							<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12 }}>
+								<TouchableOpacity
+									onPress={() => {
+										if (unclassifiedIndex > 0) {
+											const prevIdx = unclassifiedIndex - 1;
+											const prevWord = unclassifiedList[prevIdx];
+											setUnclassifiedIndex(prevIdx);
+											setWord(prevWord);
+										}
+									}}
+									disabled={unclassifiedIndex <= 0}
+									style={{ opacity: unclassifiedIndex <= 0 ? 0.3 : 1 }}
+								>
 									<View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#4F46E5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
 										<Ionicons name="chevron-back" size={16} color="#fff" />
 										<Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>上一个</Text>
@@ -1123,13 +1169,8 @@ export default function WordDetailPage() {
 										if (unclassifiedIndex < unclassifiedList.length - 1) {
 											const nextIdx = unclassifiedIndex + 1;
 											const nextWord = unclassifiedList[nextIdx];
-											router.replace('/word-detail', {
-												word: JSON.stringify(nextWord),
-												table: params.table || '111',
-												from: params.from || 'mindmap',
-												unclassifiedList: params.unclassifiedList,
-												unclassifiedIndex: nextIdx.toString(),
-											});
+											setUnclassifiedIndex(nextIdx);
+											setWord(nextWord);
 										}
 									}}
 									disabled={unclassifiedIndex >= unclassifiedList.length - 1}

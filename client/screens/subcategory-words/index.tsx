@@ -5,6 +5,7 @@ import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '@/utils/apiConfig';
+import { Base64 } from 'js-base64';
 
 interface WordItem {
   id: number;
@@ -111,13 +112,9 @@ export default function SubcategoryWordsPage() {
             onPress={() => {
               const unclassified = words.filter((w) => w.status === 'none');
               if (unclassified.length > 0) {
-                const firstWord = unclassified[0];
                 router.push('/word-detail', {
-                  word: JSON.stringify(firstWord),
                   table,
                   from: 'mindmap',
-                  unclassifiedList: JSON.stringify(unclassified),
-                  unclassifiedIndex: '0',
                 });
               }
             }}
