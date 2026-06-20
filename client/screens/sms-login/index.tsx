@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, TextInput, Image, Alert } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useState } from 'react';
@@ -161,12 +161,16 @@ export default function SmsLoginPage() {
           </Text>
 
           {/* Login Button */}
-          <TouchableOpacity 
+          <Pressable 
             style={[styles.loginButton, loginLoading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
+            onPressIn={() => window.alert('Pressable onPressIn fired!')}
+            onPress={() => {
+              window.alert('登录按钮被点击了');
+              handleLogin();
+            }}
           >
             <Text style={styles.loginText}>{loginLoading ? '登录中...' : '登录'}</Text>
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Password Login Link */}
           <TouchableOpacity 
