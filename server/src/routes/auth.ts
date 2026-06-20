@@ -45,7 +45,7 @@ router.post('/send-code', async (req, res) => {
 
     if (error) {
       console.error('存储验证码失败:', error);
-      return res.json({ success: false, error: '发送失败' });
+      return res.json({ success: false, error: `验证码存储失败: ${error.message || error}` });
     }
 
     // 真实短信发送成功时不返回验证码（安全考虑）
