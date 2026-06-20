@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, TextInput, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, Alert } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useState } from 'react';
@@ -56,10 +56,6 @@ export default function SmsLoginPage() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const handleLogin = async () => {
-    console.log('[SmsLogin] handleLogin called, phone:', phone, 'code:', code);
-    if (typeof window !== 'undefined') {
-      window.alert('登录按钮被点击了');
-    }
     if (!phone || !code) {
       Alert.alert('提示', '请输入手机号和验证码');
       return;
@@ -155,20 +151,15 @@ export default function SmsLoginPage() {
             />
           </View>
           
-          {/* Debug */}
-          <Text style={{color: '#ff0000', textAlign: 'center', marginTop: 10}}>
-            loginLoading={String(loginLoading)}
-          </Text>
-
           {/* Login Button */}
-          <Pressable 
+          <TouchableOpacity 
             style={[styles.loginButton, loginLoading && styles.loginButtonDisabled]}
             onPressIn={() => {
               handleLogin();
             }}
           >
             <Text style={styles.loginText}>{loginLoading ? '登录中...' : '登录'}</Text>
-          </Pressable>
+          </TouchableOpacity>
 
           {/* Password Login Link */}
           <TouchableOpacity 
