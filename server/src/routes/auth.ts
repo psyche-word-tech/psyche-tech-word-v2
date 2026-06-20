@@ -103,9 +103,9 @@ router.post('/send-code', async (req, res) => {
       response.smsWarning = smsResult.error;
     }
     res.json(response);
-  } catch (error) {
-    console.error('发送验证码失败:', error);
-    res.json({ success: false, error: '发送失败' });
+  } catch (error: any) {
+    console.error('发送验证码异常:', error);
+    res.json({ success: false, error: `发送失败: ${error?.message || String(error)}` });
   }
 });
 
@@ -184,9 +184,9 @@ router.post('/register', async (req, res) => {
     deleteVerificationCode(phone);
 
     res.json({ success: true, message: '注册成功', user: newUser[0] });
-  } catch (error) {
-    console.error('注册失败:', error);
-    res.json({ success: false, error: '注册失败' });
+  } catch (error: any) {
+    console.error('注册异常:', error);
+    res.json({ success: false, error: `注册异常: ${error?.message || String(error)}` });
   }
 });
 
@@ -234,9 +234,9 @@ router.post('/login', async (req, res) => {
       token,
       user: { id: user.id, phone: user.phone, username: user.username },
     });
-  } catch (error) {
-    console.error('登录失败:', error);
-    res.json({ success: false, error: '登录失败' });
+  } catch (error: any) {
+    console.error('密码登录异常:', error);
+    res.json({ success: false, error: `登录异常: ${error?.message || String(error)}` });
   }
 });
 
@@ -281,23 +281,39 @@ router.post('/sms-login', async (req, res) => {
     }
 
     // 查询或创建用户
-    let { data: userData } = await client
+    const { data: existingUsers, error: queryError } = await client
       .from('users')
       .select('id, phone, username')
       .eq('phone', phone)
       .limit(1);
 
-    if (!userData || userData.length === 0) {
-      // 自动注册（手机号已验证，直接创建账号）
-      const result = await client
-        .from('users')
-        .insert({ phone })
-        .select()
-        .limit(1);
-      userData = result.data;
+    if (queryError) {
+      console.error('查询用户失败:', queryError);
+      return res.json({ success: false, error: `查询用户失败: ${queryError.message}` });
     }
 
-    const user = userData![0];
+    let user;
+    if (existingUsers && existingUsers.length > 0) {
+      user = existingUsers[0];
+    } else {
+      // 自动注册（手机号已验证，直接创建账号）
+      const { data: newUsers, error: insertError } = await client
+        .from('users')
+        .insert({ phone })
+        .select('id, phone, username')
+        .limit(1);
+
+      if (insertError) {
+        console.error('创建用户失败:', insertError);
+        return res.json({ success: false, error: `创建用户失败: ${insertError.message}` });
+      }
+
+      if (!newUsers || newUsers.length === 0) {
+        return res.json({ success: false, error: '创建用户失败: 无返回数据' });
+      }
+
+      user = newUsers[0];
+    }
 
     // 删除已使用的验证码
     try {
@@ -316,9 +332,9 @@ router.post('/sms-login', async (req, res) => {
       token,
       user: { id: user.id, phone: user.phone, username: user.username },
     });
-  } catch (error) {
-    console.error('登录失败:', error);
-    res.json({ success: false, error: '登录失败' });
+  } catch (error: any) {
+    console.error('登录异常:', error);
+    res.json({ success: false, error: `登录异常: ${error?.message || String(error)}` });
   }
 });
 
