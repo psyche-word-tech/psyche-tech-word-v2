@@ -155,11 +155,15 @@ export default function SmsLoginPage() {
             />
           </View>
           
+          {/* Debug */}
+          <Text style={{color: '#ff0000', textAlign: 'center', marginTop: 10}}>
+            loginLoading={String(loginLoading)}
+          </Text>
+
           {/* Login Button */}
           <TouchableOpacity 
             style={[styles.loginButton, loginLoading && styles.loginButtonDisabled]}
             onPress={handleLogin}
-            disabled={loginLoading}
           >
             <Text style={styles.loginText}>{loginLoading ? '登录中...' : '登录'}</Text>
           </TouchableOpacity>
