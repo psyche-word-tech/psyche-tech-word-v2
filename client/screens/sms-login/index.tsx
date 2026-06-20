@@ -69,20 +69,24 @@ export default function SmsLoginPage() {
       });
       const data = await response.json();
 
+      console.log('[SMSLogin] Response:', data);
       if (data.success) {
+        console.log('[SMSLogin] Login success, user:', data.user);
         await login({
           id: data.user.id,
           username: data.user.username || phone,
           phone: phone,
           token: data.token,
         });
+        console.log('[SMSLogin] Auth context updated, navigating to /profile');
         router.replace('/profile');
       } else {
-        Alert.alert('登录失败', data.error || '验证码错误');
+        console.error('[SMSLogin] Login failed:', data.error);
+        window.alert('登录失败: ' + (data.error || '验证码错误'));
       }
-    } catch (error) {
-      console.error('登录错误:', error);
-      Alert.alert('错误', '网络连接失败，请稍后重试');
+    } catch (error: any) {
+      console.error('[SMSLogin] Login error:', error);
+      window.alert('网络连接失败: ' + (error?.message || '请稍后重试'));
     } finally {
       setLoginLoading(false);
     }
