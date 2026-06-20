@@ -163,10 +163,7 @@ export default function SmsLoginPage() {
           {/* Login Button */}
           <Pressable 
             style={[styles.loginButton, loginLoading && styles.loginButtonDisabled]}
-            onPressIn={() => window.alert('Pressable onPressIn fired!')}
-            onPressOut={() => window.alert('Pressable onPressOut fired!')}
-            onPress={() => {
-              window.alert('登录按钮被点击了');
+            onPressIn={() => {
               handleLogin();
             }}
           >
