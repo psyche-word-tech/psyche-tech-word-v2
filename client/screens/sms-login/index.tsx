@@ -56,6 +56,10 @@ export default function SmsLoginPage() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const handleLogin = async () => {
+    console.log('[SmsLogin] handleLogin called, phone:', phone, 'code:', code);
+    if (typeof window !== 'undefined') {
+      window.alert('登录按钮被点击了');
+    }
     if (!phone || !code) {
       Alert.alert('提示', '请输入手机号和验证码');
       return;
