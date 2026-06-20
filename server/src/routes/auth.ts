@@ -6,6 +6,39 @@ import bcrypt from 'bcryptjs';
 const router = Router();
 const SALT_ROUNDS = 10;
 
+// 内存验证码存储（当数据库表不存在时的 fallback）
+const CODE_EXPIRY_MS = 5 * 60 * 1000; // 5分钟
+const verificationCodeStore = new Map<string, { code: string; expiresAt: number }>();
+
+function saveVerificationCode(phone: string, code: string) {
+  verificationCodeStore.set(phone, { code, expiresAt: Date.now() + CODE_EXPIRY_MS });
+}
+
+function getVerificationCode(phone: string, code: string) {
+  const record = verificationCodeStore.get(phone);
+  if (!record) return null;
+  if (record.code !== code) return null;
+  if (Date.now() > record.expiresAt) {
+    verificationCodeStore.delete(phone);
+    return null;
+  }
+  return record;
+}
+
+function deleteVerificationCode(phone: string) {
+  verificationCodeStore.delete(phone);
+}
+
+// 定期清理过期验证码
+setInterval(() => {
+  const now = Date.now();
+  for (const [phone, record] of verificationCodeStore) {
+    if (now > record.expiresAt) {
+      verificationCodeStore.delete(phone);
+    }
+  }
+}, 60 * 1000);
+
 /**
  * POST /api/v1/auth/send-code
  * 发送验证码
@@ -18,9 +51,15 @@ router.post('/send-code', async (req, res) => {
       return res.json({ success: false, error: '请输入正确的手机号' });
     }
 
-    // 先删除该手机号之前的验证码
     const client = getSupabaseClient();
-    await client.from('verification_codes').delete().eq('phone', phone);
+
+    // 先删除该手机号之前的验证码
+    try {
+      await client.from('verification_codes').delete().eq('phone', phone);
+    } catch {
+      // 表可能不存在，忽略
+    }
+    deleteVerificationCode(phone);
 
     // 本地生成6位数字验证码
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -34,19 +73,27 @@ router.post('/send-code', async (req, res) => {
     }
 
     // 验证码5分钟有效
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + CODE_EXPIRY_MS);
 
-    // 存储验证码到数据库
-    const { error } = await client.from('verification_codes').insert({
-      phone,
-      code,
-      expires_at: expiresAt.toISOString()
-    });
-
-    if (error) {
-      console.error('存储验证码失败:', error);
-      return res.json({ success: false, error: `验证码存储失败: ${error.message || error}` });
+    // 尝试存储验证码到数据库
+    let dbError: any = null;
+    try {
+      const { error } = await client.from('verification_codes').insert({
+        phone,
+        code,
+        expires_at: expiresAt.toISOString(),
+      });
+      if (error) dbError = error;
+    } catch (e) {
+      dbError = e;
     }
+
+    if (dbError) {
+      console.warn('数据库存储验证码失败，使用内存存储:', dbError.message || dbError);
+    }
+
+    // 无论数据库存储是否成功，都保存到内存（确保可用）
+    saveVerificationCode(phone, code);
 
     // 真实短信发送成功时不返回验证码（安全考虑）
     // 仅在短信服务异常时返回 code，方便开发调试
@@ -69,38 +116,50 @@ router.post('/send-code', async (req, res) => {
 router.post('/register', async (req, res) => {
   try {
     const { phone, password, code } = req.body;
-    
+
     if (!phone || !password || !code) {
       return res.json({ success: false, error: '请填写完整信息' });
     }
-    
+
     const client = getSupabaseClient();
-    
-    // 验证验证码
-    const { data: codeData, error: codeError } = await client
-      .from('verification_codes')
-      .select('*')
-      .eq('phone', phone)
-      .eq('code', code)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1);
-    
-    if (codeError || !codeData || codeData.length === 0) {
-      return res.json({ success: false, error: '验证码错误或已过期' });
+
+    // 验证验证码（先查数据库，失败则查内存）
+    let codeValid = false;
+    try {
+      const { data: codeData, error: codeError } = await client
+        .from('verification_codes')
+        .select('*')
+        .eq('phone', phone)
+        .eq('code', code)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (!codeError && codeData && codeData.length > 0) {
+        codeValid = true;
+      }
+    } catch {
+      // 表可能不存在
     }
-    
+
+    if (!codeValid) {
+      const memRecord = getVerificationCode(phone, code);
+      if (!memRecord) {
+        return res.json({ success: false, error: '验证码错误或已过期' });
+      }
+      codeValid = true;
+    }
+
     // 检查手机号是否已注册
     const { data: userData } = await client
       .from('users')
       .select('id')
       .eq('phone', phone)
       .limit(1);
-    
+
     if (userData && userData.length > 0) {
       return res.json({ success: false, error: '该手机号已注册' });
     }
-    
+
     // 密码加密
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
@@ -110,15 +169,20 @@ router.post('/register', async (req, res) => {
       .insert({ phone, password: hashedPassword })
       .select()
       .limit(1);
-    
+
     if (insertError) {
       console.error('创建用户失败:', insertError);
       return res.json({ success: false, error: '注册失败' });
     }
-    
+
     // 删除已使用的验证码
-    await client.from('verification_codes').delete().eq('phone', phone);
-    
+    try {
+      await client.from('verification_codes').delete().eq('phone', phone);
+    } catch {
+      // 忽略
+    }
+    deleteVerificationCode(phone);
+
     res.json({ success: true, message: '注册成功', user: newUser[0] });
   } catch (error) {
     console.error('注册失败:', error);
@@ -133,13 +197,13 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    
+
     if (!username || !password) {
       return res.json({ success: false, error: '请填写用户名和密码' });
     }
-    
+
     const client = getSupabaseClient();
-    
+
     // 查询用户（支持手机号或用户名登录）
     const { data: userData, error } = await client
       .from('users')
@@ -160,7 +224,7 @@ router.post('/login', async (req, res) => {
     if (!isPasswordValid) {
       return res.json({ success: false, error: '用户名或密码错误' });
     }
-    
+
     // 生成token（简化版，实际应使用JWT）
     const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64');
 
@@ -168,7 +232,7 @@ router.post('/login', async (req, res) => {
       success: true,
       message: '登录成功',
       token,
-      user: { id: user.id, phone: user.phone, username: user.username }
+      user: { id: user.id, phone: user.phone, username: user.username },
     });
   } catch (error) {
     console.error('登录失败:', error);
@@ -183,34 +247,46 @@ router.post('/login', async (req, res) => {
 router.post('/sms-login', async (req, res) => {
   try {
     const { phone, code } = req.body;
-    
+
     if (!phone || !code) {
       return res.json({ success: false, error: '请填写手机号和验证码' });
     }
-    
+
     const client = getSupabaseClient();
-    
-    // 验证验证码
-    const { data: codeData, error: codeError } = await client
-      .from('verification_codes')
-      .select('*')
-      .eq('phone', phone)
-      .eq('code', code)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1);
-    
-    if (codeError || !codeData || codeData.length === 0) {
-      return res.json({ success: false, error: '验证码错误或已过期' });
+
+    // 验证验证码（先查数据库，失败则查内存）
+    let codeValid = false;
+    try {
+      const { data: codeData, error: codeError } = await client
+        .from('verification_codes')
+        .select('*')
+        .eq('phone', phone)
+        .eq('code', code)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (!codeError && codeData && codeData.length > 0) {
+        codeValid = true;
+      }
+    } catch {
+      // 表可能不存在
     }
-    
+
+    if (!codeValid) {
+      const memRecord = getVerificationCode(phone, code);
+      if (!memRecord) {
+        return res.json({ success: false, error: '验证码错误或已过期' });
+      }
+      codeValid = true;
+    }
+
     // 查询或创建用户
     let { data: userData } = await client
       .from('users')
       .select('id, phone, username')
       .eq('phone', phone)
       .limit(1);
-    
+
     if (!userData || userData.length === 0) {
       // 自动注册（手机号已验证，直接创建账号）
       const result = await client
@@ -220,20 +296,25 @@ router.post('/sms-login', async (req, res) => {
         .limit(1);
       userData = result.data;
     }
-    
+
     const user = userData![0];
-    
+
     // 删除已使用的验证码
-    await client.from('verification_codes').delete().eq('phone', phone);
-    
+    try {
+      await client.from('verification_codes').delete().eq('phone', phone);
+    } catch {
+      // 忽略
+    }
+    deleteVerificationCode(phone);
+
     // 生成token
     const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64');
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: '登录成功',
       token,
-      user: { id: user.id, phone: user.phone, username: user.username }
+      user: { id: user.id, phone: user.phone, username: user.username },
     });
   } catch (error) {
     console.error('登录失败:', error);

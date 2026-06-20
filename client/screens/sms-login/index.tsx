@@ -16,7 +16,8 @@ export default function SmsLoginPage() {
 
   const handleSendCode = async () => {
     if (!phone || phone.length !== 11) {
-      Alert.alert('提示', '请输入正确的11位手机号');
+      if (typeof window !== 'undefined') window.alert('请输入正确的11位手机号');
+      else Alert.alert('提示', '请输入正确的11位手机号');
       return;
     }
     setLoading(true);
@@ -30,7 +31,8 @@ export default function SmsLoginPage() {
       if (result.success) {
         // 开发环境下显示返回的验证码
         if (result.code) {
-          Alert.alert('开发模式', `验证码: ${result.code}`);
+          if (typeof window !== 'undefined') window.alert(`开发模式 验证码: ${result.code}`);
+          else Alert.alert('开发模式', `验证码: ${result.code}`);
         }
         setCountdown(60);
         const timer = setInterval(() => {
@@ -43,11 +45,13 @@ export default function SmsLoginPage() {
           });
         }, 1000);
       } else {
-        Alert.alert('发送失败', result.error || '请稍后重试');
+        if (typeof window !== 'undefined') window.alert('发送失败: ' + (result.error || '请稍后重试'));
+        else Alert.alert('发送失败', result.error || '请稍后重试');
       }
     } catch (error) {
       console.error('发送验证码失败:', error);
-      Alert.alert('错误', '网络连接失败，请稍后重试');
+      if (typeof window !== 'undefined') window.alert('网络连接失败，请稍后重试');
+      else Alert.alert('错误', '网络连接失败，请稍后重试');
     }
     setLoading(false);
   };
@@ -57,7 +61,8 @@ export default function SmsLoginPage() {
 
   const handleLogin = async () => {
     if (!phone || !code) {
-      Alert.alert('提示', '请输入手机号和验证码');
+      if (typeof window !== 'undefined') window.alert('请输入手机号和验证码');
+      else Alert.alert('提示', '请输入手机号和验证码');
       return;
     }
     setLoginLoading(true);
