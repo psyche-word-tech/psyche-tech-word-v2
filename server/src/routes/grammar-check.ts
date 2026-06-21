@@ -293,6 +293,9 @@ function ruleBasedGrammarCheck(text: string): GrammarResult {
   // 12. 虚拟语气
   checkSubjunctive(text, issues);
 
+  // 12.5 及物动词后代词格
+  checkObjectPronoun(doc, issues);
+
   // 13. 介词后动词形式
   checkPrepositionVerbForm(doc, issues);
 
@@ -333,7 +336,7 @@ function checkCapitalization(doc: any, text: string, issues: GrammarIssue[]) {
   const sentences = doc.sentences().json();
   for (const sent of sentences) {
     const firstWord = sent.text.trim().split(/\s+/)[0];
-    if (firstWord && /^[a-z]/.test(firstWord) && !/^[iI]$/.test(firstWord)) {
+    if (firstWord && /^[a-z]/.test(firstWord)) {
       issues.push({
         title: "首字母大写",
         message: `句子 "${sent.text.trim().substring(0, 30)}..." 的首字母应大写。`,
@@ -579,6 +582,32 @@ function checkSubjunctive(text: string, issues: GrammarIssue[]) {
         issues.push({
           title: "虚拟语气错误",
           message: `${msg}: "${match}"。应改为 "${correct}"。`,
+          replacements: [correct],
+        });
+      }
+    }
+  }
+}
+
+// 12.5 及物动词后代词应使用宾格
+function checkObjectPronoun(doc: any, issues: GrammarIssue[]) {
+  const transitiveVerbs = ["like", "love", "hate", "see", "watch", "hear", "help", "tell", "ask", "give", "show", "find", "meet", "know", "believe", "remember", "want", "need", "call", "visit", "thank", "trust", "support", "understand", "follow", "join", "leave", "send", "bring", "teach"];
+  const objectPronouns: Record<string, string> = {
+    he: "him", she: "her", i: "me", we: "us", they: "them",
+    who: "whom",
+  };
+
+  const text = doc.text();
+  for (const verb of transitiveVerbs) {
+    const regex = new RegExp(`\\b${verb}\\s+(he|she|i|we|they|who)\\b`, "gi");
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const wrong = match[1].toLowerCase();
+      const correct = objectPronouns[wrong];
+      if (correct) {
+        issues.push({
+          title: "代词格错误",
+          message: `动词 "${verb}" 是及物动词，后面应使用宾格代词。"${match[1]}" 应改为 "${correct}"。`,
           replacements: [correct],
         });
       }
