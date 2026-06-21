@@ -544,11 +544,6 @@ export default function WordDetailPage() {
 
 		setIsCheckingGrammar(true);
 		try {
-				/**
-			 * 服务端文件：server/src/routes/grammar-check.ts
-			 * 接口：POST /api/v1/grammar-check
-			 * Body参数：text: string, language?: string
-			 */
 			const response = await fetchWithRetry(`/api/v1/grammar-check`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -559,65 +554,31 @@ export default function WordDetailPage() {
 			});
 
 			const result = await response.json();
-			
+
 			if (!response.ok) {
 				throw new Error(result.error || '检测失败');
 			}
 
-			// 语法正确时直接发布，不弹窗
-			if (result.isCorrect) {
-				// 直接发布
-				setIsSubmitting(true);
-				try {
-					const publishResponse = await fetch(`${API_BASE_URL}/api/v1/comments`, {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({
-							wordId: word.id,
-							wordText: word.word,
-							userName: '用户',
-							content: commentText.trim()
-						})
-					});
-					
-					if (!publishResponse.ok) throw new Error('提交失败');
-					
-					setCommentText('');
-					fetchComments(word.id);
-					showAlert('成功', '笔记已发布');
-				} catch (error) {
-					console.error('Failed to submit comment:', error);
-					showAlert('错误', '发布失败');
-				} finally {
-					setIsSubmitting(false);
-				}
-			} else {
-				// 有错误时显示弹窗
-				setGrammarResult(result);
-				setShowResultModal(true);
-			}
+			// 无论语法是否正确，都显示检测结果弹窗，让用户确认后再发布
+			setGrammarResult(result);
+			setShowResultModal(true);
 		} catch (error: any) {
 			console.error('Grammar check error:', error);
 			showAlert('错误', error.message || '语法检测失败，请稍后重试');
 		} finally {
 			setIsCheckingGrammar(false);
 		}
-	}, [commentText, word?.id, word?.word]);
+	}, [commentText]);
 
 	// 发布评论
 	const submitComment = useCallback(async () => {
 		if (!commentText.trim() || !word.id) {
 			return;
 		}
-		
+
 		setIsSubmitting(true);
 		try {
-			/**
-			 * 服务端文件：server/src/routes/comments.ts
-			 * 接口：POST /api/v1/comments
-			 * Body参数：wordId: number, wordText: string, userName: string, content: string
-			 */
-			const response = await fetch(`${API_BASE_URL}/api/v1/comments`, {
+			const response = await fetchWithRetry(`/api/v1/comments`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -627,17 +588,17 @@ export default function WordDetailPage() {
 					content: commentText.trim()
 				})
 			});
-			
+
 			if (!response.ok) throw new Error('提交失败');
-			
+
 			setCommentText('');
 			setShowResultModal(false);
 			setGrammarResult(null);
 			fetchComments(word.id);
 			showAlert('成功', '笔记已发布');
-		} catch (error) {
+		} catch (error: any) {
 			console.error('Failed to submit comment:', error);
-			showAlert('错误', '发布失败');
+			showAlert('错误', error.message || '发布失败');
 		} finally {
 			setIsSubmitting(false);
 		}
