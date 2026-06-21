@@ -402,6 +402,113 @@ function ruleBasedGrammarCheck(text: string): { isCorrect: boolean; issues: Gram
     });
   }
 
+  // 23. 间接疑问句语序错误：I know who is he → I know who he is
+  // 检测：wh-词 + be/助动词 + 代词/名词（明显的人称代词作为宾语从句主语时，语序应为 wh+主语+动词）
+  const iqPronouns = "i|you|he|she|it|we|they|this|that|these|those|someone|somebody|something|anyone|anybody|anything|everyone|everybody|everything|nobody|nothing";
+  const indirectQuestionPattern = new RegExp(
+    `\\b(know|tell|ask|wonder|understand|remember|forget|see|hear|think|believe|imagine|guess|explain|show|decide|discover|realize|notice|doubt)\\b[^.!?]*\\b(who|what|where|when|why|how|which)\\s+(is|are|was|were|am|do|does|did|have|has|had|will|would|shall|should|can|could|may|might|must)\\s+(${iqPronouns})\\b`,
+    "gi"
+  );
+
+  while ((match = indirectQuestionPattern.exec(text)) !== null) {
+    const wh = match[2];
+    const verb = match[3];
+    const subject = match[4];
+    // 排除 "what is it" / "which is which" 等特殊情况（what/which 作主语时正确）
+    if ((wh.toLowerCase() === "what" || wh.toLowerCase() === "which") && subject.toLowerCase() === "it") {
+      continue;
+    }
+    issues.push({
+      title: "宾语从句词序错误",
+      message: `间接疑问句（宾语从句）需要使用陈述语序。原句使用了疑问语序 "${wh} ${verb} ${subject}"，应改为 "${wh} ${subject} ${verb}"。`,
+      replacements: [`${wh} ${subject} ${verb}`]
+    });
+  }
+
+  // 24. 虚拟语气：if 条件句中使用 was（第一/三人称单数应使用 were）
+  const subjunctiveWas = /\bif\s+(i|he|she|it)\s+was\b/gi;
+  while ((match = subjunctiveWas.exec(text)) !== null) {
+    const subject = match[1].toLowerCase();
+    issues.push({
+      title: "虚拟语气错误",
+      message: `虚拟语气中，无论主语是谁，be动词都应使用 "were" 而不是 "was"。`,
+      replacements: [`if ${subject} were`]
+    });
+  }
+
+  // 25. 介词后接动词原形（应使用动名词）
+  const prepVerbBase = /\b(of|in|on|at|for|with|about|without|after|before|by|from|to|through|during|until|since|between|among|against|toward|towards|into|onto|upon|within|beneath|beside|behind|beyond|except|despite|including|regarding|concerning|considering|regardless of|instead of|because of|in spite of)\s+([a-z]{2,})\b/gi;
+  while ((match = prepVerbBase.exec(text)) !== null) {
+    const prep = match[1].toLowerCase();
+    const word = match[2].toLowerCase();
+    // 排除常见介词后接名词的情况
+    const commonNounsAfterPrep = ["school", "home", "work", "time", "place", "way", "day", "year", "man", "woman", "child", "friend", "family", "house", "car", "city", "country", "world", "life", "hand", "part", "group", "problem", "question", "answer", "idea", "reason", "moment", "morning", "night", "week", "month", "hour", "minute", "second"];
+    if (!commonNounsAfterPrep.includes(word) && !word.endsWith("ing")) {
+      issues.push({
+        title: "介词后动词形式错误",
+        message: `介词 "${prep}" 后面如果接动词，应使用动名词（-ing 形式），而不是动词原形。`,
+        replacements: [`${prep} ${word}ing`]
+      });
+    }
+  }
+
+  // 26. 比较级 than 后接代词主格（应使用宾格）
+  const thanSubjectPronoun = /\b(than|as)\s+(i|he|she|we|they)\s+(?:am|is|are|was|were|do|does|did|have|has|had|can|could|will|would)\b/gi;
+  while ((match = thanSubjectPronoun.exec(text)) !== null) {
+    const pronoun = match[2].toLowerCase();
+    const objPronouns: Record<string, string> = { i: "me", he: "him", she: "her", we: "us", they: "them" };
+    if (objPronouns[pronoun]) {
+      issues.push({
+        title: "代词格错误",
+        message: `在 "than/as" 后面进行比较时，代词应使用宾格。`,
+        replacements: [objPronouns[pronoun]]
+      });
+    }
+  }
+
+  // 27. since/for + 时间段混淆
+  const sinceForWrong = /\b(since|for)\s+(\d+\s+(?:year|month|week|day|hour|minute|second)s?)\b/gi;
+  while ((match = sinceForWrong.exec(text)) !== null) {
+    const word = match[1].toLowerCase();
+    const duration = match[2].toLowerCase();
+    if (word === "since" && duration.match(/\d+\s+(?:year|month|week|day|hour|minute|second)s?/)) {
+      issues.push({
+        title: "介词使用错误",
+        message: `"since" 后接具体时间点（如 since 2020 / since Monday），"for" 后接时间段（如 for 3 years）。`,
+        replacements: [`for ${duration}`]
+      });
+    }
+  }
+
+  // 28. suggest / insist / demand / recommend + should / 动词原形（不用 to）
+  const suggestToVerb = /\b(suggest|insist|demand|recommend|require|request|order|advise|propose|command)\s+(?:someone\s+)?to\s+/gi;
+  while ((match = suggestToVerb.exec(text)) !== null) {
+    const verb = match[1].toLowerCase();
+    issues.push({
+      title: "虚拟语气/动词用法错误",
+      message: `"${verb}" 后接宾语从句时，从句中应使用 "(should) + 动词原形" 的虚拟语气结构，而不是 "to + 动词原形"。`,
+      replacements: [`${verb} that... (should) + 动词原形`]
+    });
+  }
+
+  // 29. 反身代词使用错误
+  const reflexiveWrong = /\b(i|you|he|she|it|we|they)\s+(?:myself|yourself|yourselves|himself|herself|itself|ourselves|themselves)\b/gi;
+  while ((match = reflexiveWrong.exec(text)) !== null) {
+    const subject = match[1].toLowerCase();
+    const reflexive = match[2].toLowerCase();
+    const correctReflexive: Record<string, string> = {
+      i: "myself", you: "yourself", he: "himself", she: "herself",
+      it: "itself", we: "ourselves", they: "themselves"
+    };
+    if (correctReflexive[subject] && reflexive !== correctReflexive[subject]) {
+      issues.push({
+        title: "反身代词错误",
+        message: `主语 "${subject}" 对应的反身代词应为 "${correctReflexive[subject]}"，而不是 "${reflexive}"。`,
+        replacements: [correctReflexive[subject]]
+      });
+    }
+  }
+
   return {
     isCorrect: issues.length === 0,
     issues: issues.slice(0, 5)
