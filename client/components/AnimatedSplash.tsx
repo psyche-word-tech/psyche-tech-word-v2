@@ -12,22 +12,9 @@ import Animated, {
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
-function hasSplashPlayed(): boolean {
-  if (typeof window !== 'undefined') {
-    return sessionStorage.getItem('splashPlayed') === 'true';
-  }
-  return false;
-}
-
-function markSplashPlayed() {
-  if (typeof window !== 'undefined') {
-    sessionStorage.setItem('splashPlayed', 'true');
-  }
-}
-
 export default function AnimatedSplash() {
-  const [visible, setVisible] = useState(() => !hasSplashPlayed());
-  const [zIndex, setZIndex] = useState(() => (hasSplashPlayed() ? -1 : 999));
+  const [visible, setVisible] = useState(true);
+  const [zIndex, setZIndex] = useState(999);
   const [showText, setShowText] = useState(false);
 
   // 每个元素独立的动画状态
@@ -52,7 +39,6 @@ export default function AnimatedSplash() {
   const handleAnimationComplete = () => {
     setVisible(false);
     setZIndex(-1);
-    markSplashPlayed();
   };
 
   useEffect(() => {
