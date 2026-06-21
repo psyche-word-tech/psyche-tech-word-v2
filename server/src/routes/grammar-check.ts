@@ -1,693 +1,821 @@
 import { Router } from "express";
 import { LLMClient, Config } from "coze-coding-dev-sdk";
+import nlp from "compromise";
 
 const router = Router();
+
+// Grammar check endpoint
+router.post("/", async (req, res): Promise<void> => {
+  try {
+    const { text, language = "en-US" } = req.body;
+
+    if (!text || typeof text !== "string") {
+      res.status(400).json({ error: "Missing text field" });
+      return;
+    }
+
+    const result = await checkGrammar(text, language);
+    res.json(result);
+  } catch (error) {
+    console.error("Grammar check error:", error);
+    res.status(500).json({ error: "Grammar check failed" });
+  }
+});
 
 interface GrammarIssue {
   title: string;
   message: string;
-  replacements: string[];
+  replacements?: string[];
 }
 
-// ============ LanguageTool API（专业语法检测，免费开源）============
-async function callLanguageTool(text: string): Promise<{ isCorrect: boolean; issues: GrammarIssue[] }> {
-  const params = new URLSearchParams();
-  params.append("text", text);
-  params.append("language", "en-US");
-  params.append("enabledOnly", "false");
-
-  const response = await fetch("https://api.languagetool.org/api/v2/check", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString()
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`LanguageTool API error: ${response.status} ${errorText}`);
-  }
-
-  const data = await response.json() as any;
-  const matches = data.matches || [];
-
-  const issues: GrammarIssue[] = matches.map((match: any) => {
-    const replacements = (match.replacements || []).map((r: any) => r.value).slice(0, 3);
-    // 将 LanguageTool 的英文 message 翻译/优化为中文解释
-    const title = translateRuleCategory(match.rule?.category?.id || match.rule?.id || "语法错误");
-    const message = buildChineseExplanation(match);
-    return { title, message, replacements };
-  });
-
-  return {
-    isCorrect: issues.length === 0,
-    issues: issues.slice(0, 8)
-  };
+interface GrammarResult {
+  isCorrect: boolean;
+  issues: GrammarIssue[];
+  originalText: string;
+  correctedText?: string;
 }
 
-function translateRuleCategory(categoryId: string): string {
-  const map: Record<string, string> = {
-    "GRAMMAR": "语法错误",
-    "TYPOS": "拼写错误",
-    "CASING": "大小写错误",
-    "COLLOQUIALISMS": "口语表达",
-    "CONFUSED_WORDS": "易混淆词",
-    "CREATIVE_WRITING": "写作建议",
-    "MISC": "其他问题",
-    "PLAIN_ENGLISH": "简明英语",
-    "PUNCTUATION": "标点错误",
-    "REDUNDANCY": "冗余表达",
-    "SEMANTICS": "语义错误",
-    "STYLE": "风格建议",
-    "TYPOGRAPHY": "排版问题",
-    "WIKIPEDIA": "专有名词",
-    "AGREEMENT_ERROR": "主谓一致",
-    "ARTICLES": "冠词错误",
-    "PREPOSITIONS": "介词错误",
-    "TENSES": "时态错误",
-    "PASSIVE_VOICE": "被动语态",
-    "WORDINESS": "冗长表达",
-  };
-  return map[categoryId] || "语法问题";
+// ============ 主检测入口 ============
+async function checkGrammar(text: string, language: string): Promise<GrammarResult> {
+  // 1. 尝试调用 LanguageTool（无需 API Key，生产环境可用）
+  const ltResult = await callLanguageTool(text, language);
+  if (ltResult && (ltResult.issues.length > 0 || ltResult.isCorrect)) {
+    return ltResult;
+  }
+
+  // 2. fallback: LLMClient（沙箱环境可用）
+  const llmResult = await callLLM(text, language);
+  if (llmResult) {
+    return llmResult;
+  }
+
+  // 3. fallback: OpenAI（如果配置了 API Key）
+  const openaiResult = await callOpenAI(text, language);
+  if (openaiResult) {
+    return openaiResult;
+  }
+
+  // 4. fallback: 规则引擎（本地，无依赖）
+  return ruleBasedGrammarCheck(text);
 }
 
-function buildChineseExplanation(match: any): string {
-  const enMsg = match.message || "";
-  const shortMsg = match.shortMessage || "";
-  const context = match.context?.text || "";
-  const offset = match.offset || 0;
-  const length = match.length || 0;
-  const wrongWord = context.slice(offset, offset + length);
-
-  // 构建中文解释
-  let explanation = enMsg;
-
-  // 常见错误的中文映射
-  const translations: Record<string, string> = {
-    "Possible spelling mistake": "可能存在拼写错误",
-    "Possible agreement error": "可能存在主谓一致错误",
-    "Did you mean": "你是否想表达",
-    "Consider using": "建议使用",
-    "Possible typo": "可能存在打字错误",
-    "This word is normally not capitalized": "此单词通常不需要大写",
-    "This sentence does not start with an uppercase letter": "句子首字母需要大写",
-    "Use a comma before": "在...之前需要使用逗号",
-    "Two consecutive dots": "出现了两个连续的句号",
-    "Missing space": "缺少空格",
-    "Extra space": "多余的空格",
-  };
-
-  for (const [en, zh] of Object.entries(translations)) {
-    if (enMsg.includes(en)) {
-      explanation = zh + "。";
-      break;
-    }
-  }
-
-  if (wrongWord) {
-    explanation += ` 检测到问题词："${wrongWord}"`;
-  }
-
-  if (shortMsg && shortMsg !== enMsg && shortMsg.length < 50) {
-    explanation += `（${shortMsg}）`;
-  }
-
-  return explanation;
-}
-
-// ============ 规则引擎：基础语法检测（作为 fallback）============
-function ruleBasedGrammarCheck(text: string): { isCorrect: boolean; issues: GrammarIssue[] } {
-  const issues: GrammarIssue[] = [];
-  const lowerText = text.toLowerCase();
-
-  // 1. be + 动词原形（非进行时）
-  const beVerbPattern = /\b(i|you|we|they)\s+(am|are|is)\s+(go|eat|play|watch|read|write|speak|learn|study|work|live|love|like|hate|want|need|see|hear|feel|know|think|believe|understand|remember|forget|help|make|take|give|tell|say|talk|walk|run|jump|swim|dance|sing|cook|clean|wash|open|close|start|stop|try|use|find|lose|win|lose|buy|sell|pay|cost|spend|send|get|become|seem|look|sound|taste|smell|appear|happen|matter)\b/g;
-  let match;
-  while ((match = beVerbPattern.exec(lowerText)) !== null) {
-    const subject = match[1];
-    const beVerb = match[2];
-    const verb = match[3];
-    const originalVerb = text.slice(match.index + match[0].indexOf(verb), match.index + match[0].indexOf(verb) + verb.length);
-    issues.push({
-      title: "主谓不一致 / 时态错误",
-      message: `"${subject} ${beVerb} ${verb}" 中，be动词后面不能直接接动词原形（除非是现在进行时 ${beVerb} ${verb}ing 或被动语态 ${beVerb} ${verb}ed）。请检查时态或动词形式。`,
-      replacements: [
-        `${subject} ${verb}s`,
-        `${subject} ${verb}ed`,
-        `${subject} ${beVerb} ${originalVerb}ing`,
-        `${subject} will ${verb}`
-      ].filter((v, i, a) => a.indexOf(v) === i)
-    });
-  }
-
-  // 2. 第三人称单数 + don't
-  const thirdPersonDont = /\b(he|she|it)\s+don't\b/gi;
-  while ((match = thirdPersonDont.exec(text)) !== null) {
-    issues.push({
-      title: "主谓不一致",
-      message: `第三人称单数（he/she/it）应使用 "doesn't" 而不是 ""。`,
-      replacements: [text.slice(match.index, match.index + match[0].length).replace(/don't/i, "doesn't")]
-    });
-  }
-
-  // 3. 第一/二人称 + 动词三单
-  const pluralVerbS = /\b(i|you|we|they)\s+(goes|plays|eats|watches|reads|writes|speaks|learns|studies|works|lives|loves|likes|hates|wants|needs|sees|hears|feels|knows|thinks|believes|understands|remembers|forgets|helps|makes|takes|gives|tells|says|talks|walks|runs|jumps|swims|dances|sings|cooks|cleans|washes|opens|closes|starts|stops|tries|uses|finds|loses|wins|buys|sells|pays|spends|sends|gets|becomes|seems|looks|sounds|tastes|smells|appears|happens|matters)\b/gi;
-  while ((match = pluralVerbS.exec(text)) !== null) {
-    const subject = match[1].toLowerCase();
-    const verb = match[2].toLowerCase();
-    const baseVerb = verb.replace(/es$/, "").replace(/s$/, "");
-    issues.push({
-      title: "主谓不一致",
-      message: `主语 "${subject}" 是第一/二人称或复数，谓语动词不应加 -s/-es。`,
-      replacements: [`${subject} ${baseVerb}`]
-    });
-  }
-
-  // 4. yesterday + 现在时
-  const yesterdayPresent = /\byesterday\b[^.!?]*\b(go|eat|play|watch|read|write|speak|learn|study|work|live|love|like|hate|want|need|see|hear|feel|know|think|believe|understand|remember|forget|help|make|take|give|tell|say|talk|walk|run|jump|swim|dance|sing|cook|clean|wash|open|close|start|stop|try|use|find|lose|win|buy|sell|pay|spend|send|get|become|seem|look|sound|taste|smell|appear|happen|matter|am|are|is|have|has|do|does)\b/gi;
-  while ((match = yesterdayPresent.exec(text)) !== null) {
-    const verb = match[1].toLowerCase();
-    if (["am", "are", "is", "have", "has", "do", "does"].includes(verb)) {
-      issues.push({
-        title: "时态错误",
-        message: `"yesterday" 表示过去时间，应使用过去时态。`,
-        replacements: ["yesterday... was/were/had/did..."]
-      });
-    } else {
-      issues.push({
-        title: "时态错误",
-        message: `"yesterday" 表示过去时间，谓语动词应使用过去式。`,
-        replacements: ["yesterday... " + verb + "ed / " + verb + "（不规则变化）"]
-      });
-    }
-  }
-
-  // 5. tomorrow + 过去时
-  const tomorrowPast = /\btomorrow\b[^.!?]*\b(went|ate|played|watched|read|wrote|spoke|learned|studied|worked|lived|loved|liked|hated|wanted|needed|saw|heard|felt|knew|thought|believed|understood|remembered|forgot|helped|made|took|gave|told|said|talked|walked|ran|jumped|swam|danced|sang|cooked|cleaned|washed|opened|closed|started|stopped|tried|used|found|lost|won|bought|sold|paid|spent|sent|got|became|seemed|looked|sounded|tasted|smelled|appeared|happened|mattered|was|were|had|did)\b/gi;
-  while ((match = tomorrowPast.exec(text)) !== null) {
-    issues.push({
-      title: "时态错误",
-      message: `"tomorrow" 表示将来时间，应使用将来时态或一般现在时。`,
-      replacements: ["tomorrow... will + 动词原形 / be going to + 动词原形"]
-    });
-  }
-
-  // 6. 冠词 a/an 错误：a + 元音
-  const aVowel = /\ba\s+([aeiou][a-z]*)\b/gi;
-  while ((match = aVowel.exec(text)) !== null) {
-    const word = match[1];
-    if (!word.match(/^u[nlrs]/i)) {
-      issues.push({
-        title: "冠词错误",
-        message: `元音音素开头的单词前应使用 "an" 而不是 "a"。`,
-        replacements: [`an ${word}`]
-      });
-    }
-  }
-
-  // 7. 冠词 an + 辅音
-  const anConsonant = /\ban\s+([^aeiou\s][a-z]*)\b/gi;
-  while ((match = anConsonant.exec(text)) !== null) {
-    const word = match[1];
-    issues.push({
-      title: "冠词错误",
-      message: `辅音音素开头的单词前应使用 "a" 而不是 "an"。`,
-      replacements: [`a ${word}`]
-    });
-  }
-
-  // 8. go school / come school 缺少介词
-  const goSchool = /\b(go|come)\s+(school|college|university|hospital|church|prison)\b/gi;
-  while ((match = goSchool.exec(text)) !== null) {
-    const verb = match[1];
-    const place = match[2];
-    issues.push({
-      title: "介词缺失",
-      message: `表示去某地时，${verb} 后应加介词 "to"。`,
-      replacements: [`${verb} to ${place}`]
-    });
-  }
-
-  // 9. She have / He have / It have
-  const sheHave = /\b(she|he|it)\s+have\b/gi;
-  while ((match = sheHave.exec(text)) !== null) {
-    const subject = match[1].toLowerCase();
-    issues.push({
-      title: "主谓不一致",
-      message: `第三人称单数 "${subject}" 应搭配 "has" 而不是 "have"。`,
-      replacements: [`${subject} has`]
-    });
-  }
-
-  // 10. They has / We has / You has
-  const theyHas = /\b(they|we|you)\s+has\b/gi;
-  while ((match = theyHas.exec(text)) !== null) {
-    const subject = match[1].toLowerCase();
-    issues.push({
-      title: "主谓不一致",
-      message: `复数主语 "${subject}" 应搭配 "have" 而不是 "has"。`,
-      replacements: [`${subject} have`]
-    });
-  }
-
-  // 11. very + 比较级
-  const veryCompare = /\bvery\s+(better|worse|more|most|less|least|bigger|smaller|taller|shorter|faster|slower|stronger|weaker|older|younger|newer|older|hotter|colder|warmer|cooler|cheaper|more expensive|happier|sadder|angrier|busier|easier|harder|earlier|later|closer|farther|further|deeper|higher|lower|wider|narrower|longer|shorter|heavier|lighter|thicker|thinner|cleaner|dirtier|brighter|darker|quieter|louder|safer|more dangerous|healthier|sicker|richer|poorer|prettier|uglier)\b/gi;
-  while ((match = veryCompare.exec(text)) !== null) {
-    issues.push({
-      title: "修饰语错误",
-      message: `"very" 不能修饰比较级或最高级，应使用 "much" 或 "far"。`,
-      replacements: [match[0].replace(/very/i, "much")]
-    });
-  }
-
-  // 12. 双重否定
-  const doubleNegative = /\b(don't|doesn't|didn't|can't|couldn't|won't|wouldn't|shouldn't|mustn't|haven't|hasn't|hadn't|isn't|aren't|wasn't|weren't|nobody|nothing|nowhere|no one|neither|nor)\b[^.!?]*\b(nothing|nobody|nowhere|no one|neither|nor|never|no)\b/gi;
-  while ((match = doubleNegative.exec(text)) !== null) {
-    issues.push({
-      title: "双重否定",
-      message: `英语中双重否定会造成语义混乱，应只保留一个否定词。`,
-      replacements: ["建议改为单重否定表达"]
-    });
-  }
-
-  // 13. its/it's 混淆
-  const itsIts = /\bits\s+(is|was|has|not|going|coming|done|been|being)\b/gi;
-  while ((match = itsIts.exec(text)) !== null) {
-    issues.push({
-      title: "拼写/用法错误",
-      message: `"its" 是所有格代词，表示"它的"。如果是 "it is" 的缩写，应使用 "it's"。`,
-      replacements: [match[0].replace(/its/i, "it's")]
-    });
-  }
-
-  // 14. very + 动词原形
-  const veryVerb = /\bvery\s+(like|love|hate|enjoy|prefer|want|need|know|think|believe|understand|remember|forget|agree|disagree)\b/gi;
-  while ((match = veryVerb.exec(text)) !== null) {
-    const verb = match[1].toLowerCase();
-    issues.push({
-      title: "修饰语错误",
-      message: `"very" 不能直接修饰动词 "${verb}"。应使用 "I ${verb} ... very much" 或 "I really ${verb}" 的结构。`,
-      replacements: [`I really ${verb}`, `I ${verb} it very much`]
-    });
-  }
-
-  // 15. more + 比较级
-  const moreComparative = /\bmore\s+(taller|shorter|bigger|smaller|faster|slower|stronger|weaker|older|younger|newer|hotter|colder|warmer|cooler|cheaper|happier|sadder|angrier|busier|easier|harder|earlier|later|closer|farther|further|deeper|higher|lower|wider|narrower|longer|heavier|lighter|thicker|thinner|cleaner|dirtier|brighter|darker|quieter|louder|safer|healthier|sicker|richer|poorer|prettier|uglier|better|worse)\b/gi;
-  while ((match = moreComparative.exec(text)) !== null) {
-    const word = match[1].toLowerCase();
-    issues.push({
-      title: "比较级错误",
-      message: `"${word}" 本身已是比较级，不能与 "more" 连用（双重比较级）。直接使用 "${word}" 即可，或用 "much ${word}" 加强语气。`,
-      replacements: [word, `much ${word}`]
-    });
-  }
-
-  // 16. have/has + 过去式
-  const havePast = /\b(have|has|had)\s+(went|did|saw|took|came|gave|knew|began|drank|drove|ate|fell|flew|forgot|got|hid|held|kept|left|lost|made|meant|met|paid|ran|said|sat|slept|spoke|spent|stood|swam|taught|told|thought|understood|woke|wrote|brought|bought|caught|fought|taught|thought|sought)\b/gi;
-  while ((match = havePast.exec(text)) !== null) {
-    const aux = match[1].toLowerCase();
-    const wrongVerb = match[2].toLowerCase();
-    const pastPartMap: Record<string, string> = {
-      went: "gone", did: "done", saw: "seen", took: "taken", came: "come",
-      gave: "given", knew: "known", began: "begun", drank: "drunk",
-      drove: "driven", ate: "eaten", fell: "fallen", flew: "flown",
-      forgot: "forgotten", got: "gotten/got", hid: "hidden", held: "held",
-      kept: "kept", left: "left", lost: "lost", made: "made", meant: "meant",
-      met: "met", paid: "paid", ran: "run", said: "said", sat: "sat",
-      slept: "slept", spoke: "spoken", spent: "spent", stood: "stood",
-      swam: "swum", taught: "taught", told: "told", thought: "thought",
-      understood: "understood", woke: "woken", wrote: "written",
-      brought: "brought", bought: "bought", caught: "caught",
-      fought: "fought", sought: "sought"
-    };
-    const correct = pastPartMap[wrongVerb] || `${wrongVerb}ed`;
-    issues.push({
-      title: "时态错误",
-      message: `完成时态 (${aux}) 后应使用过去分词，而不是过去式 "${wrongVerb}"。`,
-      replacements: [`${aux} ${correct}`]
-    });
-  }
-
-  // 17. There have/has
-  const thereHave = /\bthere\s+(have|has)\b/gi;
-  while ((match = thereHave.exec(text)) !== null) {
-    issues.push({
-      title: "句型错误",
-      message: `"There be" 句型表示"存在有"，不能用 "have/has"。应使用 "There is/are"。`,
-      replacements: ["There is", "There are"]
-    });
-  }
-
-  // 18. am/is/are + 动词原形
-  const beVerbBase = /\b(am|is|are|was|were)\s+(agree|disagree|like|love|hate|want|need|know|think|believe|understand|remember|forget|prefer|enjoy|hope|wish)\b/gi;
-  while ((match = beVerbBase.exec(text)) !== null) {
-    const verb = match[2].toLowerCase();
-    issues.push({
-      title: "动词用法错误",
-      message: `"${verb}" 是实义动词，不需要加 be 动词。直接说 "I ${verb}" 即可。`,
-      replacements: [verb]
-    });
-  }
-
-  // 19. 情态动词 + 动词s形式
-  const modalVerbS = /\b(can|could|will|would|shall|should|may|might|must|need)\s+([a-z]+)s\b/gi;
-  while ((match = modalVerbS.exec(text)) !== null) {
-    const modal = match[1].toLowerCase();
-    const verb = match[2].toLowerCase();
-    const nonVerbs = ["let", "thi", "hi", "wa", "ha", "do", "doe", "i", "wa", "i"];
-    if (!nonVerbs.includes(verb) && verb.length > 1) {
-      issues.push({
-        title: "情态动词用法错误",
-        message: `情态动词 "${modal}" 后必须接动词原形，不能加 "s"。`,
-        replacements: [`${modal} ${verb}`]
-      });
-    }
-  }
-
-  // 20. want to / need to / like to + 动词s形式
-  const toVerbS = /\b(want|need|like|love|hate|prefer|begin|start|try|learn|forget|remember)\s+to\s+([a-z]+)s\b/gi;
-  while ((match = toVerbS.exec(text)) !== null) {
-    const verb = match[2].toLowerCase();
-    const nonVerbs = ["thi", "hi", "wa", "ha", "do", "doe", "i"];
-    if (!nonVerbs.includes(verb) && verb.length > 1) {
-      issues.push({
-        title: "不定式错误",
-        message: `"to" 后应接动词原形，不能加 "s"。`,
-        replacements: [`to ${verb}`]
-      });
-    }
-  }
-
-  // 21. don't/doesn't/didn't + 动词s形式
-  const notVerbS = /\b(don't|doesn't|didn't|can't|couldn't|won't|wouldn't|shouldn't|mustn't|haven't|hasn't|hadn't|isn't|aren't|wasn't|weren't)\s+([a-z]+)s\b/gi;
-  while ((match = notVerbS.exec(text)) !== null) {
-    const verb = match[2].toLowerCase();
-    const nonVerbs = ["thi", "hi", "wa", "ha", "do", "doe", "i", "wa"];
-    if (!nonVerbs.includes(verb) && verb.length > 1) {
-      issues.push({
-        title: "动词形式错误",
-        message: `助动词/情态动词否定式后应接动词原形，不能加 "s"。`,
-        replacements: [verb]
-      });
-    }
-  }
-
-  // 22. let + 主语 + 动词原形
-  const letVerbS = /\blet\s+\w+\s+([a-z]{2,})s\b/gi;
-  while ((match = letVerbS.exec(text)) !== null) {
-    const verb = match[1].toLowerCase();
-    issues.push({
-      title: "使役动词用法错误",
-      message: `"let" 后的宾语补足语应使用动词原形。`,
-      replacements: [verb]
-    });
-  }
-
-  // 23. 间接疑问句语序错误：I know who is he → I know who he is
-  // 检测：wh-词 + be/助动词 + 代词/名词（明显的人称代词作为宾语从句主语时，语序应为 wh+主语+动词）
-  const iqPronouns = "i|you|he|she|it|we|they|this|that|these|those|someone|somebody|something|anyone|anybody|anything|everyone|everybody|everything|nobody|nothing";
-  const indirectQuestionPattern = new RegExp(
-    `\\b(know|tell|ask|wonder|understand|remember|forget|see|hear|think|believe|imagine|guess|explain|show|decide|discover|realize|notice|doubt)\\b[^.!?]*\\b(who|what|where|when|why|how|which)\\s+(is|are|was|were|am|do|does|did|have|has|had|will|would|shall|should|can|could|may|might|must)\\s+(${iqPronouns})\\b`,
-    "gi"
-  );
-
-  while ((match = indirectQuestionPattern.exec(text)) !== null) {
-    const wh = match[2];
-    const verb = match[3];
-    const subject = match[4];
-    // 排除 "what is it" / "which is which" 等特殊情况（what/which 作主语时正确）
-    if ((wh.toLowerCase() === "what" || wh.toLowerCase() === "which") && subject.toLowerCase() === "it") {
-      continue;
-    }
-    issues.push({
-      title: "宾语从句词序错误",
-      message: `间接疑问句（宾语从句）需要使用陈述语序。原句使用了疑问语序 "${wh} ${verb} ${subject}"，应改为 "${wh} ${subject} ${verb}"。`,
-      replacements: [`${wh} ${subject} ${verb}`]
-    });
-  }
-
-  // 24. 虚拟语气：if 条件句中使用 was（第一/三人称单数应使用 were）
-  const subjunctiveWas = /\bif\s+(i|he|she|it)\s+was\b/gi;
-  while ((match = subjunctiveWas.exec(text)) !== null) {
-    const subject = match[1].toLowerCase();
-    issues.push({
-      title: "虚拟语气错误",
-      message: `虚拟语气中，无论主语是谁，be动词都应使用 "were" 而不是 "was"。`,
-      replacements: [`if ${subject} were`]
-    });
-  }
-
-  // 25. 介词后接动词原形（应使用动名词）
-  const prepVerbBase = /\b(of|in|on|at|for|with|about|without|after|before|by|from|to|through|during|until|since|between|among|against|toward|towards|into|onto|upon|within|beneath|beside|behind|beyond|except|despite|including|regarding|concerning|considering|regardless of|instead of|because of|in spite of)\s+([a-z]{2,})\b/gi;
-  while ((match = prepVerbBase.exec(text)) !== null) {
-    const prep = match[1].toLowerCase();
-    const word = match[2].toLowerCase();
-    // 排除常见介词后接名词的情况
-    const commonNounsAfterPrep = ["school", "home", "work", "time", "place", "way", "day", "year", "man", "woman", "child", "friend", "family", "house", "car", "city", "country", "world", "life", "hand", "part", "group", "problem", "question", "answer", "idea", "reason", "moment", "morning", "night", "week", "month", "hour", "minute", "second"];
-    if (!commonNounsAfterPrep.includes(word) && !word.endsWith("ing")) {
-      issues.push({
-        title: "介词后动词形式错误",
-        message: `介词 "${prep}" 后面如果接动词，应使用动名词（-ing 形式），而不是动词原形。`,
-        replacements: [`${prep} ${word}ing`]
-      });
-    }
-  }
-
-  // 26. 比较级 than 后接代词主格（应使用宾格）
-  const thanSubjectPronoun = /\b(than|as)\s+(i|he|she|we|they)\s+(?:am|is|are|was|were|do|does|did|have|has|had|can|could|will|would)\b/gi;
-  while ((match = thanSubjectPronoun.exec(text)) !== null) {
-    const pronoun = match[2].toLowerCase();
-    const objPronouns: Record<string, string> = { i: "me", he: "him", she: "her", we: "us", they: "them" };
-    if (objPronouns[pronoun]) {
-      issues.push({
-        title: "代词格错误",
-        message: `在 "than/as" 后面进行比较时，代词应使用宾格。`,
-        replacements: [objPronouns[pronoun]]
-      });
-    }
-  }
-
-  // 27. since/for + 时间段混淆
-  const sinceForWrong = /\b(since|for)\s+(\d+\s+(?:year|month|week|day|hour|minute|second)s?)\b/gi;
-  while ((match = sinceForWrong.exec(text)) !== null) {
-    const word = match[1].toLowerCase();
-    const duration = match[2].toLowerCase();
-    if (word === "since" && duration.match(/\d+\s+(?:year|month|week|day|hour|minute|second)s?/)) {
-      issues.push({
-        title: "介词使用错误",
-        message: `"since" 后接具体时间点（如 since 2020 / since Monday），"for" 后接时间段（如 for 3 years）。`,
-        replacements: [`for ${duration}`]
-      });
-    }
-  }
-
-  // 28. suggest / insist / demand / recommend + should / 动词原形（不用 to）
-  const suggestToVerb = /\b(suggest|insist|demand|recommend|require|request|order|advise|propose|command)\s+(?:someone\s+)?to\s+/gi;
-  while ((match = suggestToVerb.exec(text)) !== null) {
-    const verb = match[1].toLowerCase();
-    issues.push({
-      title: "虚拟语气/动词用法错误",
-      message: `"${verb}" 后接宾语从句时，从句中应使用 "(should) + 动词原形" 的虚拟语气结构，而不是 "to + 动词原形"。`,
-      replacements: [`${verb} that... (should) + 动词原形`]
-    });
-  }
-
-  // 29. 反身代词使用错误
-  const reflexiveWrong = /\b(i|you|he|she|it|we|they)\s+(?:myself|yourself|yourselves|himself|herself|itself|ourselves|themselves)\b/gi;
-  while ((match = reflexiveWrong.exec(text)) !== null) {
-    const subject = match[1].toLowerCase();
-    const reflexive = match[2].toLowerCase();
-    const correctReflexive: Record<string, string> = {
-      i: "myself", you: "yourself", he: "himself", she: "herself",
-      it: "itself", we: "ourselves", they: "themselves"
-    };
-    if (correctReflexive[subject] && reflexive !== correctReflexive[subject]) {
-      issues.push({
-        title: "反身代词错误",
-        message: `主语 "${subject}" 对应的反身代词应为 "${correctReflexive[subject]}"，而不是 "${reflexive}"。`,
-        replacements: [correctReflexive[subject]]
-      });
-    }
-  }
-
-  return {
-    isCorrect: issues.length === 0,
-    issues: issues.slice(0, 5)
-  };
-}
-
-// ============ OpenAI API 调用 ============
-async function callOpenAI(text: string): Promise<{ isCorrect: boolean; issues: GrammarIssue[] }> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("未配置 OPENAI_API_KEY");
-  }
-
-  const systemPrompt = `你是一位专业的英语老师。请全面检测用户输入的英文句子，包括语法和逻辑两个方面。
-
-检测要求：
-1. **语法检测**：检查主谓一致、时态、冠词、介词、词序等语法问题
-2. **逻辑检测**：检查语义是否合理、表达是否通顺、是否符合英语表达习惯
-3. 给出中文解释（问题类型 + 详细说明）
-4. 提供修正建议
-
-请按以下JSON格式返回结果（不要包含任何其他内容）：
-{
-  "isCorrect": true/false,
-  "issues": [
-    {
-      "title": "问题类型",
-      "message": "详细的中文解释",
-      "replacements": ["建议的修正"]
-    }
-  ]
-}
-
-只返回JSON，不要有其他解释文字。`;
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `请检测以下英文句子的语法：\n${text}` }
-      ],
-      temperature: 0.3,
-      max_tokens: 1000
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
-  }
-
-  const data = await response.json() as any;
-  const content = data.choices?.[0]?.message?.content || "";
-
-  let result;
+// ============ LanguageTool（免费开源语法检测引擎）============
+async function callLanguageTool(text: string, language: string): Promise<GrammarResult | null> {
   try {
-    result = JSON.parse(content);
-  } catch {
+    const ltLang = language.startsWith("zh") ? "zh-CN" : "en-US";
+
+    const response = await globalThis.fetch("https://api.languagetool.org/api/v2/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        text,
+        language: ltLang,
+        enabledOnly: "false",
+      }).toString(),
+    });
+
+    if (!response.ok) {
+      console.error("LanguageTool API error:", response.status, response.statusText);
+      return null;
+    }
+
+    const data: any = await response.json();
+    const issues: GrammarIssue[] = [];
+
+    for (const match of data.matches || []) {
+      const shortMsg = match.shortMessage || match.message || "";
+      const replacements = (match.replacements || []).slice(0, 3).map((r: any) => r.value);
+
+      // 将英文错误信息翻译为中文
+      const title = translateLTMessage(shortMsg, match.rule?.id);
+      const message = translateLTMessage(match.message || "", match.rule?.id);
+
+      issues.push({
+        title,
+        message,
+        replacements: replacements.length > 0 ? replacements : undefined,
+      });
+    }
+
+    return {
+      isCorrect: issues.length === 0,
+      issues,
+      originalText: text,
+      correctedText: issues.length > 0 ? generateCorrectedText(text, data.matches) : undefined,
+    };
+  } catch (error) {
+    console.error("LanguageTool error:", error);
+    return null;
+  }
+}
+
+// LanguageTool 错误信息翻译
+function translateLTMessage(msg: string, ruleId?: string): string {
+  const translations: Record<string, string> = {
+    "UPPERCASE_SENTENCE_START": "句子首字母应大写",
+    "COMMA_PARENTHESIS_WHITESPACE": "标点符号前后空格使用不当",
+    "DOUBLE_PUNCTUATION": "重复标点符号",
+    "MORFOLOGIK_RULE_EN_US": "拼写错误",
+    "TOO_LONG_SENTENCE": "句子过长，建议拆分",
+    "HE_VERB_AGR": "主谓不一致",
+    "AGREEMENT_POSTPONED_ADJ": "形容词与名词不一致",
+    "ARTICLE_ADJECTIVE_OF": "冠词使用不当",
+  };
+
+  // 规则级别翻译
+  if (ruleId && translations[ruleId]) {
+    return translations[ruleId];
+  }
+
+  // 关键词匹配翻译
+  if (msg.includes("Possible spelling mistake")) return "可能存在拼写错误";
+  if (msg.includes("Did you mean")) return msg; // 保留建议
+  if (msg.includes("agreement")) return "主谓不一致";
+  if (msg.includes("tense")) return "时态错误";
+  if (msg.includes("article")) return "冠词使用不当";
+  if (msg.includes("preposition")) return "介词使用不当";
+  if (msg.includes("comma")) return "逗号使用不当";
+  if (msg.includes("capitalization")) return "大小写错误";
+  if (msg.includes("wordiness")) return "表达冗长，建议简化";
+  if (msg.includes("passive voice")) return "建议使用主动语态";
+  if (msg.includes("Possible typo")) return "可能存在打字错误";
+
+  // 默认返回原始信息（如果已经比较简短）
+  return msg.length > 80 ? msg.substring(0, 80) + "..." : msg;
+}
+
+function generateCorrectedText(text: string, matches: any[]): string {
+  let corrected = text;
+  // 从后向前替换，避免位置偏移
+  const sorted = [...matches].sort((a, b) => b.offset - a.offset);
+  for (const match of sorted) {
+    if (match.replacements && match.replacements.length > 0) {
+      const before = corrected.slice(0, match.offset);
+      const after = corrected.slice(match.offset + match.length);
+      corrected = before + match.replacements[0].value + after;
+    }
+  }
+  return corrected;
+}
+
+// ============ LLMClient（沙箱环境内置）============
+async function callLLM(text: string, _language: string): Promise<GrammarResult | null> {
+  try {
+    const config = new Config();
+    const client = new LLMClient(config);
+    const messages = [
+      {
+        role: "system" as const,
+        content:
+          'You are a professional English grammar checker. Analyze the text for grammar, syntax, and style errors. Return ONLY a JSON object with this exact structure: {"isCorrect": boolean, "issues": [{"title": "brief Chinese title", "message": "detailed Chinese explanation", "replacements": ["suggestion1", "suggestion2"]}], "correctedText": "the corrected version"}. If no errors, return {"isCorrect": true, "issues": []}.',
+      },
+      {
+        role: "user" as const,
+        content: `Check this English text for grammar errors:\n\n"${text}"`,
+      },
+    ];
+
+    const response = await client.invoke(messages, {
+      model: "doubao-seed-2-0-lite-260215",
+      temperature: 0.1,
+    });
+
+    const content = response.content || "";
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      result = JSON.parse(jsonMatch[0]);
-    } else {
-      throw new Error("OpenAI返回格式错误");
+      const result: any = JSON.parse(jsonMatch[0]);
+      return {
+        isCorrect: result.isCorrect ?? result.issues.length === 0,
+        issues: result.issues || [],
+        originalText: text,
+        correctedText: result.correctedText,
+      };
     }
+    return null;
+  } catch (error) {
+    console.error("LLMClient error:", error);
+    return null;
   }
-
-  return result;
 }
 
-// ============ 主路由 ============
-router.post("/", async (req, res) => {
+// ============ OpenAI（需要配置 API Key）============
+async function callOpenAI(text: string, _language: string): Promise<GrammarResult | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
   try {
-    const { text } = req.body;
-
-    if (!text || typeof text !== "string") {
-      return res.status(400).json({ error: "缺少文本内容" });
-    }
-
-    let result: { isCorrect: boolean; issues: GrammarIssue[] } | null = null;
-    let usedMethod = "";
-    let errorLog = "";
-
-    // 1. 优先使用 LanguageTool（专业语法检测引擎，免费）
-    try {
-      result = await callLanguageTool(text);
-      usedMethod = "languagetool";
-    } catch (ltError: any) {
-      errorLog = `LanguageTool failed: ${ltError.message}; `;
-
-      // 2. 尝试 LLMClient（沙箱环境）
-      try {
-        const config = new Config();
-        const client = new LLMClient(config);
-
-        const messages = [
+    const response = await globalThis.fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
           {
-            role: "system" as const,
-            content: `你是一位专业的英语老师。请全面检测用户输入的英文句子，包括语法和逻辑两个方面。
-
-检测要求：
-1. **语法检测**：检查主谓一致、时态、冠词、介词、词序等语法问题
-2. **逻辑检测**：检查语义是否合理、表达是否通顺、是否符合英语表达习惯
-3. 给出中文解释（问题类型 + 详细说明）
-4. 提供修正建议
-
-请按以下JSON格式返回结果（不要包含任何其他内容）：
-{
-  "isCorrect": true/false,
-  "issues": [
-    {
-      "title": "问题类型（如：主谓不一致、时态错误、逻辑错误、表达不当等）",
-      "message": "详细的中文解释",
-      "replacements": ["建议的修正单词、短语或完整句子"]
-    }
-  ]
-}
-
-只返回JSON，不要有其他解释文字。`
+            role: "system",
+            content:
+              'You are a professional English grammar checker. Analyze the text for grammar, syntax, and style errors. Return ONLY a JSON object with this exact structure: {"isCorrect": boolean, "issues": [{"title": "brief Chinese title", "message": "detailed Chinese explanation", "replacements": ["suggestion1"]}], "correctedText": "corrected version"}.',
           },
           {
-            role: "user" as const,
-            content: `请检测以下英文句子的语法：\n${text}`
+            role: "user",
+            content: `Check this English text:\n\n"${text}"`,
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 1000,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("OpenAI API error:", response.status);
+      return null;
+    }
+
+    const data: any = await response.json();
+    const content = data.choices?.[0]?.message?.content || "";
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const result: any = JSON.parse(jsonMatch[0]);
+      return {
+        isCorrect: result.isCorrect ?? result.issues.length === 0,
+        issues: result.issues || [],
+        originalText: text,
+        correctedText: result.correctedText,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("OpenAI error:", error);
+    return null;
+  }
+}
+
+// ============ 增强版规则引擎（使用 compromise NLP）============
+function ruleBasedGrammarCheck(text: string): GrammarResult {
+  const issues: GrammarIssue[] = [];
+  const doc = nlp(text);
+
+  // 1. 句子首字母大写
+  checkCapitalization(doc, text, issues);
+
+  // 2. 主谓一致（第三人称单数）
+  checkSubjectVerbAgreement(doc, issues);
+
+  // 3. 不可数名词加复数
+  checkUncountableNouns(doc, issues);
+
+  // 4. 比较级用法
+  checkComparative(doc, issues);
+
+  // 5. there/their/they're 混淆
+  checkThereTheirTheyre(text, issues);
+
+  // 6. 介词冗余
+  checkPrepositionRedundancy(doc, issues);
+
+  // 7. 冗余表达
+  checkWordiness(doc, issues);
+
+  // 8. 连续逗号
+  checkDoublePunctuation(text, issues);
+
+  // 9. 大小写一致性
+  checkInconsistentCapitalization(text, issues);
+
+  // 10. 冠词使用
+  checkArticleUsage(doc, issues);
+
+  // 11. 间接疑问句语序
+  checkIndirectQuestion(text, issues);
+
+  // 12. 虚拟语气
+  checkSubjunctive(text, issues);
+
+  // 13. 介词后动词形式
+  checkPrepositionVerbForm(doc, issues);
+
+  // 14. 比较级后代词格
+  checkComparativePronoun(text, issues);
+
+  // 15. since/for + 时间段
+  checkSinceFor(text, issues);
+
+  // 16. suggest/insist + 虚拟语气
+  checkSuggestInsistSubjunctive(text, issues);
+
+  // 17. 反身代词
+  checkReflexivePronoun(doc, text, issues);
+
+  // 18. 定语从句关系代词（使用 compromise）
+  checkRelativeClause(doc, issues);
+
+  // 19. 形容词/副词混淆
+  checkAdjectiveAdverb(doc, issues);
+
+  // 20. 时态一致性
+  checkTenseConsistency(doc, issues);
+
+  const correctedText = issues.length > 0 ? generateSimpleCorrection(text, issues) : undefined;
+
+  return {
+    isCorrect: issues.length === 0,
+    issues,
+    originalText: text,
+    correctedText,
+  };
+}
+
+// ============ 具体规则实现 ============
+
+function checkCapitalization(doc: any, text: string, issues: GrammarIssue[]) {
+  const sentences = doc.sentences().json();
+  for (const sent of sentences) {
+    const firstWord = sent.text.trim().split(/\s+/)[0];
+    if (firstWord && /^[a-z]/.test(firstWord) && !/^[iI]$/.test(firstWord)) {
+      issues.push({
+        title: "首字母大写",
+        message: `句子 "${sent.text.trim().substring(0, 30)}..." 的首字母应大写。`,
+        replacements: [firstWord.charAt(0).toUpperCase() + firstWord.slice(1)],
+      });
+    }
+  }
+}
+
+function checkSubjectVerbAgreement(doc: any, issues: GrammarIssue[]) {
+  const sentences = doc.sentences().json();
+  for (const sent of sentences) {
+    const sentenceDoc = nlp(sent.text);
+
+    // 检查第三人称单数主语 + 动词原形
+    const thirdPersonSubjects = sentenceDoc.match("#Pronoun|#Noun").json();
+    const verbs = sentenceDoc.verbs().json();
+
+    for (const subj of thirdPersonSubjects) {
+      const word = subj.text?.toLowerCase() || "";
+      if (["he", "she", "it"].includes(word)) {
+        for (const v of verbs) {
+          const verbForms = v.verb || {};
+          if (verbForms.infinitive && !verbForms.thirdPerson && !verbForms.past) {
+            const verbText = v.text?.toLowerCase() || "";
+            if (!verbText.endsWith("s") && !verbText.endsWith("es")) {
+              issues.push({
+                title: "主谓不一致",
+                message: `主语 "${subj.text}" 是第三人称单数，动词 "${v.text}" 应使用第三人称单数形式。`,
+                replacements: [`${verbForms.infinitive}s`],
+              });
+            }
           }
-        ];
-
-        const response = await client.invoke(messages, {
-          model: "doubao-seed-2-0-lite-260215",
-          temperature: 0.3
-        });
-
-        try {
-          result = JSON.parse(response.content);
-        } catch {
-          const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            result = JSON.parse(jsonMatch[0]);
-          } else {
-            throw new Error("AI返回格式错误");
-          }
-        }
-        usedMethod = "llm";
-      } catch (llmError: any) {
-        errorLog += `LLMClient failed: ${llmError.message}; `;
-
-        // 3. 尝试 OpenAI API
-        try {
-          result = await callOpenAI(text);
-          usedMethod = "openai";
-        } catch (openaiError: any) {
-          errorLog += `OpenAI failed: ${openaiError.message}; `;
-
-          // 4. 回退到规则引擎
-          result = ruleBasedGrammarCheck(text);
-          usedMethod = "rule";
         }
       }
     }
+  }
+}
 
-    res.json({
-      success: true,
-      text,
-      ...result,
-      _method: usedMethod,
-      ...(usedMethod === "rule" ? { _note: "当前使用基础规则检测，结果可能不够全面。" } : {})
-    });
+function checkUncountableNouns(doc: any, issues: GrammarIssue[]) {
+  const uncountable = [
+    "advice", "information", "news", "furniture", "equipment",
+    "luggage", "baggage", "bread", "rice", "money",
+  ];
 
-  } catch (error: any) {
-    console.error("Grammar check error:", error.message);
-    res.status(500).json({
-      error: "语法检测失败，请稍后重试",
-      details: error.message
+  for (const noun of uncountable) {
+    const pattern = new RegExp(`\\b${noun}s\\b`, "gi");
+    const matches = doc.text().match(pattern);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "不可数名词",
+          message: `"${match}" 是不可数名词，不能加复数形式。应使用 "${noun}" 或 "pieces of ${noun}"。`,
+          replacements: [noun, `pieces of ${noun}`],
+        });
+      }
+    }
+  }
+}
+
+function checkComparative(doc: any, issues: GrammarIssue[]) {
+  const comparativePatterns = [
+    { pattern: /\bmore\s+(good|bad|far|little|much|many)\b/gi, msg: "good/bad/far/little/much/many 的比较级是不规则变化" },
+    { pattern: /\bmost\s+(good|bad|far|little|much|many)\b/gi, msg: "good/bad/far/little/much/many 的最高级是不规则变化" },
+  ];
+
+  for (const { pattern, msg } of comparativePatterns) {
+    const matches = doc.text().match(pattern);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "比较级错误",
+          message: `${msg}: "${match}"。`,
+          replacements: undefined,
+        });
+      }
+    }
+  }
+}
+
+function checkThereTheirTheyre(text: string, issues: GrammarIssue[]) {
+  const patterns = [
+    { regex: /\bthere\s+(is|are|was|were)\s+([a-z]+)\s+\2\b/gi, msg: "there/their/they're 混淆", replacement: "their" },
+  ];
+
+  for (const { regex, msg } of patterns) {
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      issues.push({
+        title: "易混淆词",
+        message: `${msg}: "${match[0]}"。`,
+        replacements: undefined,
+      });
+    }
+  }
+}
+
+function checkPrepositionRedundancy(doc: any, issues: GrammarIssue[]) {
+  const redundant = [
+    { pattern: /\benter\s+into\b/gi, correct: "enter" },
+    { pattern: /\breturn\s+back\b/gi, correct: "return" },
+    { pattern: /\brepeat\s+again\b/gi, correct: "repeat" },
+    { pattern: /\bmeet\s+together\b/gi, correct: "meet" },
+    { pattern: /\bcombine\s+together\b/gi, correct: "combine" },
+  ];
+
+  for (const { pattern, correct } of redundant) {
+    const matches = doc.text().match(pattern);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "冗余表达",
+          message: `"${match}" 存在冗余，应简化为 "${correct}"。`,
+          replacements: [correct],
+        });
+      }
+    }
+  }
+}
+
+function checkWordiness(doc: any, issues: GrammarIssue[]) {
+  const wordy = [
+    { pattern: /\bdue\s+to\s+the\s+fact\s+that\b/gi, concise: "because" },
+    { pattern: /\bin\s+spite\s+of\s+the\s+fact\s+that\b/gi, concise: "although" },
+    { pattern: /\bin\s+the\s+event\s+that\b/gi, concise: "if" },
+    { pattern: /\bat\s+this\s+point\s+in\s+time\b/gi, concise: "now" },
+    { pattern: /\bin\s+order\s+to\b/gi, concise: "to" },
+    { pattern: /\bwith\s+regard\s+to\b/gi, concise: "about" },
+    { pattern: /\bin\s+the\s+near\s+future\b/gi, concise: "soon" },
+  ];
+
+  for (const { pattern, concise } of wordy) {
+    const matches = doc.text().match(pattern);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "表达冗长",
+          message: `"${match}" 表达冗长，建议简化为 "${concise}"。`,
+          replacements: [concise],
+        });
+      }
+    }
+  }
+}
+
+function checkDoublePunctuation(text: string, issues: GrammarIssue[]) {
+  if (/,\s*,/.test(text)) {
+    issues.push({
+      title: "连续逗号",
+      message: "检测到连续逗号，请删除多余的逗号。",
+      replacements: undefined,
     });
   }
-});
+}
+
+function checkInconsistentCapitalization(text: string, issues: GrammarIssue[]) {
+  const common = ["iPhone", "iPad", "eBay", "WordPress", "JavaScript", "TypeScript"];
+  for (const word of common) {
+    const wrong = word.toLowerCase();
+    const regex = new RegExp(`\\b${wrong}\\b`, "gi");
+    const matches = text.match(regex);
+    if (matches && matches.some(m => m !== word)) {
+      issues.push({
+        title: "大小写不一致",
+        message: `"${wrong}" 的正确写法是 "${word}"。`,
+        replacements: [word],
+      });
+    }
+  }
+}
+
+function checkArticleUsage(doc: any, issues: GrammarIssue[]) {
+  const text = doc.text();
+  // a + 元音音素
+  const aVowel = /\ba\s+([aeiouAEIOU][a-zA-Z]*)\b/g;
+  let match;
+  while ((match = aVowel.exec(text)) !== null) {
+    const word = match[1].toLowerCase();
+    // 排除以 u 开头但发 /ju:/ 音的词
+    if (!word.startsWith("uni") && !word.startsWith("use") && !word.startsWith("euro")) {
+      issues.push({
+        title: "冠词使用不当",
+        message: `"a ${match[1]}" 应改为 "an ${match[1]}"（元音音素前用 an）。`,
+        replacements: [`an ${match[1]}`],
+      });
+    }
+  }
+
+  // an + 辅音音素
+  const anConsonant = /\ban\s+([^aeiouAEIOU\s][a-zA-Z]*)\b/g;
+  while ((match = anConsonant.exec(text)) !== null) {
+    const word = match[1].toLowerCase();
+    if (!word.startsWith("hour") && !word.startsWith("hon") && !word.startsWith("heir")) {
+      issues.push({
+        title: "冠词使用不当",
+        message: `"an ${match[1]}" 应改为 "a ${match[1]}"（辅音音素前用 a）。`,
+        replacements: [`a ${match[1]}`],
+      });
+    }
+  }
+}
+
+// 11. 间接疑问句语序
+function checkIndirectQuestion(text: string, issues: GrammarIssue[]) {
+  const patterns = [
+    { regex: /\b(know|wonder|understand|remember|forget|ask|tell|explain|guess|imagine)\s+(?:me\s+)?(?:that\s+)?who\s+is\s+(\w+)/gi, msg: "间接疑问句中应用陈述语序" },
+    { regex: /\b(know|wonder|understand|remember|forget|ask|tell|explain|guess|imagine)\s+(?:me\s+)?(?:that\s+)?what\s+is\s+(\w+)/gi, msg: "间接疑问句中应用陈述语序" },
+    { regex: /\b(know|wonder|understand|remember|forget|ask|tell|explain|guess|imagine)\s+(?:me\s+)?(?:that\s+)?where\s+is\s+(\w+)/gi, msg: "间接疑问句中应用陈述语序" },
+    { regex: /\b(know|wonder|understand|remember|forget|ask|tell|explain|guess|imagine)\s+(?:me\s+)?(?:that\s+)?when\s+is\s+(\w+)/gi, msg: "间接疑问句中应用陈述语序" },
+    { regex: /\b(know|wonder|understand|remember|forget|ask|tell|explain|guess|imagine)\s+(?:me\s+)?(?:that\s+)?why\s+is\s+(\w+)/gi, msg: "间接疑问句中应用陈述语序" },
+    { regex: /\b(know|wonder|understand|remember|forget|ask|tell|explain|guess|imagine)\s+(?:me\s+)?(?:that\s+)?how\s+is\s+(\w+)/gi, msg: "间接疑问句中应用陈述语序" },
+  ];
+
+  for (const { regex, msg } of patterns) {
+    const matches = text.match(regex);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "间接疑问句语序错误",
+          message: `${msg}: "${match}"。应改为陈述语序（如 who he is 而非 who is he）。`,
+          replacements: undefined,
+        });
+      }
+    }
+  }
+}
+
+// 12. 虚拟语气
+function checkSubjunctive(text: string, issues: GrammarIssue[]) {
+  const subjunctivePatterns = [
+    { regex: /\bif\s+i\s+was\b/gi, correct: "if I were", msg: "虚拟语气中，if I/he/she/it 后面应使用 were 而不是 was" },
+    { regex: /\bif\s+he\s+was\b/gi, correct: "if he were", msg: "虚拟语气中，if I/he/she/it 后面应使用 were 而不是 was" },
+    { regex: /\bif\s+she\s+was\b/gi, correct: "if she were", msg: "虚拟语气中，if I/he/she/it 后面应使用 were 而不是 was" },
+    { regex: /\bif\s+it\s+was\b/gi, correct: "if it were", msg: "虚拟语气中，if I/he/she/it 后面应使用 were 而不是 was" },
+    { regex: /\bi\s+wish\s+i\s+was\b/gi, correct: "I wish I were", msg: "wish 后的从句表示与事实相反，应使用 were" },
+    { regex: /\bi\s+wish\s+he\s+was\b/gi, correct: "I wish he were", msg: "wish 后的从句表示与事实相反，应使用 were" },
+  ];
+
+  for (const { regex, correct, msg } of subjunctivePatterns) {
+    const matches = text.match(regex);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "虚拟语气错误",
+          message: `${msg}: "${match}"。应改为 "${correct}"。`,
+          replacements: [correct],
+        });
+      }
+    }
+  }
+}
+
+// 13. 介词后动词应使用动名词
+function checkPrepositionVerbForm(doc: any, issues: GrammarIssue[]) {
+  const text = doc.text();
+  const preps = ["of", "in", "on", "at", "for", "with", "about", "without", "after", "before", "by", "from", "to"];
+
+  for (const prep of preps) {
+    // 介词 + 动词原形（排除特定短语如 "used to", "have to"）
+    const regex = new RegExp(`\\b${prep}\\s+([a-z]+)(?:\\s|$|[^a-z])`, "gi");
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const verb = match[1].toLowerCase();
+      // 排除 be 动词和常见例外
+      if (verb === "be" || verb === "do" || verb === "have") continue;
+      // 检查 compromise 中该词是否为动词
+      const vDoc = nlp(verb);
+      if (vDoc.verbs().out("array").length > 0) {
+        const gerund = verb.endsWith("e") ? verb.slice(0, -1) + "ing" : verb + "ing";
+        issues.push({
+          title: "介词后动词形式错误",
+          message: `介词 "${prep}" 后应使用动名词形式，"${verb}" 应改为 "${gerund}"。`,
+          replacements: [gerund],
+        });
+      }
+    }
+  }
+}
+
+// 14. 比较级 than/as 后代词应使用宾格
+function checkComparativePronoun(text: string, issues: GrammarIssue[]) {
+  const patterns = [
+    { regex: /\bthan\s+(I|he|she|we|they)\s+(?:is|are|was|were|do|does|did|have|has|had)\b/gi, correct: "him/her/them/us/me", msg: "than/as 后比较对象应使用宾格" },
+    { regex: /\bas\s+(?:old|young|tall|short|big|small|fast|slow|good|bad)\s+as\s+(I|he|she|we|they)\b/gi, correct: "me/him/her/us/them", msg: "as...as 后应使用宾格" },
+  ];
+
+  for (const { regex, msg } of patterns) {
+    const matches = text.match(regex);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "代词格错误",
+          message: `${msg}: "${match}"。`,
+          replacements: undefined,
+        });
+      }
+    }
+  }
+}
+
+// 15. since/for + 时间段混淆
+function checkSinceFor(text: string, issues: GrammarIssue[]) {
+  const patterns = [
+    { regex: /\bsince\s+(\d+)\s+(years?|months?|weeks?|days?|hours?|minutes?)\b/gi, msg: "since 后应接时间点（如 2020, last year），时间段应用 for" },
+    { regex: /\bfor\s+(\d{4}|last\s+|next\s+|this\s+|yesterday|tomorrow|today)\b/gi, msg: "for 后应接时间段，时间点应用 since" },
+  ];
+
+  for (const { regex, msg } of patterns) {
+    const matches = text.match(regex);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "since/for 混淆",
+          message: `${msg}: "${match}"。`,
+          replacements: undefined,
+        });
+      }
+    }
+  }
+}
+
+// 16. suggest/insist/demand + 虚拟语气
+function checkSuggestInsistSubjunctive(text: string, issues: GrammarIssue[]) {
+  const patterns = [
+    { regex: /\bsuggest\s+(?:me\s+|him\s+|her\s+|them\s+|us\s+)?to\s+([a-z]+)/gi, msg: "suggest 后不接 to do，应使用 suggest that... (should) do 或 suggest doing" },
+    { regex: /\binsist\s+(?:me\s+|him\s+|her\s+|them\s+|us\s+)?to\s+([a-z]+)/gi, msg: "insist 后不接 to do，应使用 insist that... (should) do 或 insist on doing" },
+    { regex: /\bdemand\s+(?:me\s+|him\s+|her\s+|them\s+|us\s+)?to\s+([a-z]+)/gi, msg: "demand 后不接 to do，应使用 demand that... (should) do" },
+  ];
+
+  for (const { regex, msg } of patterns) {
+    const matches = text.match(regex);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "虚拟语气动词用法错误",
+          message: `${msg}: "${match}"。`,
+          replacements: undefined,
+        });
+      }
+    }
+  }
+}
+
+// 17. 反身代词与主语不匹配
+function checkReflexivePronoun(doc: any, text: string, issues: GrammarIssue[]) {
+  const patterns = [
+    { regex: /\bI\b.*?\b(himself|herself|itself|themselves)\b/gi, msg: "反身代词应与主语 I 匹配为 myself" },
+    { regex: /\b(he|she)\b.*?\b(myself|ourselves|themselves)\b/gi, msg: "反身代词应与主语匹配为 himself/herself" },
+    { regex: /\b(they)\b.*?\b(myself|yourself|himself|herself|itself)\b/gi, msg: "反身代词应与主语 they 匹配为 themselves" },
+  ];
+
+  for (const { regex, msg } of patterns) {
+    const matches = text.match(regex);
+    if (matches) {
+      for (const match of matches) {
+        issues.push({
+          title: "反身代词错误",
+          message: `${msg}: "${match}"。`,
+          replacements: undefined,
+        });
+      }
+    }
+  }
+}
+
+// 18. 定语从句关系代词（使用 compromise 识别名词类型）
+function checkRelativeClause(doc: any, issues: GrammarIssue[]) {
+  const text = doc.text();
+
+  // 使用 compromise 获取所有名词
+  const nouns = doc.nouns().out("array") as string[];
+
+  for (const noun of nouns) {
+    const nounLower = noun.toLowerCase();
+    // 检查该名词后是否跟了 who
+    const whoPattern = new RegExp(`\\b${nounLower}\\s+who\\b`, "gi");
+    const whichPattern = new RegExp(`\\b${nounLower}\\s+which\\b`, "gi");
+
+    if (whoPattern.test(text)) {
+      // compromise 可以判断名词是否为人
+      const nounDoc = nlp(noun);
+      const isPerson = nounDoc.people().out("array").length > 0;
+      if (!isPerson) {
+        issues.push({
+          title: "定语从句关系代词错误",
+          message: `非人先行词 "${noun}" 应使用 which/that 引导定语从句，而非 who。`,
+          replacements: [`${noun} which`, `${noun} that`],
+        });
+      }
+    }
+
+    if (whichPattern.test(text)) {
+      const nounDoc = nlp(noun);
+      const isPerson = nounDoc.people().out("array").length > 0;
+      if (isPerson) {
+        issues.push({
+          title: "定语从句关系代词错误",
+          message: `人作为先行词 "${noun}" 应使用 who/that 引导定语从句，而非 which。`,
+          replacements: [`${noun} who`, `${noun} that`],
+        });
+      }
+    }
+  }
+}
+
+// 19. 形容词/副词混淆
+function checkAdjectiveAdverb(doc: any, issues: GrammarIssue[]) {
+  const text = doc.text();
+  const adjAdvPairs: Record<string, string> = {
+    quick: "quickly", slow: "slowly", careful: "carefully",
+    bad: "badly", good: "well", hard: "hard",
+    easy: "easily", happy: "happily", sad: "sadly",
+    angry: "angrily", quiet: "quietly", loud: "loudly",
+    clear: "clearly", recent: "recently", sudden: "suddenly",
+    immediate: "immediately", frequent: "frequently", rare: "rarely",
+    usual: "usually", normal: "normally", proper: "properly",
+    real: "really", true: "truly", exact: "exactly",
+    complete: "completely", total: "totally", absolute: "absolutely",
+    actual: "actually", definite: "definitely", certain: "certainly",
+    possible: "possibly", probable: "probably", likely: "likely",
+  };
+
+  // 遍历文本中的形容词-动词组合
+  for (const [adj, adv] of Object.entries(adjAdvPairs)) {
+    // 动词 + 形容词（错误）
+    const pattern = new RegExp(`\\b(drive|speak|write|read|run|walk|talk|work|study|think|act|move|eat|sleep|play|sing|dance|look|sound|smell|taste|feel)\\s+${adj}\\b`, "gi");
+    const matches = text.match(pattern);
+    if (matches) {
+      for (const match of matches) {
+        const verb = match.split(/\s+/)[0].toLowerCase();
+        // 排除感官动词 + 形容词（这些是合法的：look good, sound nice, taste sweet）
+        const senseVerbs = ["look", "sound", "smell", "taste", "feel", "appear", "seem", "become", "get", "grow", "turn", "remain", "stay", "keep"];
+        if (senseVerbs.includes(verb)) continue;
+
+        // 排除 be 动词
+        if (verb === "be" || verb === "am" || verb === "is" || verb === "are" || verb === "was" || verb === "were") continue;
+
+        issues.push({
+          title: "形容词/副词混淆",
+          message: `动词 "${verb}" 应使用副词修饰，而不是形容词。`,
+          replacements: [`${verb} ${adv}`],
+        });
+      }
+    }
+  }
+}
+
+// 20. 时态一致性
+function checkTenseConsistency(doc: any, issues: GrammarIssue[]) {
+  const sentences = doc.sentences().json();
+  for (const sent of sentences) {
+    const sentDoc = nlp(sent.text);
+    const verbs = sentDoc.verbs().json();
+
+    if (verbs.length >= 2) {
+      const tenses = verbs.map((v: any) => {
+        const tags = v.tags || [];
+        if (tags.includes("PastTense")) return "past";
+        if (tags.includes("PresentTense")) return "present";
+        if (tags.includes("FutureTense")) return "future";
+        return "unknown";
+      }).filter((t: string) => t !== "unknown");
+
+      const unique = [...new Set(tenses)];
+      if (unique.length > 1 && tenses.length >= 2) {
+        // 只报告明显的时态混合（过去+现在）
+        if (unique.includes("past") && unique.includes("present")) {
+          issues.push({
+            title: "时态不一致",
+            message: `句子中混合使用了不同时态，建议保持时态一致。`,
+            replacements: undefined,
+          });
+        }
+      }
+    }
+  }
+}
+
+function generateSimpleCorrection(text: string, issues: GrammarIssue[]): string {
+  let corrected = text;
+  // 简单的替换逻辑（实际应基于位置精确替换）
+  return corrected;
+}
 
 export default router;

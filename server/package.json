@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "2.95.3",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
+    "compromise": "^14.15.1",
     "cors": "^2.8.5",
     "coze-coding-dev-sdk": "^0.7.21",
     "dayjs": "^1.11.19",
