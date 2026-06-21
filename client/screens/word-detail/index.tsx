@@ -589,7 +589,10 @@ export default function WordDetailPage() {
 				})
 			});
 
-			if (!response.ok) throw new Error('提交失败');
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.error || '提交失败');
+			}
 
 			setCommentText('');
 			setShowResultModal(false);
@@ -1466,8 +1469,14 @@ export default function WordDetailPage() {
 									<Text style={styles.cancelButtonText}>取消发布</Text>
 								</TouchableOpacity>
 								<TouchableOpacity 
-									style={[styles.modalButton, styles.publishButton]} 
-									onPress={submitComment}
+									style={[styles.modalButton, styles.publishButton, !grammarResult?.isCorrect && { backgroundColor: '#FF9800' }]} 
+									onPress={() => {
+										if (!grammarResult?.isCorrect) {
+											window.alert('存在语法错误，请先修正后再发布');
+											return;
+										}
+										submitComment();
+									}}
 									disabled={isSubmitting}
 								>
 									{isSubmitting ? (

@@ -48,9 +48,10 @@ router.post('/', async (req, res) => {
     if (error) throw error;
     
     res.json(data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to create comment:', error);
-    res.status(500).json({ error: 'Failed to create comment' });
+    const message = error?.message || error?.error_description || 'Failed to create comment';
+    res.status(500).json({ error: message });
   }
 });
 
