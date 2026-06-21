@@ -1468,6 +1468,21 @@ export default function WordDetailPage() {
 								>
 									<Text style={styles.cancelButtonText}>取消发布</Text>
 								</TouchableOpacity>
+								{!grammarResult?.isCorrect && (
+									<TouchableOpacity 
+										style={[styles.modalButton, styles.skipGrammarButton]} 
+										onPress={() => {
+											submitComment();
+										}}
+										disabled={isSubmitting}
+									>
+										{isSubmitting ? (
+											<ActivityIndicator size="small" color="#999" />
+										) : (
+											<Text style={styles.skipGrammarButtonText}>仍要发布</Text>
+										)}
+									</TouchableOpacity>
+								)}
 								<TouchableOpacity 
 									style={[styles.modalButton, styles.publishButton, !grammarResult?.isCorrect && { backgroundColor: '#FF9800' }]} 
 									onPress={() => {
@@ -1482,7 +1497,9 @@ export default function WordDetailPage() {
 									{isSubmitting ? (
 										<ActivityIndicator size="small" color="#FFF" />
 									) : (
-										<Text style={styles.publishButtonText}>发布</Text>
+										<Text style={styles.publishButtonText}>
+											{grammarResult?.isCorrect ? '发布' : '修正后发布'}
+										</Text>
 									)}
 								</TouchableOpacity>
 							</View>
@@ -2104,6 +2121,17 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		fontWeight: '600',
 		color: '#FFF',
+		fontFamily: 'serif',
+	},
+	skipGrammarButton: {
+		backgroundColor: '#F5F5F5',
+		borderWidth: 1,
+		borderColor: '#CCCCCC',
+	},
+	skipGrammarButtonText: {
+		fontSize: 16,
+		fontWeight: '600',
+		color: '#666666',
 		fontFamily: 'serif',
 	},
 	// 拖拽相关样式
