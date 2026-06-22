@@ -1,5 +1,7 @@
 import express from 'express';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
+import { optionalAuthMiddleware } from '@/middleware/auth';
+import type { AuthRequest } from '@/middleware/auth';
 
 const router = express.Router();
 
@@ -300,9 +302,10 @@ router.get('/:table/count', async (req, res) => {
  * 获取指定词汇表的所有单词
  * NOTE: 动态路由放在最后！
  */
-router.get('/:table', async (req, res) => {
+router.get('/:table', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { table } = req.params;
+    const table = Array.isArray(req.params.table) ? req.params.table[0] : req.params.table;
+    const userId = req.userId;
 
     if (!VALID_TABLES.includes(table)) {
       res.status(400).json({ error: 'Invalid table name' });
@@ -315,9 +318,16 @@ router.get('/:table', async (req, res) => {
       '111': 'mindmap',
     };
     const dbTable = tableMap[table] || table;
-    const { data, error } = await client
-      .from(dbTable)
-      .select('*');
+
+    let query = client.from(dbTable).select('*');
+
+    // m1/m2/m3 是个人分类表，需要按 user_id 过滤
+    const userTables = ['m1', 'm2', 'm3'];
+    if (userTables.includes(dbTable) && userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       res.status(500).json({ error: error.message });

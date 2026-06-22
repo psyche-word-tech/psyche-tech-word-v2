@@ -146,10 +146,10 @@ export default function WordDetailPage() {
 			const fetchUnclassified = async () => {
 				try {
 					const [allRes, m1Res, m2Res, m3Res] = await Promise.all([
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/${params.table || '111'}`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/m1`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/m2`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/m3`),
+						fetchWithRetry(`/api/v1/wordbooks/${params.table || '111'}`),
+						fetchWithRetry(`/api/v1/wordbooks/m1`),
+						fetchWithRetry(`/api/v1/wordbooks/m2`),
+						fetchWithRetry(`/api/v1/wordbooks/m3`),
 					]);
 					const [allData, m1Data, m2Data, m3Data] = await Promise.all([
 						allRes.json(),
@@ -226,10 +226,10 @@ export default function WordDetailPage() {
 				try {
 					// 重新获取最新的过滤列表
 					const [listRes, x1Res, y1Res, z1Res] = await Promise.all([
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/${params.table || '111'}`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/m1`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/m2`),
-						fetch(`${API_BASE_URL}/api/v1/wordbooks/m3`),
+						fetchWithRetry(`/api/v1/wordbooks/${params.table || '111'}`),
+						fetchWithRetry(`/api/v1/wordbooks/m1`),
+						fetchWithRetry(`/api/v1/wordbooks/m2`),
+						fetchWithRetry(`/api/v1/wordbooks/m3`),
 					]);
 					const [listData, x1Data, y1Data, z1Data] = await Promise.all([
 						listRes.json(), x1Res.json(), y1Res.json(), z1Res.json(),
@@ -258,7 +258,7 @@ export default function WordDetailPage() {
 				 * 接口：POST /api/v1/user-words/move-mindmap
 				 * Body参数：targetTable: string, word: string
 				 */
-				const response = await fetch(`${API_BASE_URL}/api/v1/user-words/move-mindmap`, {
+				const response = await fetchWithRetry(`/api/v1/user-words/move-mindmap`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
@@ -298,7 +298,7 @@ export default function WordDetailPage() {
 			 * 接口：POST /api/v1/wordbooks/move
 			 * Body参数：sourceTable: string, targetTable: string, wordId: number
 			 */
-			const response = await fetch(`${API_BASE_URL}/api/v1/wordbooks/move`, {
+			const response = await fetchWithRetry(`/api/v1/wordbooks/move`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -319,7 +319,7 @@ export default function WordDetailPage() {
 			fetchCategoryCountsRef.current();
 
 			// 从当前源表重新加载单词列表，并自动显示下一个单词
-			const listResponse = await fetch(`${API_BASE_URL}/api/v1/user-words/category/${sourceTable}`);
+			const listResponse = await fetchWithRetry(`/api/v1/user-words/category/${sourceTable}`);
 			const data = await listResponse.json();
 			if (Array.isArray(data) && data.length > 0) {
 				// 移除已移动的单词，显示下一个
@@ -346,9 +346,9 @@ export default function WordDetailPage() {
 	const fetchCategoryCounts = useCallback(async () => {
 		try {
 			const [xRes, yRes, zRes] = await Promise.all([
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/x/count`),
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/y/count`),
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/z/count`),
+				fetchWithRetry(`/api/v1/user-words/category/x/count`),
+				fetchWithRetry(`/api/v1/user-words/category/y/count`),
+				fetchWithRetry(`/api/v1/user-words/category/z/count`),
 			]);
 			const [xData, yData, zData] = await Promise.all([xRes.json(), yRes.json(), zRes.json()]);
 			setCategoryCounts({
@@ -364,9 +364,9 @@ export default function WordDetailPage() {
 	const fetchMindmapCounts = useCallback(async () => {
 		try {
 			const [xRes, yRes, zRes] = await Promise.all([
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/m1/count`),
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/m2/count`),
-				fetch(`${API_BASE_URL}/api/v1/user-words/category/m3/count`),
+				fetchWithRetry(`/api/v1/user-words/category/m1/count`),
+				fetchWithRetry(`/api/v1/user-words/category/m2/count`),
+				fetchWithRetry(`/api/v1/user-words/category/m3/count`),
 			]);
 			const [xData, yData, zData] = await Promise.all([xRes.json(), yRes.json(), zRes.json()]);
 			setMindmapCounts({
@@ -403,7 +403,7 @@ export default function WordDetailPage() {
 		setCategoryModalWords([]);
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/v1/wordbooks/${tableName}`);
+			const response = await fetchWithRetry(`/api/v1/wordbooks/${tableName}`);
 			const data = await response.json();
 			if (Array.isArray(data)) {
 				setCategoryModalWords(data);
@@ -456,7 +456,7 @@ export default function WordDetailPage() {
 					 * 服务端文件：server/src/routes/wordbooks.ts
 					 * 接口：GET /api/v1/wordbooks/:table
 					 */
-					const response = await fetch(`${API_BASE_URL}/api/v1/wordbooks/${sourceTable}`);
+					const response = await fetchWithRetry(`/api/v1/wordbooks/${sourceTable}`);
 					const data = await response.json();
 					if (Array.isArray(data) && data.length > 0 && !isInitialized.current) {
 						setWordsList(data);
@@ -466,9 +466,9 @@ export default function WordDetailPage() {
 					// 导图模式：获取过滤后的列表（111中但不在x1/y1/z1中的单词）
 					if (params.from === 'mindmap' && sourceTable === '111') {
 						const [x1Res, y1Res, z1Res] = await Promise.all([
-							fetch(`${API_BASE_URL}/api/v1/wordbooks/m1`),
-							fetch(`${API_BASE_URL}/api/v1/wordbooks/m2`),
-							fetch(`${API_BASE_URL}/api/v1/wordbooks/m3`),
+							fetchWithRetry(`/api/v1/wordbooks/m1`),
+							fetchWithRetry(`/api/v1/wordbooks/m2`),
+							fetchWithRetry(`/api/v1/wordbooks/m3`),
 						]);
 						const [x1Data, y1Data, z1Data] = await Promise.all([
 							x1Res.json(), y1Res.json(), z1Res.json(),
@@ -524,7 +524,7 @@ export default function WordDetailPage() {
 			 * 服务端文件：server/src/routes/comments.ts
 			 * 接口：GET /api/v1/comments/:wordId
 			 */
-			const response = await fetch(`${API_BASE_URL}/api/v1/comments/${wordId}`);
+			const response = await fetchWithRetry(`/api/v1/comments/${wordId}`);
 			const data = await response.json();
 			setComments(Array.isArray(data) ? data : []);
 		} catch (error) {
@@ -617,7 +617,7 @@ export default function WordDetailPage() {
 	useEffect(() => {
 		if (!word.id) return;
 		setIsLoadingComments(true);
-		fetch(`${API_BASE_URL}/api/v1/comments/${word.id}`)
+		fetchWithRetry(`/api/v1/comments/${word.id}`)
 			.then(response => response.json())
 			.then(data => {
 				setComments(Array.isArray(data) ? data : []);
@@ -635,7 +635,7 @@ export default function WordDetailPage() {
 		// 重新从后端获取完整单词数据，确保包含 example_audio_url
 		useEffect(() => {
 			if (!word.id) return;
-			fetch(`${API_BASE_URL}/api/v1/wordbooks/${sourceTable}`)
+			fetchWithRetry(`/api/v1/wordbooks/${sourceTable}`)
 				.then(response => response.json())
 				.then(data => {
 					if (Array.isArray(data)) {
@@ -969,7 +969,7 @@ export default function WordDetailPage() {
 				formData.append('originalText', word.example);
 
 				setEvalStep('正在识别语音...');
-				const response = await fetch(`${API_BASE_URL}/api/v1/speech-eval`, {
+				const response = await fetchWithRetry(`/api/v1/speech-eval`, {
 					method: 'POST',
 					body: formData,
 				});
@@ -1003,7 +1003,7 @@ export default function WordDetailPage() {
 			formData.append('originalText', word.example);
 
 			setEvalStep('正在识别语音...');
-			const response = await fetch(`${API_BASE_URL}/api/v1/speech-eval`, {
+			const response = await fetchWithRetry(`/api/v1/speech-eval`, {
 				method: 'POST',
 				body: formData,
 			});
@@ -1044,7 +1044,7 @@ export default function WordDetailPage() {
 			 * 接口：POST /api/v1/user-words/move
 			 * Body参数：wordId: number, targetTable: string
 			 */
-			const response = await fetch(`${API_BASE_URL}/api/v1/user-words/move`, {
+			const response = await fetchWithRetry(`/api/v1/user-words/move`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -1060,7 +1060,7 @@ export default function WordDetailPage() {
 			}
 
 			// 从 words_b 重新加载单词列表（移除已移动的单词）
-			const listResponse = await fetch(`${API_BASE_URL}/api/v1/user-words/category/b`);
+			const listResponse = await fetchWithRetry(`/api/v1/user-words/category/b`);
 			const data = await listResponse.json();
 				
 			if (Array.isArray(data) && data.length > 0) {

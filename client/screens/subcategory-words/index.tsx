@@ -5,6 +5,7 @@ import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '@/utils/apiConfig';
+import { fetchWithRetry } from '@/utils/apiClient';
 import { Base64 } from 'js-base64';
 
 interface WordItem {
@@ -54,9 +55,9 @@ export default function SubcategoryWordsPage() {
         // For table 111, fetch m1/m2/m3 to mark classification status
         if (table === '111') {
           const [m1Res, m2Res, m3Res] = await Promise.all([
-            fetch(`${API_BASE_URL}/api/v1/wordbooks/m1`),
-            fetch(`${API_BASE_URL}/api/v1/wordbooks/m2`),
-            fetch(`${API_BASE_URL}/api/v1/wordbooks/m3`),
+            fetchWithRetry(`/api/v1/wordbooks/m1`),
+            fetchWithRetry(`/api/v1/wordbooks/m2`),
+            fetchWithRetry(`/api/v1/wordbooks/m3`),
           ]);
           const [m1Data, m2Data, m3Data] = await Promise.all([
             m1Res.json(),

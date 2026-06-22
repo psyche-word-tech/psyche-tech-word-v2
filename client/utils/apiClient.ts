@@ -1,9 +1,24 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl } from './apiConfig';
+
+const USER_STORAGE_KEY = '@auth_user';
+
+async function getAuthToken(): Promise<string | null> {
+  try {
+    const userData = await AsyncStorage.getItem(USER_STORAGE_KEY);
+    if (!userData) return null;
+    const user = JSON.parse(userData);
+    return user?.token || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 带超时和自动重试的 fetch 包装
  * - 超时: 30 秒（Railway 冷启动可能较慢）
  * - 重试: 失败/502/504 时自动重试 2 次
+ * - 自动带上 Authorization header
  */
 export async function fetchWithRetry(
   path: string,
@@ -15,6 +30,18 @@ export async function fetchWithRetry(
   const url = path.startsWith('http') ? path : `${apiBase}${path}`;
   const timeout = 30000; // 30 秒超时，给 Railway 冷启动留足时间
 
+  // 自动带上 token
+  const token = await getAuthToken();
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string> || {}),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (!headers['Content-Type'] && options?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
@@ -22,6 +49,7 @@ export async function fetchWithRetry(
 
       const response = await fetch(url, {
         ...options,
+        headers,
         signal: controller.signal,
         cache: 'no-store',
       });

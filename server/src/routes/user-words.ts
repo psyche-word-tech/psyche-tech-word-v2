@@ -1,6 +1,8 @@
 import express from "express";
 import { getSupabaseClient, fetchTableDirectly } from "@/storage/database/supabase-client";
 import { clearWordbooksCache } from "@/routes/wordbooks";
+import { authMiddleware } from "@/middleware/auth";
+import type { AuthRequest } from "@/middleware/auth";
 
 const router = express.Router();
 
@@ -293,10 +295,11 @@ router.get('/category/:table/count', async (req, res) => {
   }
 });
 
-// POST /api/v1/user-words/move-mindmap - 将导图单词从源表移动到 x1/y1/z1
-router.post('/move-mindmap', async (req, res) => {
+// POST /api/v1/user-words/move-mindmap - 将导图单词从源表移动到 m1/m2/m3
+router.post('/move-mindmap', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { word, sourceTable, targetTable } = req.body;
+    const userId = req.userId;
 
     if (!word || !sourceTable || !targetTable) {
       res.status(400).json({ error: 'word, sourceTable and targetTable are required' });
@@ -329,11 +332,12 @@ router.post('/move-mindmap', async (req, res) => {
       return;
     }
 
-    // 检查目标表是否已存在该单词
+    // 检查目标表是否已存在该单词（仅限当前用户）
     const { data: existing, error: existingError } = await client
       .from(targetTable)
       .select('id')
       .eq('word', wordData.word)
+      .eq('user_id', userId)
       .single();
 
     if (existing) {
@@ -350,14 +354,15 @@ router.post('/move-mindmap', async (req, res) => {
           example_audio_url: wordData.example_audio_url,
           noun_phrase: wordData.noun_phrase,
         })
-        .eq('word', wordData.word);
+        .eq('word', wordData.word)
+        .eq('user_id', userId);
 
       if (updateError) {
         res.status(500).json({ error: updateError.message });
         return;
       }
     } else {
-      // 不存在则插入
+      // 不存在则插入（带上 user_id）
       const { error: insertError } = await client.from(targetTable).insert({
         word: wordData.word,
         meaning: wordData.meaning,
@@ -368,6 +373,7 @@ router.post('/move-mindmap', async (req, res) => {
         example_image_url: wordData.example_image_url,
         example_audio_url: wordData.example_audio_url,
         noun_phrase: wordData.noun_phrase,
+        user_id: userId,
       });
 
       if (insertError) {
@@ -376,13 +382,14 @@ router.post('/move-mindmap', async (req, res) => {
       }
     }
 
-    // 从其他两个分类表中删除该单词（实现"改变分类"功能）
+    // 从其他两个分类表中删除该单词（仅限当前用户的数据）
     const otherTables = validTargets.filter((t: string) => t !== targetTable);
     for (const otherTable of otherTables) {
       const { error: deleteError } = await client
         .from(otherTable)
         .delete()
-        .eq('word', wordData.word);
+        .eq('word', wordData.word)
+        .eq('user_id', userId);
       if (deleteError) {
         console.error(`Error deleting from ${otherTable}:`, deleteError.message);
       }
@@ -396,10 +403,11 @@ router.post('/move-mindmap', async (req, res) => {
   }
 });
 
-// GET /api/v1/user-words/mindmap-counts - 获取 m1/m2/m3 的单词数量
-router.get('/mindmap-counts', async (req, res) => {
+// GET /api/v1/user-words/mindmap-counts - 获取当前用户 m1/m2/m3 的单词数量
+router.get('/mindmap-counts', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const client = getSupabaseClient();
+    const userId = req.userId;
 
     const tables = ['m1', 'm2', 'm3'];
     const counts: Record<string, number> = {};
@@ -407,7 +415,8 @@ router.get('/mindmap-counts', async (req, res) => {
     for (const table of tables) {
       const { count, error } = await client
         .from(table)
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
 
       if (error) {
         res.status(500).json({ error: error.message });
