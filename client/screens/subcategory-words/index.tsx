@@ -108,7 +108,7 @@ export default function SubcategoryWordsPage() {
 
       {/* Enter Mindmap Study Button - only show when there are unclassified words */}
       {!loading && words.length > 0 && words.some((w) => w.status === 'none') && (
-        <View className="px-4 pb-3 bg-white">
+        <View className="px-4 pb-3 bg-white items-center">
           <TouchableOpacity
             onPress={() => {
               router.push('/word-detail', { table, from: 'mindmap' });
