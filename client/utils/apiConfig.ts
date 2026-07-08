@@ -11,6 +11,10 @@ export const getApiBaseUrl = (): string => {
     if (hostname === 'localhost' || hostname === '127.0.0.1' || /^192\.168\./.test(hostname) || /^10\./.test(hostname) || /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname)) {
       return 'http://localhost:9091';
     }
+    // Coze 沙箱预览环境 - 使用相对路径，由预览服务器代理到后端
+    if (hostname.includes('coze') || hostname.includes('sandbox') || window.location.port === '5000') {
+      return '';
+    }
     // Vercel环境
     if (hostname.includes('vercel.app')) {
       const vercelUrl = process.env.VERCEL_URL;
@@ -18,7 +22,7 @@ export const getApiBaseUrl = (): string => {
     }
   }
 
-  // 其他环境（Coze预览、生产部署等）使用生产API
+  // 生产部署使用生产API
   return PROD_API_URL;
 };
 

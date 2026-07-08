@@ -316,7 +316,7 @@ router.post('/move-mindmap', authMiddleware, async (req: AuthRequest, res) => {
 
     // 表名映射：前端传入的 sourceTable 映射到实际的 Supabase 表名
     const tableMap: Record<string, string> = {
-      '111': 'mindmap_111',
+      '111': 'mindmap',
     };
     const dbSourceTable = tableMap[sourceTable] || sourceTable;
 
