@@ -94,6 +94,7 @@ export default function WordDetailPage() {
 	const soundRef = useRef<Audio.Sound | null>(null);
 	const fetchCategoryCountsRef = useRef<() => void>(() => { /* noop */ });
 	const fetchMindmapCountsRef = useRef<() => void>(() => { /* noop */ });
+	const filteredWordsListRef = useRef<Word[]>([]);
 
 	// 评论相关状态
 	const [comments, setComments] = useState<Comment[]>([]);
@@ -222,7 +223,9 @@ export default function WordDetailPage() {
 
 				// 使用过滤后的列表找到当前索引和下一个单词
 				let nextWordData: Word | null = null;
-				let currentFilteredIndex = -1;
+				// 在 API 调用前记录当前单词在过滤列表中的索引
+				const currentFilteredIndex = filteredWordsListRef.current.findIndex((w: Word) => w.word === word.word);
+				console.log('Current word index in filtered list:', currentFilteredIndex, 'filtered list length:', filteredWordsListRef.current.length);
 				try {
 					// 重新获取最新的过滤列表
 					const [listRes, x1Res, y1Res, z1Res] = await Promise.all([
@@ -242,11 +245,16 @@ export default function WordDetailPage() {
 						]);
 						const filtered = listData.filter((w: Word) => !classifiedWords.has(w.word));
 						setFilteredWordsList(filtered);
-						currentFilteredIndex = filtered.findIndex((w: Word) => w.word === word.word);
-						console.log('Mindmap filtered list length:', filtered.length, 'currentIndex:', currentFilteredIndex);
-						if (currentFilteredIndex >= 0 && currentFilteredIndex < filtered.length - 1) {
-							nextWordData = filtered[currentFilteredIndex + 1];
+						console.log('Mindmap filtered list length:', filtered.length);
+						// 使用 API 调用前记录的索引来获取下一个单词
+						// 当前单词已被分类，下一个单词在相同索引位置（因为当前单词已被移除）
+						if (currentFilteredIndex >= 0 && currentFilteredIndex < filtered.length) {
+							nextWordData = filtered[currentFilteredIndex];
 							console.log('Next filtered word found:', nextWordData?.word);
+						} else if (filtered.length > 0) {
+							// 如果索引越界，显示第一个未分类单词
+							nextWordData = filtered[0];
+							console.log('Index out of bounds, fallback to first:', nextWordData?.word);
 						}
 					}
 				} catch (e) {
@@ -387,6 +395,10 @@ export default function WordDetailPage() {
 	useEffect(() => {
 		fetchMindmapCountsRef.current = fetchMindmapCounts;
 	}, [fetchMindmapCounts]);
+
+	useEffect(() => {
+		filteredWordsListRef.current = filteredWordsList;
+	}, [filteredWordsList]);
 
 	// 双击底部按钮：显示分类单词列表弹窗
 	const handleDropDoubleTap = useCallback(async (targetTable: string, label: string) => {

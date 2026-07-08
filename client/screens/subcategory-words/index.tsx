@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { View, Text, TouchableOpacity, Pressable, ActivityIndicator, ScrollView, Modal, Image } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
@@ -32,62 +33,68 @@ export default function SubcategoryWordsPage() {
 
   const pageTitle = title || '单词列表';
 
-  useEffect(() => {
+  /**
+   * 服务端文件：server/src/routes/wordbooks.ts
+   * 接口：GET /api/v1/wordbooks/:table
+   * Path 参数：table: string
+   */
+  const fetchData = useCallback(async () => {
     if (!table) return;
-
-    /**
-     * 服务端文件：server/src/routes/wordbooks.ts
-     * 接口：GET /api/v1/wordbooks/:table
-     * Path 参数：table: string
-     */
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/v1/wordbooks/${table}`
-        );
-        const data = await response.json();
-        if (!Array.isArray(data)) {
-          setWords([]);
-          return;
-        }
-
-        // For table 111, fetch m1/m2/m3 to mark classification status
-        if (table === '111') {
-          const [m1Res, m2Res, m3Res] = await Promise.all([
-            fetchWithRetry(`/api/v1/wordbooks/m1`),
-            fetchWithRetry(`/api/v1/wordbooks/m2`),
-            fetchWithRetry(`/api/v1/wordbooks/m3`),
-          ]);
-          const [m1Data, m2Data, m3Data] = await Promise.all([
-            m1Res.json(),
-            m2Res.json(),
-            m3Res.json(),
-          ]);
-
-          const m1Words = new Set((Array.isArray(m1Data) ? m1Data : []).map((w: any) => w.word));
-          const m2Words = new Set((Array.isArray(m2Data) ? m2Data : []).map((w: any) => w.word));
-          const m3Words = new Set((Array.isArray(m3Data) ? m3Data : []).map((w: any) => w.word));
-
-          const markedData = data.map((w: WordItem) => {
-            if (m1Words.has(w.word)) return { ...w, status: 'm1' as const };
-            if (m2Words.has(w.word)) return { ...w, status: 'm2' as const };
-            if (m3Words.has(w.word)) return { ...w, status: 'm3' as const };
-            return { ...w, status: 'none' as const };
-          });
-          setWords(markedData);
-        } else {
-          setWords(data);
-        }
-      } catch (error) {
-        console.error('Error fetching words:', error);
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/wordbooks/${table}`
+      );
+      const data = await response.json();
+      if (!Array.isArray(data)) {
+        setWords([]);
+        return;
       }
-    };
 
-    fetchData();
+      // For table 111, fetch m1/m2/m3 to mark classification status
+      if (table === '111') {
+        const [m1Res, m2Res, m3Res] = await Promise.all([
+          fetchWithRetry(`/api/v1/wordbooks/m1`),
+          fetchWithRetry(`/api/v1/wordbooks/m2`),
+          fetchWithRetry(`/api/v1/wordbooks/m3`),
+        ]);
+        const [m1Data, m2Data, m3Data] = await Promise.all([
+          m1Res.json(),
+          m2Res.json(),
+          m3Res.json(),
+        ]);
+
+        const m1Words = new Set((Array.isArray(m1Data) ? m1Data : []).map((w: any) => w.word));
+        const m2Words = new Set((Array.isArray(m2Data) ? m2Data : []).map((w: any) => w.word));
+        const m3Words = new Set((Array.isArray(m3Data) ? m3Data : []).map((w: any) => w.word));
+
+        const markedData = data.map((w: WordItem) => {
+          if (m1Words.has(w.word)) return { ...w, status: 'm1' as const };
+          if (m2Words.has(w.word)) return { ...w, status: 'm2' as const };
+          if (m3Words.has(w.word)) return { ...w, status: 'm3' as const };
+          return { ...w, status: 'none' as const };
+        });
+        setWords(markedData);
+      } else {
+        setWords(data);
+      }
+    } catch (error) {
+      console.error('Error fetching words:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [table]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // 页面获得焦点时重新获取数据，确保分类状态是最新的
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   return (
     <Screen className="flex-1 bg-gray-50">
