@@ -36,7 +36,7 @@
  * const { id, uri } = useSafeSearchParams<{ id: number; uri: string }>();
  * ```
  */
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter as useExpoRouter, useLocalSearchParams as useExpoParams } from 'expo-router';
 import { Base64 } from 'js-base64';
 
@@ -153,9 +153,10 @@ export function useSafeRouter() {
  */
 export function useSafeSearchParams<T = Record<string, unknown>>(): T {
   const rawParams = useExpoParams<Record<string, string | string[]>>();
+  const [decodedParams, setDecodedParams] = useState<T>(() => getCurrentParams(rawParams) as T);
 
-  const decodedParams = useMemo(() => {
-    return getCurrentParams(rawParams) as T;
+  useEffect(() => {
+    setDecodedParams(getCurrentParams(rawParams) as T);
   }, [rawParams]);
 
   return decodedParams;

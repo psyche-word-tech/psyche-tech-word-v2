@@ -365,7 +365,7 @@ export default function WordDetailPage() {
 			console.error('Failed to move word:', error);
 			Alert.alert('错误', '操作失败');
 		}
-	}, [word.id, word.word, sourceTable]);
+	}, [word.id, word.word, sourceTable, params.from, params.table]);
 
 	// 获取分类数量
 	const fetchCategoryCounts = useCallback(async () => {
