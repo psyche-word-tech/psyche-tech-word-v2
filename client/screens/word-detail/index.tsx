@@ -190,6 +190,16 @@ export default function WordDetailPage() {
 		}
 	}, [params.from, params.table, params.word, params.unclassifiedList, params.unclassifiedIndex]);
 
+	// 监听路由参数变化，更新当前单词
+	useEffect(() => {
+		if (params.word) {
+			const parsedWord = JSON.parse(params.word) as Word;
+			setWord(parsedWord);
+			setCurrentIndex(0);
+			setCommentText('');
+		}
+	}, [params.word]);
+
 	// 当从"看词分类"进入且 word 为空时，自动加载第一个未分类单词
 	useEffect(() => {
 		if (params.from === 'mindmap' && !word.word && unclassifiedList.length > 0) {
@@ -601,7 +611,7 @@ export default function WordDetailPage() {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					wordId: currentWord.id,
+					wordId: word.id,
 					wordText: word.word,
 					userName: '用户',
 					content: commentText.trim()
@@ -1067,7 +1077,7 @@ export default function WordDetailPage() {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					wordId: currentWord.id,
+					wordId: word.id,
 					targetTable: table
 				})
 			});

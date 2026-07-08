@@ -25,7 +25,7 @@ export default function SubcategoryWordsPage() {
   const router = useSafeRouter();
   const { table, title } = useSafeSearchParams<{ table: string; title: string }>();
   const [words, setWords] = useState<WordItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // 看词分类弹窗状态
   const [unclassifiedModalVisible, setUnclassifiedModalVisible] = useState(false);
@@ -93,9 +93,11 @@ export default function SubcategoryWordsPage() {
   }, [fetchData]);
 
   // 页面获得焦点时重新获取数据，确保分类状态是最新的
-  useFocusEffect(() => {
-    void fetchData();
-  });
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   return (
     <Screen className="flex-1 bg-gray-50">
