@@ -153,11 +153,13 @@ export function useSafeRouter() {
  */
 export function useSafeSearchParams<T = Record<string, unknown>>(): T {
   const rawParams = useExpoParams<Record<string, string | string[]>>();
+  // Expo Router Web 端 push 同一路由时可能复用对象引用，需用序列化值作为依赖
+  const rawParamsKey = JSON.stringify(rawParams);
   const [decodedParams, setDecodedParams] = useState<T>(() => getCurrentParams(rawParams) as T);
 
   useEffect(() => {
     setDecodedParams(getCurrentParams(rawParams) as T);
-  }, [rawParams]);
+  }, [rawParamsKey]);
 
   return decodedParams;
 }
