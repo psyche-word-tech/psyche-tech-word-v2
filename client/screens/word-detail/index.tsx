@@ -202,9 +202,16 @@ export default function WordDetailPage() {
 	const handleDrop = useCallback(async (targetTable: string, status: string) => {
 		console.log('handleDrop called:', targetTable, status);
 		console.log('Current word:', word.id, word.word, 'sourceTable:', sourceTable);
-		if (!word.id || word.id === 0) {
-			console.log('Word ID is invalid, skipping');
-			return;
+		// 如果 word 无效，尝试从过滤列表中获取第一个单词
+		let currentWord = word;
+		if (!currentWord.id || currentWord.id === 0) {
+			if (filteredWordsListRef.current.length > 0) {
+				currentWord = filteredWordsListRef.current[0];
+				console.log('Word ID is invalid, using first filtered word:', currentWord.word);
+			} else {
+				console.log('Word ID is invalid and no filtered words available, skipping');
+				return;
+			}
 		}
 
 		try {
@@ -224,7 +231,7 @@ export default function WordDetailPage() {
 				// 使用过滤后的列表找到当前索引和下一个单词
 				let nextWordData: Word | null = null;
 				// 在 API 调用前记录当前单词在过滤列表中的索引
-				const currentFilteredIndex = filteredWordsListRef.current.findIndex((w: Word) => w.word === word.word);
+				const currentFilteredIndex = filteredWordsListRef.current.findIndex((w: Word) => w.word === currentWord.word);
 				console.log('Current word index in filtered list:', currentFilteredIndex, 'filtered list length:', filteredWordsListRef.current.length);
 				try {
 					// 重新获取最新的过滤列表
@@ -272,7 +279,7 @@ export default function WordDetailPage() {
 					body: JSON.stringify({
 						sourceTable: '111',
 						targetTable: mindmapTarget,
-						word: word.word,
+						word: currentWord.word,
 					})
 				});
 
@@ -312,7 +319,7 @@ export default function WordDetailPage() {
 				body: JSON.stringify({
 					sourceTable: sourceTable,
 					targetTable: targetTable,
-					wordId: word.id,
+					wordId: currentWord.id,
 				})
 			});
 
@@ -331,7 +338,7 @@ export default function WordDetailPage() {
 			const data = await listResponse.json();
 			if (Array.isArray(data) && data.length > 0) {
 				// 移除已移动的单词，显示下一个
-				const nextWords = data.filter((w: Word) => w.id !== word.id);
+				const nextWords = data.filter((w: Word) => w.id !== currentWord.id);
 				setWordsList(nextWords);
 				if (nextWords.length > 0) {
 					setCurrentIndex(0);
@@ -518,7 +525,7 @@ export default function WordDetailPage() {
 			setUnclassifiedIndex(0);
 			return;
 		}
-		const exists = filteredWordsList.find((w) => w.word === word.word);
+		const exists = filteredWordsList.find((w) => w.word === currentWord.word);
 		if (!exists) {
 			console.log(`[WordDetail AutoSwitch] ${word.word} already classified, switching to ${filteredWordsList[0].word}`);
 			setWord(filteredWordsList[0]);
@@ -594,7 +601,7 @@ export default function WordDetailPage() {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					wordId: word.id,
+					wordId: currentWord.id,
 					wordText: word.word,
 					userName: '用户',
 					content: commentText.trim()
@@ -1060,7 +1067,7 @@ export default function WordDetailPage() {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					wordId: word.id,
+					wordId: currentWord.id,
 					targetTable: table
 				})
 			});

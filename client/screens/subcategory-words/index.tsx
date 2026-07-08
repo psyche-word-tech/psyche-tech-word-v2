@@ -90,11 +90,9 @@ export default function SubcategoryWordsPage() {
   }, [fetchData]);
 
   // 页面获得焦点时重新获取数据，确保分类状态是最新的
-  useFocusEffect(
-    useCallback(() => {
-      fetchData();
-    }, [fetchData])
-  );
+  useFocusEffect(() => {
+    fetchData();
+  });
 
   return (
     <Screen className="flex-1 bg-gray-50">
