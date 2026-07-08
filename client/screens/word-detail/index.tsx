@@ -525,7 +525,7 @@ export default function WordDetailPage() {
 			setUnclassifiedIndex(0);
 			return;
 		}
-		const exists = filteredWordsList.find((w) => w.word === currentWord.word);
+		const exists = filteredWordsList.find((w) => w.word === word.word);
 		if (!exists) {
 			console.log(`[WordDetail AutoSwitch] ${word.word} already classified, switching to ${filteredWordsList[0].word}`);
 			setWord(filteredWordsList[0]);
