@@ -92,19 +92,18 @@ export default function SubcategoryWordsPage() {
   return (
     <Screen className="flex-1 bg-gray-50">
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-3 pb-4 bg-white">
+      <View className="relative items-center justify-center px-4 pt-3 pb-4 bg-white">
         <TouchableOpacity
           onPress={() => router.back()}
-          className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
+          className="absolute left-4 top-3 w-10 h-10 rounded-full bg-gray-100 items-center justify-center z-10"
           activeOpacity={0.7}
         >
           <FontAwesome6 name="arrow-left" size={18} color="#374151" />
         </TouchableOpacity>
-        <View className="flex-1 items-center">
+        <View className="items-center">
           <Text className="text-lg font-bold text-gray-900">{pageTitle}</Text>
           <Text className="text-xs text-gray-500 mt-0.5">{words.length} 个单词</Text>
         </View>
-        <View className="w-10" />
       </View>
 
       {/* Enter Mindmap Study Button - only show when there are unclassified words */}
