@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Modal, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, ActivityIndicator, ScrollView, Modal, Image } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { FontAwesome6 } from '@expo/vector-icons';
@@ -108,17 +108,23 @@ export default function SubcategoryWordsPage() {
 
       {/* Enter Mindmap Study Button - only show when there are unclassified words */}
       {!loading && words.length > 0 && words.some((w) => w.status === 'none') && (
-        <View className="px-4 pb-3 bg-white">
-          <TouchableOpacity
+        <View className="px-4 pb-3 bg-white items-center">
+          <Pressable
             onPress={() => {
               router.push('/word-detail', { table, from: 'mindmap' });
             }}
-            className="flex-row items-center justify-center py-3 rounded-xl w-full"
-            style={{ backgroundColor: '#4F46E5' }}
-            activeOpacity={0.8}
+            style={{
+              backgroundColor: '#4F46E5',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 12,
+              paddingHorizontal: 48,
+              borderRadius: 12,
+            }}
           >
             <Text className="text-white font-bold text-base">看词分类</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 
