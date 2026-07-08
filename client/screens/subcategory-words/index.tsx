@@ -100,8 +100,8 @@ export default function SubcategoryWordsPage() {
         >
           <FontAwesome6 name="arrow-left" size={18} color="#374151" />
         </TouchableOpacity>
-        <View className="items-center">
-          <Text className="text-lg font-bold text-gray-900">{pageTitle}</Text>
+        <View style={{ width: '100%', alignItems: 'center' }}>
+          <Text className="text-lg font-bold text-red-600">{pageTitle}</Text>
           <Text className="text-xs text-gray-500 mt-0.5">{words.length} 个单词</Text>
         </View>
       </View>
