@@ -91,7 +91,7 @@ export default function SubcategoryWordsPage() {
 
   // 页面获得焦点时重新获取数据，确保分类状态是最新的
   useFocusEffect(() => {
-    fetchData();
+    void fetchData();
   });
 
   return (
