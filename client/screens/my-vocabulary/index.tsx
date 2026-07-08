@@ -154,7 +154,7 @@ export default function MyVocabularyPage() {
                 
                 {index === 1 && (
                   <TouchableOpacity style={styles.oldSchoolButton} onPress={() => router.push('/tree-diagram')}>
-                    <Text style={styles.oldSchoolText}>old-school</Text>
+                    <Text style={styles.oldSchoolText} numberOfLines={1}>old-school</Text>
                   </TouchableOpacity>
                 )}
 
@@ -220,14 +220,14 @@ const styles = StyleSheet.create({
   },
   oldSchoolButton: {
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 20,
     marginTop: 200,
     alignSelf: 'center',
   },
   oldSchoolText: {
-    fontSize: 12,
+    fontSize: 15,
     color: '#FFFFFF',
     fontFamily: 'serif',
     fontWeight: '600',
