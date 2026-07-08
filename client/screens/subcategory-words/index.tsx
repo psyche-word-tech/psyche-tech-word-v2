@@ -39,7 +39,10 @@ export default function SubcategoryWordsPage() {
    * Path 参数：table: string
    */
   const fetchData = useCallback(async () => {
-    if (!table) return;
+    if (!table) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const response = await fetch(
