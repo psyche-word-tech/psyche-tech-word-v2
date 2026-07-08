@@ -101,19 +101,19 @@ export default function SubcategoryWordsPage() {
           <FontAwesome6 name="arrow-left" size={18} color="#374151" />
         </TouchableOpacity>
         <View style={{ width: '100%', alignItems: 'center' }}>
-          <Text className="text-lg font-bold text-red-600">{pageTitle}</Text>
+          <Text className="text-lg font-bold text-gray-900">{pageTitle}</Text>
           <Text className="text-xs text-gray-500 mt-0.5">{words.length} 个单词</Text>
         </View>
       </View>
 
       {/* Enter Mindmap Study Button - only show when there are unclassified words */}
       {!loading && words.length > 0 && words.some((w) => w.status === 'none') && (
-        <View className="px-4 pb-3 bg-white items-center">
+        <View className="px-4 pb-3 bg-white">
           <TouchableOpacity
             onPress={() => {
               router.push('/word-detail', { table, from: 'mindmap' });
             }}
-            className="flex-row items-center justify-center py-3 rounded-xl"
+            className="flex-row items-center justify-center py-3 rounded-xl w-full"
             style={{ backgroundColor: '#4F46E5' }}
             activeOpacity={0.8}
           >
