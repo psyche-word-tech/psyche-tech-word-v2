@@ -1,0 +1,14 @@
+node_modules
+.expo
+web-build
+dist
+.git
+.github
+*.log
+.env
+.DS_Store
+client/
+scripts/
+.coze
+.cozeproj
+render.yaml

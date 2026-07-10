@@ -1,24 +1,29 @@
-FROM node:18-alpine
+# Koyeb 部署用 Dockerfile
+# 构建并运行 Express.js 后端服务
+
+FROM node:20-slim
+
+# 安装 pnpm
+RUN npm install -g pnpm
 
 WORKDIR /app
 
-# 安装 pnpm 和 ffmpeg
-RUN npm install -g pnpm && apk add --no-cache ffmpeg
+# 先复制 package.json 利用 Docker 缓存层
+COPY server/package.json server/pnpm-lock.yaml ./server/
 
-# 复制 package 文件
-COPY server/package*.json ./
+WORKDIR /app/server
 
 # 安装依赖
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
-# 复制源码
-COPY server/ ./
+# 复制后端源码
+COPY server/ .
 
-# 构建
-RUN pnpm build
+# 构建（使用 build.js 编译 dist/index.js）
+RUN node build.js
 
-# 暴露端口
-EXPOSE 9091
+# 暴露端口（Koyeb 会通过 PORT 环境变量传入）
+EXPOSE 8080
 
-# 启动
-CMD ["pnpm", "start"]
+# 启动服务
+CMD ["node", "dist/index.js"]
