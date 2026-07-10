@@ -1,18 +1,23 @@
+# Render 部署配置
+# 部署步骤：
+# 1. 将代码 push 到 GitHub
+# 2. 在 render.com 创建 New Web Service，选择此仓库
+# 3. Render 会自动读取此配置文件
+# 4. 在 Dashboard → Environment 中补全环境变量（见下方列表）
+
 services:
   - type: web
     name: word-voyage-api
     runtime: node
     plan: free
+    region: singapore
     buildCommand: cd server && pnpm install && pnpm run build
-    startCommand: cd server && pnpm start
-    healthCheckPath: /api/v1/health
+    startCommand: cd server && pnpm run start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
       - key: COZE_SUPABASE_URL
-        sync: false
+        sync: false  # 在 Dashboard 手动设置，避免泄露
       - key: COZE_SUPABASE_ANON_KEY
         sync: false
       - key: COZE_SUPABASE_SERVICE_ROLE_KEY

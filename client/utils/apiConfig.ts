@@ -1,7 +1,24 @@
 /**
  * API配置 - 统一管理API基础URL
+ *
+ * 部署到 Render 后，将下面的 URL 替换为你的 Render 服务地址：
+ * 格式：https://<your-service-name>.onrender.com
+ * 示例：https://word-voyage-api.onrender.com
  */
-const PROD_API_URL = 'https://word-voyage-api-production.up.railway.app';
+const PROD_API_URL = 'https://word-voyage-api-production.up.railway.app'; // TODO: 替换为 Render 地址后重新构建部署前端
+// const PROD_API_URL = 'https://word-voyage-api.onrender.com'; // Render 部署后取消此行注释，注释掉上面那行
+
+/**
+ * Render 免费部署指南：
+ * 1. 访问 https://dashboard.render.com 注册/登录
+ * 2. 点击 "New +" → "Web Service"
+ * 3. 连接你的 GitHub 仓库
+ * 4. Render 会自动读取根目录的 render.yaml 配置
+ * 5. 在 Environment 标签页填入 .env 中的所有环境变量
+ * 6. 点击部署，等待完成
+ * 7. 复制生成的域名（如 https://word-voyage-api.onrender.com）
+ * 8. 替换上面的 PROD_API_URL，重新构建部署前端
+ */
 
 export const getApiBaseUrl = (): string => {
   // Web环境下根据当前域名动态选择
