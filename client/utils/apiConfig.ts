@@ -5,8 +5,7 @@
  * 格式：https://<your-service-name>.onrender.com
  * 示例：https://word-voyage-api.onrender.com
  */
-const PROD_API_URL = 'https://word-voyage-api-production.up.railway.app'; // TODO: 替换为 Render 地址后重新构建部署前端
-// const PROD_API_URL = 'https://word-voyage-api.onrender.com'; // Render 部署后取消此行注释，注释掉上面那行
+const PROD_API_URL = 'http://82.157.60.179:5000';
 
 /**
  * Render 免费部署指南：
