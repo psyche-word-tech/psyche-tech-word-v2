@@ -37,6 +37,6 @@ echo "[2/2] 启动前端预览服务 (端口 5000)..."
 fuser -k 5000/tcp 2>/dev/null || true
 sleep 1
 
-# 使用预导出的静态文件启动预览
-echo "启动前端预览服务，端口 5000..."
-exec python3 ".cozeproj/scripts/serve-static.py" 5000 "client/web-static"
+# 使用反向代理服务器启动预览（支持 /api/* 代理到后端）
+echo "启动前端预览服务（含API代理），端口 5000..."
+exec python3 "scripts/proxy-server.py" 5000 "client/web-static"
