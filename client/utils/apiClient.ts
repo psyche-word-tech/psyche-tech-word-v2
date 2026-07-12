@@ -28,7 +28,7 @@ export async function fetchWithRetry(
 ): Promise<Response> {
   const apiBase = baseUrl || getApiBaseUrl();
   const url = path.startsWith('http') ? path : `${apiBase}${path}`;
-  const timeout = 30000; // 30 秒超时，给 Railway 冷启动留足时间
+  const timeout = 10000; // 10 秒超时（自有服务器响应快，不需要等冷启动）
 
   // 自动带上 token
   const token = await getAuthToken();

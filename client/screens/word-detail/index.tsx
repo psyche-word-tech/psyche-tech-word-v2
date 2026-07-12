@@ -238,44 +238,20 @@ export default function WordDetailPage() {
 					return;
 				}
 
-				// 使用过滤后的列表找到当前索引和下一个单词
+				// 直接从内存中的过滤列表计算下一个单词（避免发前置请求）
 				let nextWordData: Word | null = null;
-				// 在 API 调用前记录当前单词在过滤列表中的索引
 				const currentFilteredIndex = filteredWordsListRef.current.findIndex((w: Word) => w.word === currentWord.word);
 				console.log('Current word index in filtered list:', currentFilteredIndex, 'filtered list length:', filteredWordsListRef.current.length);
-				try {
-					// 重新获取最新的过滤列表
-					const [listRes, x1Res, y1Res, z1Res] = await Promise.all([
-						fetchWithRetry(`/api/v1/wordbooks/${params.table || '111'}`),
-						fetchWithRetry(`/api/v1/wordbooks/m1`),
-						fetchWithRetry(`/api/v1/wordbooks/m2`),
-						fetchWithRetry(`/api/v1/wordbooks/m3`),
-					]);
-					const [listData, x1Data, y1Data, z1Data] = await Promise.all([
-						listRes.json(), x1Res.json(), y1Res.json(), z1Res.json(),
-					]);
-					if (Array.isArray(listData)) {
-						const classifiedWords = new Set([
-							...(Array.isArray(x1Data) ? x1Data.map((w: any) => w.word) : []),
-							...(Array.isArray(y1Data) ? y1Data.map((w: any) => w.word) : []),
-							...(Array.isArray(z1Data) ? z1Data.map((w: any) => w.word) : []),
-						]);
-						const filtered = listData.filter((w: Word) => !classifiedWords.has(w.word));
-						setFilteredWordsList(filtered);
-						console.log('Mindmap filtered list length:', filtered.length);
-						// 使用 API 调用前记录的索引来获取下一个单词
-						// 当前单词已被分类，下一个单词在相同索引位置（因为当前单词已被移除）
-						if (currentFilteredIndex >= 0 && currentFilteredIndex < filtered.length) {
-							nextWordData = filtered[currentFilteredIndex];
-							console.log('Next filtered word found:', nextWordData?.word);
-						} else if (filtered.length > 0) {
-							// 如果索引越界，显示第一个未分类单词
-							nextWordData = filtered[0];
-							console.log('Index out of bounds, fallback to first:', nextWordData?.word);
-						}
+				if (currentFilteredIndex >= 0) {
+					// 从列表中移除当前单词，取下一个
+					const remaining = filteredWordsListRef.current.filter((_, idx) => idx !== currentFilteredIndex);
+					setFilteredWordsList(remaining);
+					if (currentFilteredIndex < remaining.length) {
+						nextWordData = remaining[currentFilteredIndex];
+					} else if (remaining.length > 0) {
+						nextWordData = remaining[0];
 					}
-				} catch (e) {
-					console.log('获取过滤列表失败:', e);
+					console.log('Next word computed from memory:', nextWordData?.word);
 				}
 
 				/**
@@ -300,8 +276,8 @@ export default function WordDetailPage() {
 					throw new Error(result.error || '移动失败');
 				}
 
-				// 刷新计数
-				fetchMindmapCountsRef.current();
+				// 异步刷新计数，不阻塞跳转
+				fetchMindmapCountsRef.current().catch(() => {});
 
 				// 自动跳转到 mindmap 中下一个未被分类的单词
 				if (nextWordData) {
