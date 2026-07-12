@@ -1,7 +1,7 @@
 import express from "express";
 import { getSupabaseClient, fetchTableDirectly } from "@/storage/database/supabase-client";
 import { clearWordbooksCache } from "@/routes/wordbooks";
-import { authMiddleware } from "@/middleware/auth";
+import { authMiddleware, optionalAuthMiddleware } from "@/middleware/auth";
 import type { AuthRequest } from "@/middleware/auth";
 
 const router = express.Router();
@@ -296,10 +296,10 @@ router.get('/category/:table/count', async (req, res) => {
 });
 
 // POST /api/v1/user-words/move-mindmap - 将导图单词从源表移动到 m1/m2/m3
-router.post('/move-mindmap', authMiddleware, async (req: AuthRequest, res) => {
+router.post('/move-mindmap', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const { word, sourceTable, targetTable } = req.body;
-    const userId = req.userId;
+    const userId = req.userId || 1;
 
     if (!word || !sourceTable || !targetTable) {
       res.status(400).json({ error: 'word, sourceTable and targetTable are required' });
@@ -404,10 +404,10 @@ router.post('/move-mindmap', authMiddleware, async (req: AuthRequest, res) => {
 });
 
 // GET /api/v1/user-words/mindmap-counts - 获取当前用户 m1/m2/m3 的单词数量
-router.get('/mindmap-counts', authMiddleware, async (req: AuthRequest, res) => {
+router.get('/mindmap-counts', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const client = getSupabaseClient();
-    const userId = req.userId;
+    const userId = req.userId || 1;
 
     const tables = ['m1', 'm2', 'm3'];
     const counts: Record<string, number> = {};
