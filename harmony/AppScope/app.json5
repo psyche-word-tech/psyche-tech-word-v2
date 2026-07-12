@@ -1,0 +1,21 @@
+{
+  "app": {
+    "bundleName": "com.psychetech.wordvoyage",
+    "vendor": "psychetech",
+    "versionCode": 1000000,
+    "versionName": "1.0.0",
+    "icon": "$media:app_icon",
+    "label": "$string:app_name",
+    "targetBundleName": "",
+    "minAPIVersion": 12,
+    "apiReleaseType": "Release",
+    "accessible": false,
+    "multiProjects": false,
+    "asanEnabled": false,
+    "tsanEnabled": false,
+    "gwpAsanEnabled": false,
+    "cfiEnabled": false,
+    "overflowEnabled": false,
+    "configuration": "$profile:configuration"
+  }
+}

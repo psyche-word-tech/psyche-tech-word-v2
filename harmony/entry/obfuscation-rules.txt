@@ -1,0 +1,4 @@
+# Obfuscation rules for release build
+# Keep all ArkTS APIs
+-keep-property-name
+-keep-global-name

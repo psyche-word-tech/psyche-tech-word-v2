@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Word Voyage Entry Module"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Word Voyage"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Word Voyage"
+    }
+  ]
+}
