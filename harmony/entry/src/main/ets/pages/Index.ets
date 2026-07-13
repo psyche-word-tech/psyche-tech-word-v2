@@ -3,36 +3,28 @@ import { webview } from '@kit.ArkWeb';
 @Entry
 @Component
 struct Index {
-  // WebView 控制器
   controller: webview.WebviewController = new webview.WebviewController();
-
-  // 要加载的 URL（线上地址或本地地址）
-  // 线上：使用部署后的前端地址
   @State webUrl: string = 'http://82.157.60.179:5000';
-
-  // 是否显示加载中
   @State isLoading: boolean = true;
-
-  // 是否可以返回
   @State canGoBack: boolean = false;
+  @State loadError: boolean = false;
 
   aboutToAppear() {
-    // 允许明文 HTTP 传输（开发调试使用，正式发布建议用 HTTPS）
     webview.WebviewController.setWebDebuggingAccess(true);
   }
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      // WebView 主组件
       Web({ src: this.webUrl, controller: this.controller })
         .width('100%')
         .height('100%')
         .javaScriptAccess(true)
         .domStorageAccess(true)
         .mixedMode(MixedMode.All)
-        .cacheMode(CacheMode.Default)
+        .cacheMode(CacheMode.CacheFirst)
         .onPageBegin(() => {
           this.isLoading = true;
+          this.loadError = false;
         })
         .onPageEnd(() => {
           this.isLoading = false;
@@ -40,17 +32,52 @@ struct Index {
         })
         .onErrorReceive((error) => {
           console.error('WebView error:', error.error.getErrorInfo());
+          this.loadError = true;
         })
         .backgroundColor('#ffffff')
 
-      // 加载指示器
       if (this.isLoading) {
-        LoadingProgress()
-          .width(40)
-          .height(40)
-          .color('#007AFF')
-          .position({ x: '50%', y: '50%' })
-          .markAnchor({ x: '50%', y: '50%' })
+        Column() {
+          LoadingProgress()
+            .width(48)
+            .height(48)
+            .color('#007AFF')
+          Text('psyche tech')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#333333')
+            .margin({ top: 16 })
+          Text('加载中...')
+            .fontSize(14)
+            .fontColor('#999999')
+            .margin({ top: 8 })
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#ffffff')
+        .justifyContent(FlexAlign.Center)
+      }
+
+      if (this.loadError) {
+        Column() {
+          Text('加载失败')
+            .fontSize(18)
+            .fontColor('#ff4444')
+          Text('请检查网络连接')
+            .fontSize(14)
+            .fontColor('#999999')
+            .margin({ top: 8 })
+          Button('重新加载')
+            .margin({ top: 20 })
+            .onClick(() => {
+              this.loadError = false;
+              this.controller.loadUrl(this.webUrl);
+            })
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#ffffff')
+        .justifyContent(FlexAlign.Center)
       }
     }
     .width('100%')
@@ -58,7 +85,6 @@ struct Index {
     .padding({ top: this.getStatusBarHeight() })
   }
 
-  // 获取状态栏高度，避免内容被状态栏遮挡
   getStatusBarHeight(): number {
     return AppStorage.get<number>('statusBarHeight') ?? 0;
   }
