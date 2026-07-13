@@ -50,10 +50,47 @@ harmony/
 @State webUrl: string = 'http://你的地址';
 ```
 
-### 4. 运行到模拟器或真机
+### 4. 真机运行（详细步骤）
 
-- **模拟器**：Tools → Device Manager → 创建本地模拟器（API 12）
-- **真机**：需要华为开发者账号，开启调试模式，签名后安装
+#### 4.1 注册华为开发者账号
+
+1. 访问 [华为开发者联盟](https://developer.huawei.com/consumer/cn/)
+2. 注册/登录账号（可用手机号）
+3. 完成实名认证（个人开发者即可）
+
+#### 4.2 在 DevEco Studio 登录
+
+1. 打开 DevEco Studio
+2. 点击右上角 **登录图标**（或 File → Settings → Appearance & Behavior → System Settings → HarmonyOS SDK → 登录华为账号）
+3. 用华为开发者账号登录
+
+#### 4.3 配置自动签名
+
+1. 点击菜单 **File → Project Structure → Project → Signing Configs**
+2. 勾选 **Support HarmonyOS** 和 **Automatically generate signing**
+3. 点击 **OK**
+4. DevEco Studio 会自动从华为服务器申请调试证书
+
+> 如果自动签名失败，去 [AppGallery Connect](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html) → 用户与访问 → 证书管理，手动创建调试证书。
+
+#### 4.4 开启手机开发者模式
+
+1. 手机「设置 → 关于手机」
+2. 连续点击 **版本号** 7 次，开启开发者模式
+3. 返回「设置 → 系统和更新 → 开发者选项」
+4. 打开：
+   - **USB 调试**
+   - **仅充电模式下允许 ADB 调试**（如有）
+
+#### 4.5 连接手机并运行
+
+1. 用 USB 数据线连接手机和电脑
+2. 手机上弹出的 USB 连接方式选择 **传输文件** 或 **仅充电**
+3. 在 DevEco Studio 顶部工具栏，点击设备选择框，选择你的手机
+4. 点击 **运行按钮**（绿色三角形）或按 `Shift+F10`
+5. 等待编译、签名、安装完成
+
+> 首次安装需要在手机上点击「允许」调试权限。
 
 ### 5. 构建 Release 包
 
