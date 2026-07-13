@@ -1187,7 +1187,7 @@ export default function WordDetailPage() {
 								<Image
 									source={{ uri: word.phrase_image_url }}
 									style={styles.phraseImage}
-									resizeMode="cover"
+									resizeMode="contain"
 								/>
 							</View>
 						</View>
@@ -1214,7 +1214,7 @@ export default function WordDetailPage() {
 										<Image
 											source={{ uri: imgUrl }}
 											style={styles.exampleImage}
-											resizeMode="cover"
+											resizeMode="contain"
 										/>
 									);
 								})()}
