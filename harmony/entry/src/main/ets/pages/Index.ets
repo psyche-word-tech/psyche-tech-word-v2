@@ -21,7 +21,7 @@ struct Index {
         .javaScriptAccess(true)
         .domStorageAccess(true)
         .mixedMode(MixedMode.All)
-        .cacheMode(CacheMode.CacheFirst)
+        .cacheMode(CacheMode.Default)
         .onPageBegin(() => {
           this.isLoading = true;
           this.loadError = false;
