@@ -3,6 +3,8 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import { checkDatabaseHealth, startKeepAlive, resetSupabaseClient } from "./storage/database/supabase-client";
 import wordsRouter from "./routes/words";
 import userWordsRouter from "./routes/user-words";
@@ -15,6 +17,9 @@ import speechEvalRouter from "./routes/speech-eval";
 import ttsRouter from "./routes/tts";
 import mindmapRouter from "./routes/mindmap";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const port = process.env.PORT || 9091;
 
@@ -23,8 +28,12 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Serve frontend static files
+app.use(express.static(path.join(__dirname, '../public')));
+
 /**
  * 根路径健康检查 - Railway 默认健康检查
+ * 仅在 public 目录不存在 index.html 时生效
  */
 app.get('/', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'word-voyage-api' });
@@ -134,6 +143,11 @@ app.use('/api/v1/grammar-check', grammarCheckRouter);
 app.use('/api/v1/speech-eval', speechEvalRouter);
 app.use('/api/v1/tts', ttsRouter);
 app.use('/api/v1/mindmap', mindmapRouter);
+
+// SPA fallback: serve index.html for non-API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
 
 // 全局未捕获异常处理 - 防止进程崩溃退出
 process.on('uncaughtException', (err) => {
