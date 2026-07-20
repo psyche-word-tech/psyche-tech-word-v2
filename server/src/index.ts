@@ -37,7 +37,7 @@ app.use(express.static(path.join(__dirname, '../public')));
  */
 app.get('/', (req, res) => {
   const indexPath = path.join(__dirname, '../public/index.html');
-  if (require('fs').existsSync(indexPath)) {
+  if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
     res.status(200).json({ status: 'ok', service: 'word-voyage-api' });
