@@ -14,7 +14,7 @@ echo "[1/2] 启动后端服务 (端口 9091)..."
 
 # 检查后端是否已运行
 if ! ss -tlnp | grep -q ":9091"; then
-    cd server && pnpm run dev > /dev/null 2>&1 &
+    cd server && NODE_ENV=development PORT=9091 node dist/index.js > /tmp/server-dev.log 2>&1 &
     BACKEND_PID=$!
     echo "后端服务已启动 (PID: $BACKEND_PID)"
     
