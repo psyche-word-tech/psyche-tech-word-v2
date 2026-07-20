@@ -10,7 +10,13 @@ struct Index {
   @State loadError: boolean = false;
 
   aboutToAppear() {
-    webview.WebviewController.setWebDebuggingAccess(true);
+    try {
+      webview.WebviewController.setWebDebuggingAccess(true);
+      // 每次启动加时间戳，绕过缓存加载最新内容
+      this.webUrl = 'http://82.157.60.179:5000?t=' + Date.now();
+    } catch (e) {
+      console.error('WebView init error:', JSON.stringify(e));
+    }
   }
 
   build() {
@@ -21,7 +27,7 @@ struct Index {
         .javaScriptAccess(true)
         .domStorageAccess(true)
         .mixedMode(MixedMode.All)
-        .cacheMode(CacheMode.Default)
+        .cacheMode(CacheMode.None)
         .onPageBegin(() => {
           this.isLoading = true;
           this.loadError = false;
@@ -34,27 +40,27 @@ struct Index {
           console.error('WebView error:', error.error.getErrorInfo());
           this.loadError = true;
         })
-        .backgroundColor('#ffffff')
+        .backgroundColor($r('app.color.start_window_background'))
 
       if (this.isLoading) {
         Column() {
           LoadingProgress()
             .width(48)
             .height(48)
-            .color('#007AFF')
+            .color($r('sys.color.brand'))
           Text('psyche tech')
             .fontSize(18)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#333333')
+            .fontColor($r('sys.color.font_primary'))
             .margin({ top: 16 })
           Text('加载中...')
             .fontSize(14)
-            .fontColor('#999999')
+            .fontColor($r('sys.color.font_secondary'))
             .margin({ top: 8 })
         }
         .width('100%')
         .height('100%')
-        .backgroundColor('#ffffff')
+        .backgroundColor($r('app.color.start_window_background'))
         .justifyContent(FlexAlign.Center)
       }
 
@@ -65,7 +71,7 @@ struct Index {
             .fontColor('#ff4444')
           Text('请检查网络连接')
             .fontSize(14)
-            .fontColor('#999999')
+            .fontColor($r('sys.color.font_secondary'))
             .margin({ top: 8 })
           Button('重新加载')
             .margin({ top: 20 })
@@ -76,7 +82,7 @@ struct Index {
         }
         .width('100%')
         .height('100%')
-        .backgroundColor('#ffffff')
+        .backgroundColor($r('app.color.start_window_background'))
         .justifyContent(FlexAlign.Center)
       }
     }
@@ -86,6 +92,10 @@ struct Index {
   }
 
   getStatusBarHeight(): number {
-    return AppStorage.get<number>('statusBarHeight') ?? 0;
+    try {
+      return AppStorage.get<number>('statusBarHeight') ?? 0;
+    } catch (e) {
+      return 0;
+    }
   }
 }

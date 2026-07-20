@@ -1,9 +1,6 @@
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
-
-const backgroundImg = require('@/assets/home-bg.jpg');
-const booksIcon = require('@/assets/books-icon.webp');
 
 export default function HomeScreen() {
   const router = useSafeRouter();
@@ -11,30 +8,19 @@ export default function HomeScreen() {
   return (
     <Screen>
       <ScrollView style={styles.container} bounces={false}>
-        {/* Top Background Image Area */}
+        {/* Top Section - Brand Name */}
         <View style={styles.topSection}>
-          <Image 
-            source={backgroundImg} 
-            style={styles.backgroundImage}
-            resizeMode="cover"
-          />
-          <View style={styles.imageOverlay}>
-            <Text style={styles.imageLabel}>刻字</Text>
-          </View>
+          <Text style={styles.brandText}>psyche tech</Text>
+          <Text style={styles.subText}>刻字</Text>
         </View>
 
-        {/* Bottom Section - My Vocabulary Books */}
+        {/* Bottom Section - Navigation */}
         <View style={styles.bottomSection}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.card}
             activeOpacity={0.8}
             onPress={() => router.push('/study')}
           >
-            <Image 
-              source={booksIcon}
-              style={styles.iconImage}
-              resizeMode="contain"
-            />
             <Text style={styles.cardText}>我的词汇书</Text>
           </TouchableOpacity>
         </View>
@@ -50,28 +36,21 @@ const styles = StyleSheet.create({
   },
   topSection: {
     height: 280,
-    position: 'relative',
-  },
-  backgroundImage: {
-    width: '100%',
-    height: '100%',
-  },
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 40,
-    left: 0,
-    right: 0,
+    backgroundColor: '#1a1a2e',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  imageLabel: {
-    fontSize: 16,
+  brandText: {
+    fontSize: 28,
     color: '#FFFFFF',
-    fontFamily: 'serif',
-    fontWeight: '300',
-    letterSpacing: 2,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    fontWeight: 'bold',
+    letterSpacing: 3,
+  },
+  subText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 12,
+    letterSpacing: 4,
   },
   bottomSection: {
     flex: 1,
@@ -81,17 +60,15 @@ const styles = StyleSheet.create({
   },
   card: {
     alignItems: 'center',
-    padding: 20,
-  },
-  iconImage: {
-    width: 120,
-    height: 120,
+    paddingVertical: 20,
+    paddingHorizontal: 40,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
   },
   cardText: {
     fontSize: 18,
     color: '#333333',
-    fontFamily: 'serif',
-    marginTop: 16,
+    fontWeight: '500',
     letterSpacing: 2,
   },
 });
