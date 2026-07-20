@@ -4,6 +4,7 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { checkDatabaseHealth, startKeepAlive, resetSupabaseClient } from "./storage/database/supabase-client";
 import wordsRouter from "./routes/words";
@@ -32,11 +33,15 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 /**
- * 根路径健康检查 - Railway 默认健康检查
- * 仅在 public 目录不存在 index.html 时生效
+ * 根路径 - 优先 serve 前端 index.html，不存在时返回 API 状态
  */
 app.get('/', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'word-voyage-api' });
+  const indexPath = path.join(__dirname, '../public/index.html');
+  if (require('fs').existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).json({ status: 'ok', service: 'word-voyage-api' });
+  }
 });
 
 /**
