@@ -24,6 +24,11 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith('/api/'):
             self._proxy_request('GET')
         else:
+            # 移除条件请求头，防止 SimpleHTTPRequestHandler 返回 304
+            if 'If-Modified-Since' in self.headers:
+                del self.headers['If-Modified-Since']
+            if 'If-None-Match' in self.headers:
+                del self.headers['If-None-Match']
             super().do_GET()
 
     def do_POST(self):
@@ -94,6 +99,13 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             print(f"[Proxy Error] {method} {target_url}: {e}", file=sys.stderr)
             self.send_error(502, f"Proxy Error: {e}")
+
+    def end_headers(self):
+        # 禁用静态文件缓存，确保沙箱预览始终加载最新版本
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
 
     def log_message(self, format, *args):
         print(f"[ProxyServer] {self.address_string()} - {format % args}")
