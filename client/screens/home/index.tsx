@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 
@@ -23,20 +24,56 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Bottom Section - My Vocabulary Books */}
-        <View style={styles.bottomSection}>
-          <TouchableOpacity 
-            style={styles.card}
-            activeOpacity={0.8}
-            onPress={() => router.push('/study')}
-          >
-            <Image 
-              source={booksIcon}
-              style={styles.iconImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.cardText}>我的词汇书</Text>
-          </TouchableOpacity>
+        {/* Bottom Section - 2x2 Grid */}
+        <View style={styles.gridContainer}>
+          <View style={styles.gridRow}>
+            {/* Top Left - Study */}
+            <TouchableOpacity 
+              style={[styles.gridCell, styles.cellBrown]}
+              activeOpacity={0.8}
+              onPress={() => router.push('/study')}
+            >
+              <View style={styles.iconCard}>
+                <Ionicons name="home-outline" size={40} color="#333" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Top Right - Calendar */}
+            <TouchableOpacity 
+              style={[styles.gridCell, styles.cellGray]}
+              activeOpacity={0.8}
+              onPress={() => router.push('/calendar')}
+            >
+              <View style={styles.iconCard}>
+                <Ionicons name="calendar-outline" size={40} color="#333" />
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.gridRow}>
+            {/* Bottom Left - Settings (no icon, keep link) */}
+            <TouchableOpacity 
+              style={[styles.gridCell, styles.cellDark]}
+              activeOpacity={0.8}
+              onPress={() => router.push('/settings')}
+            >
+              {/* Icon removed, link preserved */}
+            </TouchableOpacity>
+
+            {/* Bottom Right - My Vocabulary Books */}
+            <TouchableOpacity 
+              style={[styles.gridCell, styles.cellBrownDark]}
+              activeOpacity={0.8}
+              onPress={() => router.push('/study')}
+            >
+              <Image 
+                source={booksIcon}
+                style={styles.iconImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.cardText}>我的词汇书</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </Screen>
@@ -73,25 +110,44 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  bottomSection: {
+  gridContainer: {
+    flex: 1,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    height: 200,
+  },
+  gridCell: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
   },
-  card: {
-    alignItems: 'center',
+  cellBrown: {
+    backgroundColor: '#5D3A1A',
+  },
+  cellGray: {
+    backgroundColor: '#6B5B4F',
+  },
+  cellDark: {
+    backgroundColor: '#4A3728',
+  },
+  cellBrownDark: {
+    backgroundColor: '#4A2E0F',
+  },
+  iconCard: {
+    backgroundColor: '#F5F5F5',
     padding: 20,
+    borderRadius: 4,
   },
   iconImage: {
-    width: 120,
-    height: 120,
+    width: 60,
+    height: 60,
   },
   cardText: {
-    fontSize: 18,
-    color: '#333333',
+    fontSize: 14,
+    color: '#FFFFFF',
     fontFamily: 'serif',
-    marginTop: 16,
+    marginTop: 8,
     letterSpacing: 2,
   },
 });
