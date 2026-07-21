@@ -60,12 +60,6 @@ export default function EngraveScreen() {
 
         {/* Bottom Action Area */}
         <View style={styles.bottomAction}>
-          <TouchableOpacity 
-            style={styles.settingsButton} 
-            activeOpacity={0.7}
-          >
-            <Ionicons name="settings-outline" size={24} color="#333333" />
-          </TouchableOpacity>
         </View>
       </View>
     </Screen>
