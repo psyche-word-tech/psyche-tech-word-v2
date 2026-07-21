@@ -305,3 +305,71 @@ cd client && npx expo export --platform web
 - 后端服务运行在 `9091` 端口，不影响前端预览
 - 前端预览使用预导出的静态文件，无需启动 Metro bundler
 
+## 关键配置备忘（当前稳定版本）
+
+### API URL 配置（client/utils/apiConfig.ts）
+
+**必须保留完整环境检测逻辑，不能简化：**
+
+```typescript
+function getApiBaseUrl() {
+  const PROD_API_URL = 'http://82.157.60.179:5000';
+  const hostname = window.location.hostname;
+  
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:9091';
+  }
+  
+  // 沙箱预览环境：相对路径（平台代理转发）
+  if (hostname.includes('coze') || hostname.includes('sandbox') || window.location.port === '5000') {
+    return '';
+  }
+  
+  return PROD_API_URL;
+}
+```
+
+**三个环境区分：**
+- `localhost` → `http://localhost:9091`（本地开发）
+- `coze`/`sandbox`/`port:5000` → 相对路径 `''`（沙箱预览 + 手机 App WebView）
+- 其他 → `http://82.157.60.179:5000`（直接访问生产地址）
+
+**警告**：如果简化成 `hostname === 'localhost' ? 'http://localhost:9091' : ''`，会导致沙箱预览 iframe 请求发到平台域名（不处理 `/api`），API 失败页面白屏。
+
+### 服务器根路径（server/src/index.ts）
+
+根路径 `/` 必须优先检查并返回 `public/index.html`：
+
+```typescript
+app.get('/', (req, res) => {
+  const indexPath = path.join(__dirname, '../public/index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  res.json({ status: 'ok', service: 'word-voyage-api' });
+});
+```
+
+### 鸿蒙 WebView 配置（Index.ets）
+
+```typescript
+// 禁用缓存 + URL 加时间戳，避免加载旧内容
+aboutToAppear() {
+  webview.WebviewController.setWebDebuggingAccess(true);
+  this.webUrl = 'http://82.157.60.179:5000?t=' + Date.now();
+}
+
+// Web 组件配置
+cacheMode(CacheMode.None)  // 完全禁用缓存
+```
+
+### 已修复问题清单
+
+1. **白屏**：WebView `CacheMode.None` + URL 时间戳
+2. **API JSON 解析错误**：移除服务器 gzip 压缩（WebView fetch 无法解压）
+3. **根路径返回 JSON**：改为优先返回 index.html
+4. **沙箱预览失效**：恢复 `apiConfig.ts` 完整环境检测
+5. **图片加载慢**：压缩 `rock.jpg` 11MB→48KB，`purchase-books.webp` 968KB→28KB
+6. **图片裁剪**：`resizeMode="contain"` 替代 `"cover"`
+7. **ESM 非法 require**：`require('fs')` → `fs.existsSync`（已导入）
+
