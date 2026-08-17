@@ -42,6 +42,7 @@ ios/build/
 # Expo
 .expo/
 web-build/
+.preview
 
 # 临时文件
 tmp/
