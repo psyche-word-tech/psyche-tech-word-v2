@@ -23,13 +23,18 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/api/'):
             self._proxy_request('GET')
-        else:
-            # 移除条件请求头，防止 SimpleHTTPRequestHandler 返回 304
-            if 'If-Modified-Since' in self.headers:
-                del self.headers['If-Modified-Since']
-            if 'If-None-Match' in self.headers:
-                del self.headers['If-None-Match']
-            super().do_GET()
+            return
+        # 移除条件请求头，防止 SimpleHTTPRequestHandler 返回 304
+        if 'If-Modified-Since' in self.headers:
+            del self.headers['If-Modified-Since']
+        if 'If-None-Match' in self.headers:
+            del self.headers['If-None-Match']
+        # 先尝试提供静态文件
+        file_path = self.translate_path(self.path)
+        if not os.path.isfile(file_path):
+            # SPA fallback: 非静态文件路径返回 index.html
+            self.path = '/index.html'
+        super().do_GET()
 
     def do_POST(self):
         if self.path.startswith('/api/'):
@@ -113,7 +118,15 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == '__main__':
     os.chdir(STATIC_DIR)
-    with socketserver.TCPServer(("0.0.0.0", PORT), ProxyHandler) as httpd:
+
+    class ReusableTCPServer(socketserver.TCPServer):
+        allow_reuse_address = True
+        def server_bind(self):
+            import socket
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            super().server_bind()
+
+    with ReusableTCPServer(("0.0.0.0", PORT), ProxyHandler) as httpd:
         print(f"[ProxyServer] Serving static files from {STATIC_DIR}")
         print(f"[ProxyServer] Proxying /api/* to {API_TARGET}")
         print(f"[ProxyServer] Listening on http://0.0.0.0:{PORT}")
