@@ -25,6 +25,7 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<SolveResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   useEffect(() => {
     if (imageUri) {
@@ -37,9 +38,41 @@ export default function SearchScreen() {
     setResult(null);
 
     try {
-      // Fetch the image from the URI
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      let blob: Blob;
+      
+      if (uri.startsWith('data:')) {
+        // Data URL (base64) - convert directly to blob without fetch
+        try {
+          const arr = uri.split(',');
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const base64 = arr[1];
+          
+          if (!base64) {
+            throw new Error('Invalid data URL: no base64 data');
+          }
+          
+          const bstr = atob(base64);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          blob = new Blob([u8arr], { type: mime });
+          console.log('[Search] Data URL converted to blob, size:', blob.size);
+        } catch (e) {
+          console.error('[Search] Failed to convert data URL:', e);
+          // Fallback: try fetch
+          const response = await fetch(uri);
+          blob = await response.blob();
+        }
+      } else {
+        // Regular URL - fetch it
+        const response = await fetch(uri);
+        blob = await response.blob();
+      }
+
+      console.log('[Search] Image blob size:', blob.size, 'type:', blob.type);
 
       // Create FormData - use browser native FormData on web
       const formData = new FormData();
@@ -56,18 +89,60 @@ export default function SearchScreen() {
         } as any);
       }
 
+      console.log('[Search] Sending request to /api/v1/solve-problem');
+
       const res = await fetch('/api/v1/solve-problem', {
         method: 'POST',
         body: formData,
       });
 
+      console.log('[Search] Response status:', res.status);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('[Search] API error:', errorText);
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
       const data = await res.json();
+      console.log('[Search] Response data:', data);
       setResult(data);
     } catch (err) {
       console.error('Solve problem error:', err);
       setResult({ error: '解析失败，请重试' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFavorite = async (question: QuestionResult) => {
+    setFavoriteLoading(true);
+    try {
+      const res = await fetch('/api/v1/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question_text: question.question || '',
+          subject: question.subject,
+          answer: question.answer,
+          analysis: question.analysis,
+          solution: question.solution,
+          tips: question.tips,
+          image_url: imageUri,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert('收藏成功');
+      } else {
+        alert(data.message || '收藏失败');
+      }
+    } catch (err) {
+      console.error('Favorite error:', err);
+      alert('收藏失败，请重试');
+    } finally {
+      setFavoriteLoading(false);
     }
   };
 
@@ -179,6 +254,25 @@ export default function SearchScreen() {
                           <Text style={styles.tipsContent}>{q.tips}</Text>
                         </View>
                       )}
+
+                      {/* 收藏按钮 */}
+                      <TouchableOpacity
+                        style={styles.favoriteButton}
+                        onPress={() => handleFavorite(q)}
+                        disabled={favoriteLoading}
+                      >
+                        <Ionicons
+                          name={q.isFavorite ? 'heart' : 'heart-outline'}
+                          size={20}
+                          color={q.isFavorite ? '#EF4444' : '#666'}
+                        />
+                        <Text style={[
+                          styles.favoriteText,
+                          q.isFavorite && styles.favoriteTextActive
+                        ]}>
+                          {q.isFavorite ? '已收藏' : '收藏'}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   ))}
                 </>
@@ -385,5 +479,27 @@ const styles = {
     marginTop: 16,
     fontSize: 14,
     color: '#999',
+  },
+  favoriteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  favoriteText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  favoriteTextActive: {
+    color: '#EF4444',
   },
 };
