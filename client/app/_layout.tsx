@@ -7,6 +7,7 @@ import { Provider } from '@/components/Provider';
 import { ApiConfigProvider } from '@/contexts/ApiConfigContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import AnimatedSplash from '@/components/AnimatedSplash';
+import 'katex/dist/katex.min.css';
 
 LogBox.ignoreLogs([
   "TurboModuleRegistry.getEnforcing(...): 'RNMapsAirModule' could not be found",
