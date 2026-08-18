@@ -23,8 +23,13 @@ export function MathText({ text, style }: MathTextProps) {
     return <Text style={style}>{text}</Text>;
   }
 
-  // Web 端使用 div 渲染 HTML
-  return <div style={style} dangerouslySetInnerHTML={{ __html: html || '' }} />;
+  // Web 端使用 div 渲染 HTML，覆盖 KaTeX 的默认 margin
+  return (
+    <div
+      style={{ ...style, margin: 0 }}
+      dangerouslySetInnerHTML={{ __html: html || '' }}
+    />
+  );
 }
 
 function renderMathInHtml(text: string): string {

@@ -266,3 +266,12 @@
   --radius-4xl: calc(var(--radius) * 4); /* 2rem (32px) */
 }
 
+/* Override KaTeX display margins to reduce spacing */
+.katex-display {
+  margin: 0.2em 0 !important;
+}
+
+.katex {
+  font-size: 1em !important;
+}
+
