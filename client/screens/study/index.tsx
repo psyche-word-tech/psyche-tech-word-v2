@@ -24,28 +24,91 @@ export default function StudyScreen() {
     setShowImagePicker(false);
     
     if (Platform.OS === 'web') {
-      // Web 端使用隐藏的 input 元素调用摄像头
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.setAttribute('capture', 'environment');
-      input.style.display = 'none';
-      
-      input.onchange = async (e: any) => {
-        const file = e.target.files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const uri = event.target?.result as string;
+      // Web 端使用 getUserMedia 调用摄像头
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } 
+        });
+        
+        // 创建视频元素
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.style.position = 'fixed';
+        video.style.top = '0';
+        video.style.left = '0';
+        video.style.width = '100%';
+        video.style.height = '100%';
+        video.style.objectFit = 'cover';
+        video.style.zIndex = '9999';
+        
+        // 创建画布元素
+        const canvas = document.createElement('canvas');
+        
+        // 创建拍照按钮
+        const captureBtn = document.createElement('button');
+        captureBtn.textContent = '拍照';
+        captureBtn.style.position = 'fixed';
+        captureBtn.style.bottom = '100px';
+        captureBtn.style.left = '50%';
+        captureBtn.style.transform = 'translateX(-50%)';
+        captureBtn.style.padding = '15px 30px';
+        captureBtn.style.fontSize = '18px';
+        captureBtn.style.backgroundColor = '#fff';
+        captureBtn.style.border = 'none';
+        captureBtn.style.borderRadius = '30px';
+        captureBtn.style.zIndex = '10000';
+        captureBtn.style.cursor = 'pointer';
+        
+        // 创建关闭按钮
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '关闭';
+        closeBtn.style.position = 'fixed';
+        closeBtn.style.top = '20px';
+        closeBtn.style.right = '20px';
+        closeBtn.style.padding = '10px 20px';
+        closeBtn.style.fontSize = '16px';
+        closeBtn.style.backgroundColor = '#fff';
+        closeBtn.style.border = 'none';
+        closeBtn.style.borderRadius = '20px';
+        closeBtn.style.zIndex = '10000';
+        closeBtn.style.cursor = 'pointer';
+        
+        document.body.appendChild(video);
+        document.body.appendChild(captureBtn);
+        document.body.appendChild(closeBtn);
+        
+        // 拍照按钮点击事件
+        captureBtn.onclick = () => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0);
+            const uri = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // 清理
+            stream.getTracks().forEach(track => track.stop());
+            document.body.removeChild(video);
+            document.body.removeChild(captureBtn);
+            document.body.removeChild(closeBtn);
+            
             router.push('/search', { imageUri: uri });
-          };
-          reader.readAsDataURL(file);
-        }
-        document.body.removeChild(input);
-      };
-      
-      document.body.appendChild(input);
-      input.click();
+          }
+        };
+        
+        // 关闭按钮点击事件
+        closeBtn.onclick = () => {
+          stream.getTracks().forEach(track => track.stop());
+          document.body.removeChild(video);
+          document.body.removeChild(captureBtn);
+          document.body.removeChild(closeBtn);
+        };
+      } catch (err) {
+        console.error('摄像头访问失败:', err);
+        // 如果摄像头访问失败，回退到文件选择
+        handlePickFromLibrary();
+      }
       return;
     }
     
