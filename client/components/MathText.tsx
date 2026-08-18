@@ -11,22 +11,7 @@ if (Platform.OS === 'web') {
     style.id = styleId;
     style.textContent = `
       .katex-display {
-        margin: 0.1em 0 !important;
-        padding: 0 !important;
-        display: block !important;
-        position: relative !important;
-      }
-      .katex {
-        font-size: 1em !important;
-        display: inline-block !important;
-        position: relative !important;
-      }
-      .katex-display > .katex {
-        margin: 0 !important;
-        display: block !important;
-      }
-      .katex-display .base {
-        display: block !important;
+        margin: 0.2em 0 !important;
       }
     `;
     document.head.appendChild(style);
