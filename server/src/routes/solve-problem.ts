@@ -49,7 +49,16 @@ function fixJsonControlChars(jsonStr: string): string {
     const char = jsonStr[i];
     
     if (escaped) {
-      result += char;
+      // 检查是否是合法的 JSON 转义字符
+      if (char === '"' || char === '\\' || char === '/' || char === 'b' || char === 'f' || char === 'n' || char === 'r' || char === 't') {
+        result += char;
+      } else if (char === 'u') {
+        // \uXXXX 需要后面跟 4 个十六进制字符
+        result += char;
+      } else {
+        // 非法转义字符，去掉反斜杠
+        result += char;
+      }
       escaped = false;
       continue;
     }
@@ -67,7 +76,6 @@ function fixJsonControlChars(jsonStr: string): string {
     }
     
     if (inString) {
-      // 在字符串内部，转义控制字符
       if (char === '\n') {
         result += '\\n';
       } else if (char === '\r') {
