@@ -56,7 +56,7 @@ function fixJsonControlChars(jsonStr: string): string {
         // \uXXXX 需要后面跟 4 个十六进制字符
         result += char;
       } else {
-        // 非法转义字符，去掉反斜杠
+        // 非法转义字符（如 \p, \s, \c 等），去掉反斜杠
         result += char;
       }
       escaped = false;
@@ -91,6 +91,22 @@ function fixJsonControlChars(jsonStr: string): string {
       result += char;
     }
   }
+  
+  return result;
+}
+
+/**
+ * 更激进的 JSON 修复：处理 LaTeX 反斜杠问题
+ * LLM 可能在 JSON 字符串中返回未转义的反斜杠（如 \frac）
+ */
+function fixJsonLaTeX(jsonStr: string): string {
+  // 先修复控制字符
+  let result = fixJsonControlChars(jsonStr);
+  
+  // 然后修复字符串中的未转义反斜杠
+  // 在 JSON 字符串中，反斜杠必须转义为 \\
+  // 但 LLM 可能返回 \frac 而不是 \\frac
+  result = result.replace(/(?<=^|[^\\])(?:\\\\)*\\(?!["\\\/bfnrtu])/g, '\\\\');
   
   return result;
 }
@@ -260,23 +276,29 @@ router.post("/", upload.single("image"), async (req, res) => {
           } catch (e2) {
             console.error("[SolveProblem] JSON parse failed after fixes:", e2.message);
             console.error("[SolveProblem] Fixed JSON preview:", fixedJson.substring(0, 500));
-            // 尝试更激进的修复：移除所有换行符和制表符
-            let aggressiveFixed = jsonStr
-              .replace(/\r\n/g, '\\n')
-              .replace(/\n/g, '\\n')
-              .replace(/\r/g, '\\n')
-              .replace(/\t/g, '\\t')
-              .replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+            // 尝试修复 LaTeX 反斜杠问题
+            let latexFixed = fixJsonLaTeX(jsonStr);
             try {
-              result = JSON.parse(aggressiveFixed);
+              result = JSON.parse(latexFixed);
             } catch (e3) {
-              console.error("[SolveProblem] Aggressive fix also failed:", e3.message);
-              result = {
-                questions: [
-                  {
-                    subject: "未知",
-                    question: "无法解析题目内容",
-                    analysis: "解析失败，请重试",
+              console.error("[SolveProblem] LaTeX fix also failed:", e3.message);
+              // 尝试更激进的修复：移除所有换行符和制表符
+              let aggressiveFixed = jsonStr
+                .replace(/\r\n/g, '\\n')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\n')
+                .replace(/\t/g, '\\t')
+                .replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+              try {
+                result = JSON.parse(aggressiveFixed);
+              } catch (e4) {
+                console.error("[SolveProblem] Aggressive fix also failed:", e4.message);
+                result = {
+                  questions: [
+                    {
+                      subject: "未知",
+                      question: "无法解析题目内容",
+                      analysis: "解析失败，请重试",
                     solution: "",
                     answer: "",
                   }
@@ -285,8 +307,9 @@ router.post("/", upload.single("image"), async (req, res) => {
             }
           }
         }
-      } else {
-        console.error("[SolveProblem] No JSON found in response");
+      }
+    } else {
+      console.error("[SolveProblem] No JSON found in response");
         result = {
           questions: [
             {
