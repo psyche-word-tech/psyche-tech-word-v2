@@ -273,5 +273,17 @@
 
 .katex {
   font-size: 1em !important;
+  text-rendering: auto !important;
+}
+
+/* Hide KaTeX internal elements that shouldn't be visible */
+.katex .mtable .mspace,
+.katex .mtable .strut,
+.katex .mtable .col-align-c {
+  display: inline-block !important;
+}
+
+.katex .base {
+  display: inline-block !important;
 }
 

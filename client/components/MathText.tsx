@@ -1,22 +1,5 @@
-import { Text, Platform } from 'react-native';
-import { useMemo, useEffect } from 'react';
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
-
-// 注入 CSS 覆盖 KaTeX 默认样式
-if (Platform.OS === 'web') {
-  const styleId = 'katex-override-style';
-  if (typeof document !== 'undefined' && !document.getElementById(styleId)) {
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      .katex-display {
-        margin: 0.2em 0 !important;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-}
+import { Text } from 'react-native';
+import { useMemo } from 'react';
 
 interface MathTextProps {
   text: string;
@@ -24,81 +7,105 @@ interface MathTextProps {
 }
 
 /**
+ * 简单的 LaTeX 到 Unicode 转换
+ * 将常见的 LaTeX 公式转换为 Unicode 字符
+ */
+function simpleLatexToUnicode(text: string): string {
+  if (!text) return '';
+  
+  return text
+    // 分数 \frac{a}{b} → a/b
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2')
+    // 平方根 \sqrt{x} → √x
+    .replace(/\\sqrt\{([^}]+)\}/g, '√$1')
+    // 上标 x^{n} → xⁿ (简化处理)
+    .replace(/\^\{([^}]+)\}/g, '^$1')
+    // 下标 x_{n} → x_n
+    .replace(/_\{([^}]+)\}/g, '_$1')
+    // 常见符号
+    .replace(/\\times/g, '×')
+    .replace(/\\div/g, '÷')
+    .replace(/\\pm/g, '±')
+    .replace(/\\mp/g, '∓')
+    .replace(/\\cdot/g, '·')
+    .replace(/\\cdots/g, '⋯')
+    .replace(/\\ldots/g, '…')
+    .replace(/\\vdots/g, '')
+    .replace(/\\ddots/g, '⋱')
+    .replace(/\\infty/g, '∞')
+    .replace(/\\partial/g, '')
+    .replace(/\\nabla/g, '∇')
+    .replace(/\\forall/g, '∀')
+    .replace(/\\exists/g, '∃')
+    .replace(/\\in/g, '∈')
+    .replace(/\\notin/g, '∉')
+    .replace(/\\subset/g, '⊂')
+    .replace(/\\supset/g, '⊃')
+    .replace(/\\subseteq/g, '')
+    .replace(/\\supseteq/g, '⊇')
+    .replace(/\\cup/g, '∪')
+    .replace(/\\cap/g, '∩')
+    .replace(/\\emptyset/g, '∅')
+    .replace(/\\rightarrow/g, '→')
+    .replace(/\\leftarrow/g, '←')
+    .replace(/\\Rightarrow/g, '⇒')
+    .replace(/\\Leftarrow/g, '⇐')
+    .replace(/\\leftrightarrow/g, '↔')
+    .replace(/\\Leftrightarrow/g, '⇔')
+    .replace(/\\uparrow/g, '↑')
+    .replace(/\\downarrow/g, '↓')
+    .replace(/\\alpha/g, 'α')
+    .replace(/\\beta/g, 'β')
+    .replace(/\\gamma/g, 'γ')
+    .replace(/\\delta/g, 'δ')
+    .replace(/\\epsilon/g, 'ε')
+    .replace(/\\zeta/g, 'ζ')
+    .replace(/\\eta/g, 'η')
+    .replace(/\\theta/g, 'θ')
+    .replace(/\\iota/g, 'ι')
+    .replace(/\\kappa/g, 'κ')
+    .replace(/\\lambda/g, 'λ')
+    .replace(/\\mu/g, 'μ')
+    .replace(/\\nu/g, 'ν')
+    .replace(/\\xi/g, 'ξ')
+    .replace(/\\pi/g, 'π')
+    .replace(/\\rho/g, 'ρ')
+    .replace(/\\sigma/g, 'σ')
+    .replace(/\\tau/g, 'τ')
+    .replace(/\\upsilon/g, 'υ')
+    .replace(/\\phi/g, 'φ')
+    .replace(/\\chi/g, 'χ')
+    .replace(/\\psi/g, 'ψ')
+    .replace(/\\omega/g, 'ω')
+    .replace(/\\Delta/g, 'Δ')
+    .replace(/\\Gamma/g, 'Γ')
+    .replace(/\\Lambda/g, 'Λ')
+    .replace(/\\Omega/g, 'Ω')
+    .replace(/\\Phi/g, 'Φ')
+    .replace(/\\Pi/g, 'Π')
+    .replace(/\\Psi/g, 'Ψ')
+    .replace(/\\Sigma/g, 'Σ')
+    .replace(/\\Theta/g, 'Θ')
+    .replace(/\\Upsilon/g, 'Υ')
+    .replace(/\\Xi/g, 'Ξ')
+    // 移除剩余的 LaTeX 命令
+    .replace(/\\[a-zA-Z]+/g, '')
+    // 移除多余的大括号
+    .replace(/[{}]/g, '')
+    // 清理多余的空格
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * 渲染包含 LaTeX 公式的文本
- * 支持 $...$ 行内公式和 $$...$$ 块级公式
- * Web 端使用 KaTeX 渲染，Native 端直接显示文本
+ * Web 端使用简单的 Unicode 转换，Native 端直接显示文本
  */
 export function MathText({ text, style }: MathTextProps) {
-  const html = useMemo(() => {
-    if (Platform.OS !== 'web' || !text) return null;
-    return renderMathInHtml(text);
+  const displayText = useMemo(() => {
+    if (!text) return '';
+    return simpleLatexToUnicode(text);
   }, [text]);
 
-  if (Platform.OS !== 'web') {
-    return <Text style={style}>{text}</Text>;
-  }
-
-  // Web 端使用 div 渲染 HTML，强制覆盖 KaTeX 的默认 margin
-  return (
-    <div
-      style={{
-        ...style,
-        margin: 0,
-        padding: 0,
-        lineHeight: '1.5',
-      }}
-      dangerouslySetInnerHTML={{ __html: html || '' }}
-    />
-  );
-}
-
-function renderMathInHtml(text: string): string {
-  if (!text) return '';
-
-  // 先转义 HTML 特殊字符
-  let result = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // 处理块级公式 $$...$$
-  result = result.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
-    try {
-      return '<div style="display: block; margin: 8px 0; text-align: center; clear: both;">' +
-        katex.renderToString(decodeHtmlEntities(formula.trim()), {
-          displayMode: true,
-          throwOnError: false,
-          output: 'html',
-        }) +
-        '</div>';
-    } catch (e) {
-      return `<span style="color: red;">[公式错误]</span>`;
-    }
-  });
-
-  // 处理行内公式 $...$
-  result = result.replace(/\$([^\$\n]+?)\$/g, (match, formula) => {
-    try {
-      return katex.renderToString(decodeHtmlEntities(formula.trim()), {
-        displayMode: false,
-        throwOnError: false,
-        output: 'html',
-      });
-    } catch (e) {
-      return `<span style="color: red;">[公式错误]</span>`;
-    }
-  });
-
-  // 处理换行（减少间距）
-  result = result.replace(/\n/g, '<br style="line-height: 1.2;"/>');
-
-  return result;
-}
-
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"');
+  return <Text style={style}>{displayText}</Text>;
 }
