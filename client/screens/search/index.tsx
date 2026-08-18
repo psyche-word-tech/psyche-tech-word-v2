@@ -33,15 +33,24 @@ export default function SearchScreen() {
     setResult(null);
 
     try {
+      // Fetch the image from the URI
       const response = await fetch(uri);
       const blob = await response.blob();
 
+      // Create FormData - use browser native FormData on web
       const formData = new FormData();
-      formData.append('image', {
-        uri: Platform.OS === 'web' ? uri : uri,
-        name: 'problem.jpg',
-        type: blob.type || 'image/jpeg',
-      } as any);
+      
+      if (Platform.OS === 'web') {
+        // Web: append blob directly
+        formData.append('image', blob, 'problem.jpg');
+      } else {
+        // Native: use React Native FormData format
+        formData.append('image', {
+          uri: uri,
+          name: 'problem.jpg',
+          type: blob.type || 'image/jpeg',
+        } as any);
+      }
 
       const res = await fetch('/api/v1/solve-problem', {
         method: 'POST',
