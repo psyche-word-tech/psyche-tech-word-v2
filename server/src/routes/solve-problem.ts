@@ -78,6 +78,9 @@ router.post("/", upload.single("image"), async (req, res) => {
             solution: cached.solution,
             answer: cached.answer,
             tips: cached.tips,
+            knowledge_points: cached.knowledge_points || "",
+            core_competency: cached.core_competency || "",
+            difficulty: cached.difficulty || "",
             from_cache: true,
           }
         ]
@@ -272,6 +275,9 @@ router.post("/", upload.single("image"), async (req, res) => {
           analysis: q.analysis || "",
           solution: q.solution || "",
           tips: q.tips || "",
+          knowledge_points: q.knowledge_points || "",
+          core_competency: q.core_competency || "",
+          difficulty: q.difficulty || "",
           image_hash: hash,
         });
       }
