@@ -467,7 +467,7 @@ const styles = {
   blockContent: {
     fontSize: 14,
     color: '#555',
-    lineHeight: 22,
+    lineHeight: 18,
   },
   answerBlock: {
     backgroundColor: '#F1F8E9',
@@ -500,7 +500,7 @@ const styles = {
   tipsContent: {
     fontSize: 14,
     color: '#666',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   errorBox: {
     flexDirection: 'row',
