@@ -12,14 +12,18 @@ interface MathTextProps {
 function cleanLatex(text: string): string {
   if (!text) return '';
   
-  return text
+  let result = text;
+  
+  // 多次处理嵌套分数和根号
+  for (let i = 0; i < 3; i++) {
+    result = result.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)');
+    result = result.replace(/\\sqrt\{([^{}]+)\}/g, '√($1)');
+  }
+  
+  return result
     // 移除 $$ 和 $ 标记
     .replace(/\$\$/g, '')
     .replace(/\$/g, '')
-    // 分数 \frac{a}{b} → a/b
-    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2')
-    // 平方根 \sqrt{x} → √x
-    .replace(/\\sqrt\{([^}]+)\}/g, '√$1')
     // 上标
     .replace(/\^\{([^}]+)\}/g, '^$1')
     // 下标
