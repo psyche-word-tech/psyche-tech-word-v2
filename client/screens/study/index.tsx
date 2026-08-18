@@ -21,27 +21,37 @@ export default function StudyScreen() {
     <Screen safeAreaEdges={[]}>
       <View style={styles.container}>
         {/* 上半部分：区域一（100% 宽，50% 高） */}
-        <TouchableOpacity 
-          style={styles.topCard} 
-          activeOpacity={0.9} 
-          onPress={() => router.push('/engrave')}
-        >
-          <Image source={iconRock} style={styles.topImage} resizeMode="stretch" />
-          {engravedText.length > 0 && (
-            <View style={[styles.engravedTextContainer, { position: 'absolute', top: HALF_HEIGHT / 3 + 55, flexDirection: 'column', alignItems: 'center' }]}>
-              {engravedText.split(' ').map((word, wordIndex) => (
-                <View key={wordIndex} style={{ flexDirection: 'row', marginVertical: 5 }}>
-                  {word.split('').map((char, charIndex) => (
-                    <View key={charIndex} style={{ marginHorizontal: 15 }}>
-                      <Text style={styles.engravedText}>{char}</Text>
-                      <Text style={styles.engravedTextHighlight}>{char}</Text>
-                    </View>
-                  ))}
-                </View>
-              ))}
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={styles.topCardWrapper}>
+          <TouchableOpacity 
+            style={styles.topCard} 
+            activeOpacity={0.9} 
+            onPress={() => router.push('/engrave')}
+          >
+            <Image source={iconRock} style={styles.topImage} resizeMode="stretch" />
+            {engravedText.length > 0 && (
+              <View style={[styles.engravedTextContainer, { position: 'absolute', top: HALF_HEIGHT / 3 + 55, flexDirection: 'column', alignItems: 'center' }]}>
+                {engravedText.split(' ').map((word, wordIndex) => (
+                  <View key={wordIndex} style={{ flexDirection: 'row', marginVertical: 5 }}>
+                    {word.split('').map((char, charIndex) => (
+                      <View key={charIndex} style={{ marginHorizontal: 15 }}>
+                        <Text style={styles.engravedText}>{char}</Text>
+                        <Text style={styles.engravedTextHighlight}>{char}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            )}
+          </TouchableOpacity>
+          {/* Search Icon - Top Right */}
+          <TouchableOpacity 
+            style={styles.searchButton}
+            activeOpacity={0.7}
+            onPress={() => router.push('/search')}
+          >
+            <Ionicons name="search" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
 
         {/* 下半部分：2x2 田字格（区域二、三、四、五） */}
         <View style={styles.bottomSection}>
@@ -106,6 +116,23 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  topCardWrapper: {
+    position: 'relative',
+    height: HALF_HEIGHT,
+    width: '100%',
+  },
+  searchButton: {
+    position: 'absolute',
+    top: 70,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   topImage: {
     width: '100%',
