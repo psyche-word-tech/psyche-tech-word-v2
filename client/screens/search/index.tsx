@@ -5,6 +5,7 @@ import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { useState, useEffect } from 'react';
 import { MathText } from '@/components/MathText';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 
 interface QuestionResult {
   subject?: string;
@@ -32,6 +33,7 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   useEffect(() => {
     if (imageUri !== null) {
@@ -212,6 +214,27 @@ export default function SearchScreen() {
     }
   };
 
+  const handleUploadFile = async () => {
+    setShowImagePicker(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.wps-office.doc', 'application/vnd.wps-office.docx'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const file = result.assets[0];
+      console.log('[Search] Selected file:', file.name, file.uri);
+      alert(`已选择文件：${file.name}\n\n注意：当前版本仅支持图片搜题，文档解析功能开发中。`);
+    } catch (err) {
+      console.error('Document picker error:', err);
+      alert('选择文件失败，请重试');
+    }
+  };
+
   return (
     <Screen>
       <View style={styles.container}>
@@ -269,6 +292,10 @@ export default function SearchScreen() {
                 <TouchableOpacity style={styles.modalButton} onPress={handlePickFromLibrary}>
                   <Ionicons name="images" size={24} color="#333" />
                   <Text style={styles.modalButtonText}>从相册选择</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalButton} onPress={handleUploadFile}>
+                  <Ionicons name="document-text" size={24} color="#333" />
+                  <Text style={styles.modalButtonText}>上传文件</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
