@@ -1,9 +1,10 @@
-import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Platform, Modal } from 'react-native';
+import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { useState, useEffect } from 'react';
 import { MathText } from '@/components/MathText';
+import * as ImagePicker from 'expo-image-picker';
 
 interface QuestionResult {
   subject?: string;
@@ -30,6 +31,7 @@ export default function SearchScreen() {
   const [result, setResult] = useState<SolveResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [showImagePicker, setShowImagePicker] = useState(false);
 
   useEffect(() => {
     if (imageUri) {
@@ -150,6 +152,66 @@ export default function SearchScreen() {
     }
   };
 
+  const handleReselect = () => {
+    setShowImagePicker(true);
+  };
+
+  const handleTakePhoto = async () => {
+    setShowImagePicker(false);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      alert('需要相机权限才能拍照');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setImageUri(uri);
+        setResult(null);
+        setLoading(true);
+        await solveProblem(uri);
+      }
+    } catch (err) {
+      console.error('Camera error:', err);
+      alert('拍照失败，请重试');
+    }
+  };
+
+  const handlePickFromLibrary = async () => {
+    setShowImagePicker(false);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      alert('需要相册权限才能选择图片');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setImageUri(uri);
+        setResult(null);
+        setLoading(true);
+        await solveProblem(uri);
+      }
+    } catch (err) {
+      console.error('Image picker error:', err);
+      alert('选择图片失败，请重试');
+    }
+  };
+
   return (
     <Screen>
       <View style={styles.container}>
@@ -179,16 +241,44 @@ export default function SearchScreen() {
             <View style={styles.imageSection}>
               <Text style={styles.sectionTitle}>题目图片</Text>
               <Image source={{ uri: imageUri }} style={styles.selectedImage} resizeMode="contain" />
-              <TouchableOpacity style={styles.retakeButton} onPress={() => {
-                setImageUri('');
-                setResult(null);
-                setLoading(false);
-              }}>
+              <TouchableOpacity style={styles.retakeButton} onPress={handleReselect}>
                 <Ionicons name="refresh" size={18} color="#666" />
                 <Text style={styles.retakeText}>重新选择</Text>
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Image Picker Modal */}
+          <Modal
+            visible={showImagePicker}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowImagePicker(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowImagePicker(false)}
+            >
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>选择图片来源</Text>
+                <TouchableOpacity style={styles.modalButton} onPress={handleTakePhoto}>
+                  <Ionicons name="camera" size={24} color="#333" />
+                  <Text style={styles.modalButtonText}>拍照</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalButton} onPress={handlePickFromLibrary}>
+                  <Ionicons name="images" size={24} color="#333" />
+                  <Text style={styles.modalButtonText}>从相册选择</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setShowImagePicker(false)}
+                >
+                  <Text style={styles.modalCancelText}>取消</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
 
           {/* Loading */}
           {loading && (
@@ -605,5 +695,48 @@ const styles = {
   },
   difficultyHard: {
     color: '#DC2626',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#F5F5F5',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  modalButtonText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  modalCancelButton: {
+    alignItems: 'center',
+    padding: 16,
+    marginTop: 8,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#999',
   },
 };
