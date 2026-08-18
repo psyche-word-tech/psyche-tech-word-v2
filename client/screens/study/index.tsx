@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
+import * as ImagePicker from 'expo-image-picker';
 
 const iconRock = require('@/assets/iconRock.png');
 const iconMyVocab = require('@/assets/my-vocab.png');
@@ -16,6 +17,52 @@ export default function StudyScreen() {
   const router = useSafeRouter();
   const params = useSafeSearchParams<{ engravedText?: string }>();
   const engravedText = params.engravedText || '';
+
+  const handleSearchImage = async () => {
+    Alert.alert(
+      '选择图片来源',
+      '请选择拍照或从相册选择',
+      [
+        {
+          text: '拍照',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('权限被拒绝', '请在设置中开启相机权限');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets[0]) {
+              router.push('/search', { imageUri: result.assets[0].uri });
+            }
+          },
+        },
+        {
+          text: '从相册选择',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('权限被拒绝', '请在设置中开启相册权限');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets[0]) {
+              router.push('/search', { imageUri: result.assets[0].uri });
+            }
+          },
+        },
+        { text: '取消', style: 'cancel' },
+      ]
+    );
+  };
 
   return (
     <Screen safeAreaEdges={[]}>
@@ -47,7 +94,7 @@ export default function StudyScreen() {
           <TouchableOpacity 
             style={styles.searchButton}
             activeOpacity={0.7}
-            onPress={() => router.push('/search')}
+            onPress={handleSearchImage}
           >
             <Ionicons name="search" size={22} color="#FFFFFF" />
           </TouchableOpacity>
