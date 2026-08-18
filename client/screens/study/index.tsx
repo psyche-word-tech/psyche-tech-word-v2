@@ -400,17 +400,21 @@ const styles = StyleSheet.create({
     height: HALF_HEIGHT,
     width: '100%',
   },
-  searchButton: {
+  topRightButtons: {
     position: 'absolute',
     top: 70,
     right: 20,
+    flexDirection: 'row',
+    gap: 10,
+    zIndex: 10,
+  },
+  searchButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
   },
   topImage: {
     width: '100%',
