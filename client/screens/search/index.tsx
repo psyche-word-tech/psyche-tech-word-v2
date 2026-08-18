@@ -26,15 +26,15 @@ interface SolveResult {
 export default function SearchScreen() {
   const router = useSafeRouter();
   const params = useSafeSearchParams<{ imageUri?: string }>();
-  const imageUri = params.imageUri || '';
   const [query, setQuery] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(params.imageUri || null);
   const [result, setResult] = useState<SolveResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
 
   useEffect(() => {
-    if (imageUri) {
+    if (imageUri !== null) {
       solveProblem(imageUri);
     }
   }, [imageUri]);
