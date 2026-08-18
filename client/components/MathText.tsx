@@ -39,13 +39,13 @@ function renderMathInHtml(text: string): string {
   // 处理块级公式 $$...$$
   result = result.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
     try {
-      return '<div style="margin: 8px 0; text-align: center;">' +
+      return '<span style="display: block; margin: 4px 0; text-align: center;">' +
         katex.renderToString(decodeHtmlEntities(formula.trim()), {
           displayMode: true,
           throwOnError: false,
           output: 'html',
         }) +
-        '</div>';
+        '</span>';
     } catch (e) {
       return `<span style="color: red;">[公式错误]</span>`;
     }
@@ -64,8 +64,8 @@ function renderMathInHtml(text: string): string {
     }
   });
 
-  // 处理换行
-  result = result.replace(/\n/g, '<br/>');
+  // 处理换行（减少间距）
+  result = result.replace(/\n/g, '<br style="line-height: 1.2;"/>');
 
   return result;
 }
