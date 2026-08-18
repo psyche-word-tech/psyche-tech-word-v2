@@ -104,7 +104,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 
 **重要：图片中可能包含多道题目，请逐一解析所有题目。**
 
-请按以下 JSON 格式返回结果：
+请按以下 JSON 格式返回结果（必须包含所有字段）：
 {
   "questions": [
     {
@@ -114,12 +114,14 @@ router.post("/", upload.single("image"), async (req, res) => {
       "solution": "详细解答过程",
       "answer": "最终答案",
       "tips": "解题技巧或注意事项（可选）",
-      "knowledge_points": "考查的知识点（如：函数、三角函数、概率统计等）",
-      "core_competency": "考察的学科核心素养（如：数学抽象、逻辑推理、数学建模、直观想象、数学运算、数据分析等）",
-      "difficulty": "难度等级（简单/中等/困难）"
+      "knowledge_points": "考查的知识点（必填，如：函数、三角函数、概率统计等）",
+      "core_competency": "考察的学科核心素养（必填，如：数学抽象、逻辑推理、数学建模、直观想象、数学运算、数据分析等）",
+      "difficulty": "难度等级（必填，只能是：简单、中等、困难）"
     }
   ]
 }
+
+**注意：knowledge_points、core_competency、difficulty 这三个字段是必填的，不能为空！**
 
 如果图片中只有一道题，questions 数组中只有一个元素。
 只返回 JSON，不要有其他解释文字。如果图片不清晰或无法识别，请返回：
@@ -149,12 +151,14 @@ router.post("/", upload.single("image"), async (req, res) => {
       "solution": "解答步骤",
       "answer": "最终答案",
       "tips": "解题技巧（可选）",
-      "knowledge_points": "考查的知识点",
-      "core_competency": "考察的学科核心素养",
-      "difficulty": "难度等级（简单/中等/困难）"
+      "knowledge_points": "考查的知识点（必填）",
+      "core_competency": "考察的学科核心素养（必填）",
+      "difficulty": "难度等级（必填，只能是：简单/中等/困难）"
     }
   ]
 }
+
+**重要：knowledge_points、core_competency、difficulty 三个字段必须填写，不能为空！**
 
 如果图片中有多道题，请在 questions 数组中包含所有题目。`,
           },
@@ -170,6 +174,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 
     console.log(`[SolveProblem] LLM done in ${Date.now() - startTime}ms`);
     console.log(`[SolveProblem] LLM response length: ${llmResponse.content.length}`);
+    console.log(`[SolveProblem] LLM response preview:`, llmResponse.content.substring(0, 500));
 
     let result: any;
     try {
@@ -290,6 +295,13 @@ router.post("/", upload.single("image"), async (req, res) => {
         q.from_cache = false;
       });
     }
+
+    console.log(`[SolveProblem] Final result questions:`, JSON.stringify(result.questions?.map((q: any) => ({
+      subject: q.subject,
+      knowledge_points: q.knowledge_points,
+      core_competency: q.core_competency,
+      difficulty: q.difficulty
+    })), null, 2));
 
     res.json(result);
   } catch (err: any) {
