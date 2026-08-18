@@ -20,6 +20,7 @@ export default function StudyScreen() {
   const params = useSafeSearchParams<{ engravedText?: string }>();
   const engravedText = params.engravedText || '';
   const [showImagePicker, setShowImagePicker] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const handleTakePhoto = async () => {
     setShowImagePicker(false);
@@ -231,13 +232,22 @@ export default function StudyScreen() {
             )}
           </TouchableOpacity>
           {/* Search Icon - Top Right */}
-          <TouchableOpacity 
-            style={styles.searchButton}
-            activeOpacity={0.7}
-            onPress={() => setShowImagePicker(true)}
-          >
-            <Ionicons name="search" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.topRightButtons}>
+            <TouchableOpacity 
+              style={styles.searchButton}
+              activeOpacity={0.7}
+              onPress={() => setShowImagePicker(true)}
+            >
+              <Ionicons name="search" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.searchButton}
+              activeOpacity={0.7}
+              onPress={() => setShowHistory(true)}
+            >
+              <Ionicons name="time-outline" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 下半部分：2x2 田字格（区域二、三、四、五） */}
@@ -328,6 +338,38 @@ export default function StudyScreen() {
               <Text style={styles.modalCancelText}>取消</Text>
             </TouchableOpacity>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 历史记录 Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showHistory}
+        onRequestClose={() => setShowHistory(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowHistory(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>历史记录</Text>
+              <TouchableOpacity onPress={() => setShowHistory(false)}>
+                <Text style={styles.modalCloseBtn}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={{ color: '#999', textAlign: 'center', marginTop: 40 }}>
+                暂无历史记录
+              </Text>
+            </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </Screen>
@@ -524,6 +566,40 @@ const styles = StyleSheet.create({
   },
   modalCancelText: {
     fontSize: 16,
+    color: '#999',
+  },
+  historyModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    maxHeight: '70%',
+  },
+  historyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  historyItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  historyItemText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  historyEmpty: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  historyEmptyText: {
+    fontSize: 14,
     color: '#999',
   },
 });
