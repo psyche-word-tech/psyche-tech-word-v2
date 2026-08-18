@@ -10,9 +10,24 @@ if (Platform.OS === 'web') {
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      .katex-display { margin: 0.1em 0 !important; }
-      .katex { font-size: 1em !important; }
-      .katex-display > .katex { margin: 0 !important; }
+      .katex-display {
+        margin: 0.1em 0 !important;
+        padding: 0 !important;
+        display: block !important;
+        position: relative !important;
+      }
+      .katex {
+        font-size: 1em !important;
+        display: inline-block !important;
+        position: relative !important;
+      }
+      .katex-display > .katex {
+        margin: 0 !important;
+        display: block !important;
+      }
+      .katex-display .base {
+        display: block !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -64,13 +79,13 @@ function renderMathInHtml(text: string): string {
   // 处理块级公式 $$...$$
   result = result.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
     try {
-      return '<span style="display: block; margin: 4px 0; text-align: center;">' +
+      return '<div style="display: block; margin: 8px 0; text-align: center; clear: both;">' +
         katex.renderToString(decodeHtmlEntities(formula.trim()), {
           displayMode: true,
           throwOnError: false,
           output: 'html',
         }) +
-        '</span>';
+        '</div>';
     } catch (e) {
       return `<span style="color: red;">[公式错误]</span>`;
     }
