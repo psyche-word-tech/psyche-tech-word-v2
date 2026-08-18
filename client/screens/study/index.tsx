@@ -7,6 +7,21 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useState } from 'react';
 
+// 雷达图 SVG 图标组件
+const RadarChartIcon = ({ size = 22, color = '#FFFFFF' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2L20.66 7V17L12 22L3.34 17V7L12 2Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
+    <path d="M12 6L17.33 9V15L12 18L6.67 15V9L12 6Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
+    <path d="M12 10L14 11V13L12 14L10 13V11L12 10Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
+    <line x1="12" y1="2" x2="12" y2="6" stroke={color} strokeWidth="1.5"/>
+    <line x1="20.66" y1="7" x2="17.33" y2="9" stroke={color} strokeWidth="1.5"/>
+    <line x1="20.66" y1="17" x2="17.33" y2="15" stroke={color} strokeWidth="1.5"/>
+    <line x1="12" y1="22" x2="12" y2="18" stroke={color} strokeWidth="1.5"/>
+    <line x1="3.34" y1="17" x2="6.67" y2="15" stroke={color} strokeWidth="1.5"/>
+    <line x1="3.34" y1="7" x2="6.67" y2="9" stroke={color} strokeWidth="1.5"/>
+  </svg>
+);
+
 const iconRock = require('@/assets/iconRock.png');
 const iconMyVocab = require('@/assets/my-vocab.png');
 const region4Bg = require('@/assets/region4-bg.webp');
@@ -253,7 +268,7 @@ export default function StudyScreen() {
               activeOpacity={0.7}
               onPress={() => router.push('/competency-map')}
             >
-              <FontAwesome6 name="network-wired" size={22} color="#FFFFFF" />
+              <RadarChartIcon size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
