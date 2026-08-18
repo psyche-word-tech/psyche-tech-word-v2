@@ -110,7 +110,10 @@ router.post("/", upload.single("image"), async (req, res) => {
       "analysis": "题目分析（考查知识点、解题思路）",
       "solution": "详细解答过程",
       "answer": "最终答案",
-      "tips": "解题技巧或注意事项（可选）"
+      "tips": "解题技巧或注意事项（可选）",
+      "knowledge_points": "考查的知识点（如：函数、三角函数、概率统计等）",
+      "core_competency": "考察的学科核心素养（如：数学抽象、逻辑推理、数学建模、直观想象、数学运算、数据分析等）",
+      "difficulty": "难度等级（简单/中等/困难）"
     }
   ]
 }
@@ -142,7 +145,10 @@ router.post("/", upload.single("image"), async (req, res) => {
       "analysis": "详细解析过程",
       "solution": "解答步骤",
       "answer": "最终答案",
-      "tips": "解题技巧（可选）"
+      "tips": "解题技巧（可选）",
+      "knowledge_points": "考查的知识点",
+      "core_competency": "考察的学科核心素养",
+      "difficulty": "难度等级（简单/中等/困难）"
     }
   ]
 }

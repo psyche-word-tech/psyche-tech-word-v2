@@ -11,6 +11,9 @@ interface QuestionResult {
   solution?: string;
   answer?: string;
   tips?: string;
+  knowledge_points?: string;
+  core_competency?: string;
+  difficulty?: string;
 }
 
 interface SolveResult {
@@ -273,6 +276,45 @@ export default function SearchScreen() {
                           {q.isFavorite ? '已收藏' : '收藏'}
                         </Text>
                       </TouchableOpacity>
+
+                      {/* 双向细目表 */}
+                      {(q.knowledge_points || q.core_competency || q.difficulty) && (
+                        <View style={styles.specTable}>
+                          <View style={styles.specTableHeader}>
+                            <Ionicons name="analytics-outline" size={16} color="#6366F1" />
+                            <Text style={styles.specTableTitle}>双向细目表</Text>
+                          </View>
+                          <View style={styles.specTableBody}>
+                            {q.knowledge_points && (
+                              <View style={styles.specRow}>
+                                <Text style={styles.specLabel}>考查知识点</Text>
+                                <Text style={styles.specValue}>{q.knowledge_points}</Text>
+                              </View>
+                            )}
+                            {q.core_competency && (
+                              <View style={styles.specRow}>
+                                <Text style={styles.specLabel}>学科核心素养</Text>
+                                <Text style={styles.specValue}>{q.core_competency}</Text>
+                              </View>
+                            )}
+                            {q.difficulty && (
+                              <View style={styles.specRow}>
+                                <Text style={styles.specLabel}>难度等级</Text>
+                                <View style={styles.difficultyBadge}>
+                                  <Text style={[
+                                    styles.difficultyText,
+                                    q.difficulty === '简单' && styles.difficultyEasy,
+                                    q.difficulty === '中等' && styles.difficultyMedium,
+                                    q.difficulty === '困难' && styles.difficultyHard,
+                                  ]}>
+                                    {q.difficulty}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      )}
                     </View>
                   ))}
                 </>
@@ -501,5 +543,62 @@ const styles = {
   },
   favoriteTextActive: {
     color: '#EF4444',
+  },
+  specTable: {
+    marginTop: 16,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  specTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  specTableTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4338CA',
+  },
+  specTableBody: {
+    gap: 8,
+  },
+  specRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  specLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    width: 80,
+    fontWeight: '500',
+  },
+  specValue: {
+    fontSize: 13,
+    color: '#1F2937',
+    flex: 1,
+  },
+  difficultyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: '#E5E7EB',
+  },
+  difficultyText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  difficultyEasy: {
+    color: '#059669',
+  },
+  difficultyMedium: {
+    color: '#D97706',
+  },
+  difficultyHard: {
+    color: '#DC2626',
   },
 };
