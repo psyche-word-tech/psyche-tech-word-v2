@@ -264,77 +264,61 @@ import { Screen } from '../../../components/Screen';
 
 ### 预览方案
 - 项目类型：Web 预览型（React Native / Expo Web）
-- 预览方式：静态导出 + Python 静态服务器
-- 技术栈：预导出静态文件 (`client/web-static/`) + `serve-static.py`
+- 预览方式：静态导出 + Express.js 统一服务
+- 技术栈：前端静态文件复制到 `server/public/`，后端同时提供前端页面和 API
 
 ### 预览配置
 - 工作区根目录：`/workspace/projects`
-- 技术项目目录：`/workspace/projects/client`
+- 技术项目目录：`/workspace/projects`
 - 预览脚本：`scripts/coze-preview-run.sh`
 - 预览端口：`5000`（IPv4 全接口 `0.0.0.0:5000`）
-- 后端端口：`9091`
+- 后端端口：`5000`（与前端同一端口）
 
 ### 服务启动命令
 **重要**：每次重新打开沙箱/电脑后，需要先启动服务：
 
 ```bash
-# 方式一：一键启动（推荐）
-bash start.sh
-
-# 方式二：前台运行预览
+# 一键启动（构建前端 + 复制静态文件 + 启动后端）
 bash scripts/coze-preview-run.sh
 ```
 
 ### 预览入口
 ```bash
-# 构建
-bash scripts/coze-preview-build.sh
-
-# 运行
+# 运行（自动构建并启动）
 bash scripts/coze-preview-run.sh
 ```
 
 ### 静态文件更新
-当修改前端代码后，需要重新导出静态文件：
+当修改前端代码后，需要重新导出并复制：
 ```bash
 cd client && npx expo export --platform web
+rm -rf ../server/public && cp -r dist ../server/public
 ```
 
 ### 注意事项
-- **服务重启问题**：沙箱重启后，后端服务（9091）不会自动启动，必须手动运行 `bash start.sh`
-- 后端服务运行在 `9091` 端口，不影响前端预览
-- 前端预览使用预导出的静态文件，无需启动 Metro bundler
+- **服务重启问题**：沙箱重启后，后端服务不会自动启动，必须手动运行 `bash scripts/coze-preview-run.sh`
+- 后端服务运行在 `5000` 端口，同时提供前端页面和 API
+- 前端静态文件存放在 `server/public/` 目录
+- 扣子 App 扫码预览时，所有请求（页面 + API）都通过 5000 端口处理
 
 ## 关键配置备忘（当前稳定版本）
 
 ### API URL 配置（client/utils/apiConfig.ts）
 
-**必须保留完整环境检测逻辑，不能简化：**
+**使用相对路径（所有环境统一）：**
 
 ```typescript
 function getApiBaseUrl() {
-  const PROD_API_URL = 'http://82.157.60.179:5000';
-  const hostname = window.location.hostname;
-  
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:9091';
-  }
-  
-  // 沙箱预览环境：相对路径（平台代理转发）
-  if (hostname.includes('coze') || hostname.includes('sandbox') || window.location.port === '5000') {
-    return '';
-  }
-  
-  return PROD_API_URL;
+  // 所有环境都使用相对路径，由后端统一处理
+  // 后端监听 5000 端口，同时提供前端页面和 API
+  return '';
 }
 ```
 
-**三个环境区分：**
-- `localhost` → `http://localhost:9091`（本地开发）
-- `coze`/`sandbox`/`port:5000` → 相对路径 `''`（沙箱预览 + 手机 App WebView）
-- 其他 → `http://82.157.60.179:5000`（直接访问生产地址）
-
-**警告**：如果简化成 `hostname === 'localhost' ? 'http://localhost:9091' : ''`，会导致沙箱预览 iframe 请求发到平台域名（不处理 `/api`），API 失败页面白屏。
+**说明：**
+- 后端服务监听 5000 端口，同时提供前端静态文件和 API
+- 所有环境（本地、沙箱预览、扣子 App WebView）都使用相对路径
+- API 请求（如 `/api/v1/solve-problem`）会自动发送到当前域名的后端
 
 ### 服务器根路径（server/src/index.ts）
 

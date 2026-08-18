@@ -9,34 +9,46 @@ cd "$PROJECT_DIR"
 # 显式声明关键环境变量
 export PORT=5000
 
-# ==================== 启动后端服务 ====================
-echo "[1/2] 启动后端服务 (端口 9091)..."
+# ==================== 构建前端 ====================
+echo "[1/3] 构建前端..."
+cd client
+npx expo export --platform web
+cd "$PROJECT_DIR"
 
-# 检查后端是否已运行
-if ! ss -tlnp | grep -q ":9091"; then
-    cd server && NODE_ENV=development PORT=9091 node dist/index.js > /tmp/server-dev.log 2>&1 &
+# ==================== 复制前端到 server/public ====================
+echo "[2/3] 复制前端文件到 server/public..."
+rm -rf server/public
+cp -r client/dist server/public
+
+# ==================== 启动后端服务 ====================
+echo "[3/3] 启动后端服务 (端口 5000)..."
+
+# 检查是否已运行
+if ss -tlnp | grep -q ":5000.*node"; then
+    echo "后端服务已在运行"
+else
+    # 清理 5000 端口残留进程
+    pkill -f "node dist/index.js" 2>/dev/null || true
+    sleep 1
+    
+    cd server
+    NODE_ENV=development PORT=5000 node dist/index.js > /tmp/server-dev.log 2>&1 &
     BACKEND_PID=$!
     echo "后端服务已启动 (PID: $BACKEND_PID)"
     
     # 等待后端启动
     for i in {1..10}; do
-        if ss -tlnp | grep -q ":9091"; then
+        if ss -tlnp | grep -q ":5000.*node"; then
             echo "后端服务启动成功"
             break
         fi
         sleep 1
     done
-else
-    echo "后端服务已在运行"
 fi
 
-# ==================== 启动前端服务 ====================
-echo "[2/2] 启动前端预览服务 (端口 5000)..."
-
-# 清理 5000 端口残留进程（幂等性）
-fuser -k 5000/tcp 2>/dev/null || true
-sleep 1
-
-# 使用反向代理服务器启动预览（支持 /api/* 代理到后端）
-echo "启动前端预览服务（含API代理），端口 5000..."
-exec python3 "scripts/proxy-server.py" 5000 "client/web-static"
+echo ""
+echo "=== 服务已就绪 ==="
+echo "访问: http://localhost:5000/"
+echo "API:  http://localhost:5000/api/v1/"
+echo ""
+echo "查看日志: tail -f /tmp/server-dev.log"
