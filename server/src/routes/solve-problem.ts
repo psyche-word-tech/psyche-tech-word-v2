@@ -252,17 +252,29 @@ router.post("/", upload.single("image"), async (req, res) => {
           } catch (e2) {
             console.error("[SolveProblem] JSON parse failed after fixes:", e2.message);
             console.error("[SolveProblem] Fixed JSON preview:", fixedJson.substring(0, 500));
-            result = {
-              questions: [
-                {
-                  subject: "未知",
-                  question: "无法解析题目内容",
-                  analysis: llmResponse.content,
-                  solution: "",
-                  answer: "",
-                }
-              ]
-            };
+            // 尝试更激进的修复：移除所有换行符和制表符
+            let aggressiveFixed = jsonStr
+              .replace(/\r\n/g, '\\n')
+              .replace(/\n/g, '\\n')
+              .replace(/\r/g, '\\n')
+              .replace(/\t/g, '\\t')
+              .replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+            try {
+              result = JSON.parse(aggressiveFixed);
+            } catch (e3) {
+              console.error("[SolveProblem] Aggressive fix also failed:", e3.message);
+              result = {
+                questions: [
+                  {
+                    subject: "未知",
+                    question: "无法解析题目内容",
+                    analysis: "解析失败，请重试",
+                    solution: "",
+                    answer: "",
+                  }
+                ]
+              };
+            }
           }
         }
       } else {
@@ -272,7 +284,7 @@ router.post("/", upload.single("image"), async (req, res) => {
             {
               subject: "未知",
               question: "无法解析题目内容",
-              analysis: llmResponse.content,
+              analysis: "解析失败，请重试",
               solution: "",
               answer: "",
             }
