@@ -133,6 +133,12 @@ export default function SearchScreen() {
                         </View>
                       )}
 
+                      {q.from_cache && (
+                        <View style={styles.cacheBadge}>
+                          <Text style={styles.cacheBadgeText}> 来自缓存</Text>
+                        </View>
+                      )}
+
                       {q.subject && (
                         <View style={styles.subjectTag}>
                           <Text style={styles.subjectText}>{q.subject}</Text>
@@ -283,6 +289,19 @@ const styles = {
   },
   questionNumberText: {
     fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  cacheBadge: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  cacheBadgeText: {
+    fontSize: 11,
     color: '#FFFFFF',
     fontWeight: '600',
   },

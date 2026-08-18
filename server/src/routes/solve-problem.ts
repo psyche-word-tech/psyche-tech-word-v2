@@ -1,12 +1,50 @@
 import { Router } from "express";
 import multer from "multer";
+import { createHash } from "crypto";
 import { LLMClient, Config } from "coze-coding-dev-sdk";
+import { getSupabaseClient } from "../storage/database/supabase-client.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 /**
- * 搜题接口 - 接收图片，调用多模态大模型解析题目
+ * 计算文本相似度（Levenshtein 距离）
+ */
+function similarity(s1: string, s2: string): number {
+  if (!s1 || !s2) return 0;
+  const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
+  if (longer.length === 0) return 1.0;
+  
+  const costs: number[] = [];
+  for (let i = 0; i <= shorter.length; i++) {
+    let lastValue = i;
+    for (let j = 0; j <= longer.length; j++) {
+      if (i === 0) {
+        costs[j] = j;
+      } else if (j > 0) {
+        let newValue = costs[j - 1];
+        if (shorter[i - 1] !== longer[j - 1]) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+        }
+        costs[j - 1] = lastValue;
+        lastValue = newValue;
+      }
+    }
+    if (i > 0) costs[longer.length] = lastValue;
+  }
+  return (longer.length - costs[longer.length]) / longer.length;
+}
+
+/**
+ * 计算图片 hash
+ */
+function imageHash(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+/**
+ * 搜题接口 - 接收图片，先查缓存，未命中则调用大模型解析
  * POST /api/v1/solve-problem
  * Body: FormData with 'image' field (image file)
  */
@@ -17,6 +55,36 @@ router.post("/", upload.single("image"), async (req, res) => {
     }
 
     const imageBuffer = req.file.buffer;
+    const hash = imageHash(imageBuffer);
+
+    const supabase = getSupabaseClient();
+
+    // 1. 先查缓存：通过图片 hash 或文本相似度
+    const { data: cachedProblems, error: cacheError } = await supabase
+      .from("problems")
+      .select("*")
+      .eq("image_hash", hash)
+      .limit(1);
+
+    if (!cacheError && cachedProblems && cachedProblems.length > 0) {
+      console.log("[SolveProblem] Cache hit by image hash");
+      const cached = cachedProblems[0];
+      return res.json({
+        questions: [
+          {
+            subject: cached.subject,
+            question: cached.question_text,
+            analysis: cached.analysis,
+            solution: cached.solution,
+            answer: cached.answer,
+            tips: cached.tips,
+            from_cache: true,
+          }
+        ]
+      });
+    }
+
+    // 2. 缓存未命中，调用大模型解析
     const imageBase64 = imageBuffer.toString("base64");
     const mimeType = req.file.mimetype;
 
@@ -165,6 +233,50 @@ router.post("/", upload.single("image"), async (req, res) => {
           }
         ]
       };
+    }
+
+    // 3. 缓存结果到数据库
+    if (result.questions && Array.isArray(result.questions)) {
+      for (const q of result.questions) {
+        // 检查是否有相似题目（文本相似度 > 90%）
+        const { data: similarProblems } = await supabase
+          .from("problems")
+          .select("id")
+          .ilike("question_text", `%${q.question?.substring(0, 50) || ""}%`)
+          .limit(1);
+
+        if (similarProblems && similarProblems.length > 0) {
+          const { data: existing } = await supabase
+            .from("problems")
+            .select("question_text")
+            .eq("id", similarProblems[0].id)
+            .single();
+
+          if (existing && similarity(existing.question_text, q.question || "") > 0.9) {
+            console.log("[SolveProblem] Similar problem found, skipping cache");
+            continue;
+          }
+        }
+
+        // 插入新题目
+        await supabase.from("problems").insert({
+          question_text: q.question || "",
+          subject: q.subject || "未知",
+          answer: q.answer || "",
+          analysis: q.analysis || "",
+          solution: q.solution || "",
+          tips: q.tips || "",
+          image_hash: hash,
+        });
+      }
+      console.log(`[SolveProblem] Cached ${result.questions.length} problems`);
+    }
+
+    // 标记来源
+    if (result.questions) {
+      result.questions.forEach((q: any) => {
+        q.from_cache = false;
+      });
     }
 
     res.json(result);
