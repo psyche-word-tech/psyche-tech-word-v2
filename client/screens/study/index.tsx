@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
@@ -22,6 +22,34 @@ export default function StudyScreen() {
 
   const handleTakePhoto = async () => {
     setShowImagePicker(false);
+    
+    if (Platform.OS === 'web') {
+      // Web 端使用隐藏的 input 元素调用摄像头
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment';
+      input.style.display = 'none';
+      
+      input.onchange = async (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const uri = event.target?.result as string;
+            router.push('/search', { imageUri: uri });
+          };
+          reader.readAsDataURL(file);
+        }
+        document.body.removeChild(input);
+      };
+      
+      document.body.appendChild(input);
+      input.click();
+      return;
+    }
+    
+    // 移动端使用 expo-image-picker
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') return;
@@ -34,13 +62,39 @@ export default function StudyScreen() {
         router.push('/search', { imageUri: result.assets[0].uri });
       }
     } catch (e) {
-      // Camera not available on web, fallback to library
       handlePickFromLibrary();
     }
   };
 
   const handlePickFromLibrary = async () => {
     setShowImagePicker(false);
+    
+    if (Platform.OS === 'web') {
+      // Web 端使用隐藏的 input 元素选择图片
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.style.display = 'none';
+      
+      input.onchange = async (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const uri = event.target?.result as string;
+            router.push('/search', { imageUri: uri });
+          };
+          reader.readAsDataURL(file);
+        }
+        document.body.removeChild(input);
+      };
+      
+      document.body.appendChild(input);
+      input.click();
+      return;
+    }
+    
+    // 移动端使用 expo-image-picker
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') return;
