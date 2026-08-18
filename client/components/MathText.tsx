@@ -1,7 +1,22 @@
 import { Text, Platform } from 'react-native';
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+
+// 注入 CSS 覆盖 KaTeX 默认样式
+if (Platform.OS === 'web') {
+  const styleId = 'katex-override-style';
+  if (typeof document !== 'undefined' && !document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .katex-display { margin: 0.1em 0 !important; }
+      .katex { font-size: 1em !important; }
+      .katex-display > .katex { margin: 0 !important; }
+    `;
+    document.head.appendChild(style);
+  }
+}
 
 interface MathTextProps {
   text: string;
@@ -23,10 +38,15 @@ export function MathText({ text, style }: MathTextProps) {
     return <Text style={style}>{text}</Text>;
   }
 
-  // Web 端使用 div 渲染 HTML，覆盖 KaTeX 的默认 margin
+  // Web 端使用 div 渲染 HTML，强制覆盖 KaTeX 的默认 margin
   return (
     <div
-      style={{ ...style, margin: 0 }}
+      style={{
+        ...style,
+        margin: 0,
+        padding: 0,
+        lineHeight: '1.5',
+      }}
       dangerouslySetInnerHTML={{ __html: html || '' }}
     />
   );
