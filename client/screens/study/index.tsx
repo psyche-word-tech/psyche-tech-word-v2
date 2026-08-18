@@ -253,7 +253,7 @@ export default function StudyScreen() {
               activeOpacity={0.7}
               onPress={() => router.push('/competency-map')}
             >
-              <FontAwesome6 name="bullseye" size={22} color="#FFFFFF" />
+              <FontAwesome6 name="project-diagram" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
