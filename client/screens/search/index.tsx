@@ -146,6 +146,13 @@ export default function SearchScreen() {
                         </View>
                       )}
 
+                      {q.answer && (
+                        <View style={styles.answerBlock}>
+                          <Text style={styles.answerTitle}>答案</Text>
+                          <Text style={styles.answerContent}>{q.answer}</Text>
+                        </View>
+                      )}
+
                       {q.analysis && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>解析</Text>
@@ -157,13 +164,6 @@ export default function SearchScreen() {
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>解答</Text>
                           <Text style={styles.blockContent}>{q.solution}</Text>
-                        </View>
-                      )}
-
-                      {q.answer && (
-                        <View style={styles.answerBlock}>
-                          <Text style={styles.answerTitle}>答案</Text>
-                          <Text style={styles.answerContent}>{q.answer}</Text>
                         </View>
                       )}
 
