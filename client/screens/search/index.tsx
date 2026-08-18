@@ -179,7 +179,11 @@ export default function SearchScreen() {
             <View style={styles.imageSection}>
               <Text style={styles.sectionTitle}>题目图片</Text>
               <Image source={{ uri: imageUri }} style={styles.selectedImage} resizeMode="contain" />
-              <TouchableOpacity style={styles.retakeButton} onPress={() => router.back()}>
+              <TouchableOpacity style={styles.retakeButton} onPress={() => {
+                setImageUri('');
+                setResult(null);
+                setLoading(false);
+              }}>
                 <Ionicons name="refresh" size={18} color="#666" />
                 <Text style={styles.retakeText}>重新选择</Text>
               </TouchableOpacity>
