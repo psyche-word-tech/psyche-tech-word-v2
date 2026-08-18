@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import * as ImagePicker from 'expo-image-picker';
+import { useState } from 'react';
 
 const iconRock = require('@/assets/iconRock.png');
 const iconMyVocab = require('@/assets/my-vocab.png');
@@ -17,51 +18,43 @@ export default function StudyScreen() {
   const router = useSafeRouter();
   const params = useSafeSearchParams<{ engravedText?: string }>();
   const engravedText = params.engravedText || '';
+  const [showImagePicker, setShowImagePicker] = useState(false);
 
-  const handleSearchImage = async () => {
-    Alert.alert(
-      '选择图片来源',
-      '请选择拍照或从相册选择',
-      [
-        {
-          text: '拍照',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert('权限被拒绝', '请在设置中开启相机权限');
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              router.push('/search', { imageUri: result.assets[0].uri });
-            }
-          },
-        },
-        {
-          text: '从相册选择',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert('权限被拒绝', '请在设置中开启相册权限');
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              router.push('/search', { imageUri: result.assets[0].uri });
-            }
-          },
-        },
-        { text: '取消', style: 'cancel' },
-      ]
-    );
+  const handleTakePhoto = async () => {
+    setShowImagePicker(false);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') return;
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        router.push('/search', { imageUri: result.assets[0].uri });
+      }
+    } catch (e) {
+      // Camera not available on web, fallback to library
+      handlePickFromLibrary();
+    }
+  };
+
+  const handlePickFromLibrary = async () => {
+    setShowImagePicker(false);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        router.push('/search', { imageUri: result.assets[0].uri });
+      }
+    } catch (e) {
+      // Silently fail
+    }
   };
 
   return (
@@ -94,7 +87,7 @@ export default function StudyScreen() {
           <TouchableOpacity 
             style={styles.searchButton}
             activeOpacity={0.7}
-            onPress={handleSearchImage}
+            onPress={() => setShowImagePicker(true)}
           >
             <Ionicons name="search" size={22} color="#FFFFFF" />
           </TouchableOpacity>
@@ -141,6 +134,47 @@ export default function StudyScreen() {
           </View>
         </View>
       </View>
+
+      {/* Image Picker Modal */}
+      <Modal
+        visible={showImagePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowImagePicker(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowImagePicker(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>选择图片来源</Text>
+            <TouchableOpacity 
+              style={styles.modalButton} 
+              onPress={handleTakePhoto}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="camera" size={24} color="#333" />
+              <Text style={styles.modalButtonText}>拍照</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.modalButton} 
+              onPress={handlePickFromLibrary}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="images" size={24} color="#333" />
+              <Text style={styles.modalButtonText}>从相册选择</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.modalCancelButton} 
+              onPress={() => setShowImagePicker(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCancelText}>取消</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Screen>
   );
 }
@@ -290,5 +324,51 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: 'rgba(255,255,255,0.9)',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '80%',
+    maxWidth: 320,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 20,
+  },
+  modalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 14,
+    marginBottom: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    gap: 10,
+  },
+  modalButtonText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  modalCancelButton: {
+    width: '100%',
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#999',
   },
 });
