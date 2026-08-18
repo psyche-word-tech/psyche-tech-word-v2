@@ -37,6 +37,57 @@ function similarity(s1: string, s2: string): number {
 }
 
 /**
+ * 修复 JSON 字符串中的控制字符问题
+ * LLM 返回的 JSON 中字符串值可能包含未转义的换行符、制表符等
+ */
+function fixJsonControlChars(jsonStr: string): string {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+  
+  for (let i = 0; i < jsonStr.length; i++) {
+    const char = jsonStr[i];
+    
+    if (escaped) {
+      result += char;
+      escaped = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      result += char;
+      escaped = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      inString = !inString;
+      result += char;
+      continue;
+    }
+    
+    if (inString) {
+      // 在字符串内部，转义控制字符
+      if (char === '\n') {
+        result += '\\n';
+      } else if (char === '\r') {
+        result += '\\r';
+      } else if (char === '\t') {
+        result += '\\t';
+      } else if (char.charCodeAt(0) < 32) {
+        result += '\\u' + char.charCodeAt(0).toString(16).padStart(4, '0');
+      } else {
+        result += char;
+      }
+    } else {
+      result += char;
+    }
+  }
+  
+  return result;
+}
+
+/**
  * 计算图片 hash
  */
 function imageHash(buffer: Buffer): string {
@@ -194,16 +245,13 @@ router.post("/", upload.single("image"), async (req, res) => {
         try {
           result = JSON.parse(jsonStr);
         } catch (e) {
-          // 如果还是解析失败，尝试修复常见的 JSON 问题
-          let fixedJson = jsonStr
-            .replace(/\\n/g, "\n")
-            .replace(/\\t/g, "\t")
-            .replace(/\\"/g, '"')
-            .replace(/\\\\/g, "\\");
+          // 修复 JSON 中的控制字符问题：将字符串值中的实际换行符/制表符转义
+          let fixedJson = fixJsonControlChars(jsonStr);
           try {
             result = JSON.parse(fixedJson);
           } catch (e2) {
             console.error("[SolveProblem] JSON parse failed after fixes:", e2.message);
+            console.error("[SolveProblem] Fixed JSON preview:", fixedJson.substring(0, 500));
             result = {
               questions: [
                 {
