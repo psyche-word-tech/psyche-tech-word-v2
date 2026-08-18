@@ -17,6 +17,7 @@ import grammarCheckRouter from "./routes/grammar-check";
 import speechEvalRouter from "./routes/speech-eval";
 import ttsRouter from "./routes/tts";
 import mindmapRouter from "./routes/mindmap";
+import solveProblemRouter from "./routes/solve-problem";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -148,6 +149,7 @@ app.use('/api/v1/grammar-check', grammarCheckRouter);
 app.use('/api/v1/speech-eval', speechEvalRouter);
 app.use('/api/v1/tts', ttsRouter);
 app.use('/api/v1/mindmap', mindmapRouter);
+app.use('/api/v1/solve-problem', solveProblemRouter);
 
 // SPA fallback: serve index.html for non-API routes
 app.get('*', (req, res) => {
