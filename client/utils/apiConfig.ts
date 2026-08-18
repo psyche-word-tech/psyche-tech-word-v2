@@ -3,8 +3,9 @@
 // 所有环境都使用相对路径
 
 function getApiBaseUrl() {
-  // 所有环境都使用相对路径，由后端统一处理
   return '';
 }
 
-export const API_BASE_URL = getApiBaseUrl();
+const API_BASE_URL = getApiBaseUrl();
+
+export { getApiBaseUrl, API_BASE_URL };
