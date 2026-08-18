@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import * as ImagePicker from 'expo-image-picker';
@@ -246,6 +247,13 @@ export default function StudyScreen() {
               onPress={() => setShowHistory(true)}
             >
               <Ionicons name="time-outline" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.searchButton}
+              activeOpacity={0.7}
+              onPress={() => router.push('/competency-map')}
+            >
+              <FontAwesome6 name="circle-nodes" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
