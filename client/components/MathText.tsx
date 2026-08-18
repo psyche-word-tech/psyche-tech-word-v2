@@ -1,4 +1,4 @@
-import { View, Text, Platform } from 'react-native';
+import { Text, Platform } from 'react-native';
 import { useMemo } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -23,12 +23,8 @@ export function MathText({ text, style }: MathTextProps) {
     return <Text style={style}>{text}</Text>;
   }
 
-  return (
-    <View
-      style={style}
-      dangerouslySetInnerHTML={{ __html: html || '' }}
-    />
-  );
+  // Web 端使用 div 渲染 HTML
+  return <div style={style} dangerouslySetInnerHTML={{ __html: html || '' }} />;
 }
 
 function renderMathInHtml(text: string): string {
