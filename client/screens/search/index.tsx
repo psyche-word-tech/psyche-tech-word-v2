@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { useState, useEffect } from 'react';
+import { MathText } from '@/components/MathText';
 
 interface QuestionResult {
   subject?: string;
@@ -226,35 +227,35 @@ export default function SearchScreen() {
                       {q.question && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>题目</Text>
-                          <Text style={styles.blockContent}>{q.question}</Text>
+                          <MathText text={q.question} style={styles.blockContent} />
                         </View>
                       )}
 
                       {q.answer && (
                         <View style={styles.answerBlock}>
                           <Text style={styles.answerTitle}>答案</Text>
-                          <Text style={styles.answerContent}>{q.answer}</Text>
+                          <MathText text={q.answer} style={styles.answerContent} />
                         </View>
                       )}
 
                       {q.analysis && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>解析</Text>
-                          <Text style={styles.blockContent}>{q.analysis}</Text>
+                          <MathText text={q.analysis} style={styles.blockContent} />
                         </View>
                       )}
 
                       {q.solution && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>解答</Text>
-                          <Text style={styles.blockContent}>{q.solution}</Text>
+                          <MathText text={q.solution} style={styles.blockContent} />
                         </View>
                       )}
 
                       {q.tips && (
                         <View style={styles.tipsBlock}>
                           <Text style={styles.tipsTitle}>💡 解题技巧</Text>
-                          <Text style={styles.tipsContent}>{q.tips}</Text>
+                          <MathText text={q.tips} style={styles.tipsContent} />
                         </View>
                       )}
 
