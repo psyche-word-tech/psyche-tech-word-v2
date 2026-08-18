@@ -75,9 +75,30 @@ router.post("/", upload.single("image"), async (req, res) => {
     try {
       result = JSON.parse(llmResponse.content);
     } catch (parseError) {
-      const jsonMatch = llmResponse.content.match(/\{[\s\S]*\}/);
+      // 尝试从响应中提取 JSON
+      const jsonMatch = llmResponse.content.match(/\{[\s\S]*?\}(?=\s*(?:\n|$))/);
       if (jsonMatch) {
-        result = JSON.parse(jsonMatch[0]);
+        try {
+          result = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          // 如果还是解析失败，尝试修复常见的 JSON 问题
+          let fixedJson = jsonMatch[0]
+            .replace(/\\n/g, "\n")
+            .replace(/\\t/g, "\t")
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, "\\");
+          try {
+            result = JSON.parse(fixedJson);
+          } catch (e2) {
+            result = {
+              subject: "未知",
+              question: "无法解析题目内容",
+              analysis: llmResponse.content,
+              solution: "",
+              answer: "",
+            };
+          }
+        }
       } else {
         result = {
           subject: "未知",
