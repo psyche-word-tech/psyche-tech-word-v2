@@ -142,7 +142,7 @@ export default function CompetencyMapScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => router.replace('/')}
             activeOpacity={0.7}
           >
             <Ionicons name="chevron-back" size={24} color="#1F2937" />
