@@ -4,13 +4,17 @@ import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { useState, useEffect } from 'react';
 
-interface SolveResult {
+interface QuestionResult {
   subject?: string;
   question?: string;
   analysis?: string;
   solution?: string;
   answer?: string;
   tips?: string;
+}
+
+interface SolveResult {
+  questions?: QuestionResult[];
   error?: string;
 }
 
@@ -121,46 +125,56 @@ export default function SearchScreen() {
                 </View>
               ) : (
                 <>
-                  {result.subject && (
-                    <View style={styles.subjectTag}>
-                      <Text style={styles.subjectText}>{result.subject}</Text>
-                    </View>
-                  )}
+                  {result.questions && result.questions.map((q, index) => (
+                    <View key={index} style={styles.questionCard}>
+                      {result.questions && result.questions.length > 1 && (
+                        <View style={styles.questionNumber}>
+                          <Text style={styles.questionNumberText}>第 {index + 1} 题</Text>
+                        </View>
+                      )}
 
-                  {result.question && (
-                    <View style={styles.resultBlock}>
-                      <Text style={styles.blockTitle}>题目</Text>
-                      <Text style={styles.blockContent}>{result.question}</Text>
-                    </View>
-                  )}
+                      {q.subject && (
+                        <View style={styles.subjectTag}>
+                          <Text style={styles.subjectText}>{q.subject}</Text>
+                        </View>
+                      )}
 
-                  {result.analysis && (
-                    <View style={styles.resultBlock}>
-                      <Text style={styles.blockTitle}>解析</Text>
-                      <Text style={styles.blockContent}>{result.analysis}</Text>
-                    </View>
-                  )}
+                      {q.question && (
+                        <View style={styles.resultBlock}>
+                          <Text style={styles.blockTitle}>题目</Text>
+                          <Text style={styles.blockContent}>{q.question}</Text>
+                        </View>
+                      )}
 
-                  {result.solution && (
-                    <View style={styles.resultBlock}>
-                      <Text style={styles.blockTitle}>解答</Text>
-                      <Text style={styles.blockContent}>{result.solution}</Text>
-                    </View>
-                  )}
+                      {q.analysis && (
+                        <View style={styles.resultBlock}>
+                          <Text style={styles.blockTitle}>解析</Text>
+                          <Text style={styles.blockContent}>{q.analysis}</Text>
+                        </View>
+                      )}
 
-                  {result.answer && (
-                    <View style={styles.answerBlock}>
-                      <Text style={styles.answerTitle}>答案</Text>
-                      <Text style={styles.answerContent}>{result.answer}</Text>
-                    </View>
-                  )}
+                      {q.solution && (
+                        <View style={styles.resultBlock}>
+                          <Text style={styles.blockTitle}>解答</Text>
+                          <Text style={styles.blockContent}>{q.solution}</Text>
+                        </View>
+                      )}
 
-                  {result.tips && (
-                    <View style={styles.tipsBlock}>
-                      <Text style={styles.tipsTitle}>💡 解题技巧</Text>
-                      <Text style={styles.tipsContent}>{result.tips}</Text>
+                      {q.answer && (
+                        <View style={styles.answerBlock}>
+                          <Text style={styles.answerTitle}>答案</Text>
+                          <Text style={styles.answerContent}>{q.answer}</Text>
+                        </View>
+                      )}
+
+                      {q.tips && (
+                        <View style={styles.tipsBlock}>
+                          <Text style={styles.tipsTitle}>💡 解题技巧</Text>
+                          <Text style={styles.tipsContent}>{q.tips}</Text>
+                        </View>
+                      )}
                     </View>
-                  )}
+                  ))}
                 </>
               )}
             </View>
@@ -250,6 +264,27 @@ const styles = {
   },
   resultSection: {
     padding: 16,
+  },
+  questionCard: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  questionNumber: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  questionNumberText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   subjectTag: {
     alignSelf: 'flex-start',

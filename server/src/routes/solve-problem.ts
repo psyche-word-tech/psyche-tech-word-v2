@@ -31,16 +31,23 @@ router.post("/", upload.single("image"), async (req, res) => {
         role: "system" as const,
         content: `你是一位专业的题目解析老师。请仔细分析用户提供的题目图片，给出详细的解析。
 
+**重要：图片中可能包含多道题目，请逐一解析所有题目。**
+
 请按以下 JSON 格式返回结果：
 {
-  "subject": "学科（如数学、物理、化学、英语等）",
-  "question": "题目内容（文字描述）",
-  "analysis": "题目分析（考查知识点、解题思路）",
-  "solution": "详细解答过程",
-  "answer": "最终答案",
-  "tips": "解题技巧或注意事项（可选）"
+  "questions": [
+    {
+      "subject": "学科（如数学、物理、化学、英语等）",
+      "question": "题目内容（文字描述）",
+      "analysis": "题目分析（考查知识点、解题思路）",
+      "solution": "详细解答过程",
+      "answer": "最终答案",
+      "tips": "解题技巧或注意事项（可选）"
+    }
+  ]
 }
 
+如果图片中只有一道题，questions 数组中只有一个元素。
 只返回 JSON，不要有其他解释文字。如果图片不清晰或无法识别，请返回：
 {
   "error": "图片不清晰或无法识别，请重新上传"
@@ -57,7 +64,7 @@ router.post("/", upload.single("image"), async (req, res) => {
           },
           {
             type: "text" as const,
-            text: "请解析这道题目。",
+            text: "请解析图片中的所有题目。",
           },
         ],
       },
@@ -76,7 +83,7 @@ router.post("/", upload.single("image"), async (req, res) => {
       result = JSON.parse(llmResponse.content);
     } catch (parseError) {
       // 尝试从响应中提取 JSON
-      const jsonMatch = llmResponse.content.match(/\{[\s\S]*?\}(?=\s*(?:\n|$))/);
+      const jsonMatch = llmResponse.content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
           result = JSON.parse(jsonMatch[0]);
@@ -91,23 +98,47 @@ router.post("/", upload.single("image"), async (req, res) => {
             result = JSON.parse(fixedJson);
           } catch (e2) {
             result = {
-              subject: "未知",
-              question: "无法解析题目内容",
-              analysis: llmResponse.content,
-              solution: "",
-              answer: "",
+              questions: [
+                {
+                  subject: "未知",
+                  question: "无法解析题目内容",
+                  analysis: llmResponse.content,
+                  solution: "",
+                  answer: "",
+                }
+              ]
             };
           }
         }
       } else {
         result = {
-          subject: "未知",
-          question: "无法解析题目内容",
-          analysis: llmResponse.content,
-          solution: "",
-          answer: "",
+          questions: [
+            {
+              subject: "未知",
+              question: "无法解析题目内容",
+              analysis: llmResponse.content,
+              solution: "",
+              answer: "",
+            }
+          ]
         };
       }
+    }
+
+    // 兼容旧格式：如果返回的是单题格式，转换为数组格式
+    if (result && result.subject && !result.questions) {
+      result = {
+        questions: [
+          {
+            subject: result.subject,
+            question: result.question,
+            analysis: result.analysis,
+            solution: result.solution,
+            answer: result.answer,
+            tips: result.tips,
+          }
+        ]
+      };
     }
 
     res.json(result);
