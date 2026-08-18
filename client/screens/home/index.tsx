@@ -19,6 +19,14 @@ export default function HomeScreen() {
             style={styles.backgroundImage}
             resizeMode="cover"
           />
+          {/* Search Icon - Top Right */}
+          <TouchableOpacity 
+            style={styles.searchButton}
+            activeOpacity={0.7}
+            onPress={() => router.push('/search')}
+          >
+            <Ionicons name="search" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
           <View style={styles.imageOverlay}>
             <Text style={styles.imageLabel}>刻字</Text>
           </View>
@@ -109,6 +117,17 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  searchButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   gridContainer: {
     flex: 1,
