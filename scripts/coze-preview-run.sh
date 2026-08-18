@@ -10,18 +10,23 @@ cd "$PROJECT_DIR"
 export PORT=5000
 
 # ==================== 构建前端 ====================
-echo "[1/3] 构建前端..."
+echo "[1/4] 构建前端..."
 cd client
 npx expo export --platform web
+
+# 复制 KaTeX 字体文件
+echo "  复制 KaTeX 字体..."
+mkdir -p dist/_expo/static/css/fonts
+cp /workspace/projects/node_modules/.pnpm/katex@0.18.4/node_modules/katex/dist/fonts/* dist/_expo/static/css/fonts/ 2>/dev/null || true
 cd "$PROJECT_DIR"
 
 # ==================== 复制前端到 server/public ====================
-echo "[2/3] 复制前端文件到 server/public..."
+echo "[2/4] 复制前端文件到 server/public..."
 rm -rf server/public
 cp -r client/dist server/public
 
 # ==================== 启动后端服务 ====================
-echo "[3/3] 启动后端服务 (端口 5000)..."
+echo "[3/4] 启动后端服务 (端口 5000)..."
 
 # 检查是否已运行
 if ss -tlnp | grep -q ":5000.*node"; then
