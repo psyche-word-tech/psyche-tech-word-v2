@@ -64,7 +64,22 @@ router.post("/", upload.single("image"), async (req, res) => {
           },
           {
             type: "text" as const,
-            text: "请解析图片中的所有题目。",
+            text: `请解析图片中的所有题目，并严格按照以下 JSON 格式返回（不要使用 markdown 代码块，直接返回 JSON）：
+
+{
+  "questions": [
+    {
+      "subject": "学科",
+      "question": "题目内容（包含选项）",
+      "analysis": "详细解析过程",
+      "solution": "解答步骤",
+      "answer": "最终答案",
+      "tips": "解题技巧（可选）"
+    }
+  ]
+}
+
+如果图片中有多道题，请在 questions 数组中包含所有题目。`,
           },
         ],
       },
@@ -77,19 +92,28 @@ router.post("/", upload.single("image"), async (req, res) => {
     });
 
     console.log(`[SolveProblem] LLM done in ${Date.now() - startTime}ms`);
+    console.log(`[SolveProblem] LLM response length: ${llmResponse.content.length}`);
 
     let result: any;
     try {
       result = JSON.parse(llmResponse.content);
     } catch (parseError) {
-      // 尝试从响应中提取 JSON
-      const jsonMatch = llmResponse.content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
+      // 尝试从 markdown 代码块中提取 JSON
+      const markdownMatch = llmResponse.content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      let jsonStr = markdownMatch ? markdownMatch[1].trim() : null;
+
+      // 如果没有 markdown 代码块，尝试直接提取 JSON
+      if (!jsonStr) {
+        const jsonMatch = llmResponse.content.match(/\{[\s\S]*\}/);
+        jsonStr = jsonMatch ? jsonMatch[0] : null;
+      }
+
+      if (jsonStr) {
         try {
-          result = JSON.parse(jsonMatch[0]);
+          result = JSON.parse(jsonStr);
         } catch (e) {
           // 如果还是解析失败，尝试修复常见的 JSON 问题
-          let fixedJson = jsonMatch[0]
+          let fixedJson = jsonStr
             .replace(/\\n/g, "\n")
             .replace(/\\t/g, "\t")
             .replace(/\\"/g, '"')
@@ -97,6 +121,7 @@ router.post("/", upload.single("image"), async (req, res) => {
           try {
             result = JSON.parse(fixedJson);
           } catch (e2) {
+            console.error("[SolveProblem] JSON parse failed after fixes:", e2.message);
             result = {
               questions: [
                 {
@@ -111,6 +136,7 @@ router.post("/", upload.single("image"), async (req, res) => {
           }
         }
       } else {
+        console.error("[SolveProblem] No JSON found in response");
         result = {
           questions: [
             {
