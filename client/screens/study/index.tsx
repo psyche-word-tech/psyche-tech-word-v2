@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useState } from 'react';
 
 const iconRock = require('@/assets/iconRock.png');
@@ -174,6 +175,35 @@ export default function StudyScreen() {
     }
   };
 
+  const handleUploadFile = async () => {
+    setShowImagePicker(false);
+    
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/plain'],
+        copyToCacheDirectory: true,
+      });
+      
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+      
+      const file = result.assets[0];
+      const fileName = file.name || 'uploaded_file';
+      const fileUri = file.uri;
+      
+      // 跳转到搜索页面并传递文件信息
+      router.push('/search', { 
+        imageUri: fileUri,
+        fileName: fileName,
+        isFile: true 
+      });
+    } catch (error) {
+      console.error('文件上传失败:', error);
+      Alert.alert('错误', '文件上传失败，请重试');
+    }
+  };
+
   return (
     <Screen safeAreaEdges={[]}>
       <View style={styles.container}>
@@ -281,6 +311,14 @@ export default function StudyScreen() {
             >
               <Ionicons name="images" size={24} color="#333" />
               <Text style={styles.modalButtonText}>从相册选择</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.modalButton} 
+              onPress={handleUploadFile}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="document-text" size={24} color="#333" />
+              <Text style={styles.modalButtonText}>上传文件</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.modalCancelButton} 
