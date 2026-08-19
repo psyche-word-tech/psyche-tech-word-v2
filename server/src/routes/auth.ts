@@ -152,16 +152,42 @@ router.post('/register', async (req, res) => {
     // 检查手机号是否已注册
     const { data: userData } = await client
       .from('users')
-      .select('id')
+      .select('id, password')
       .eq('phone', phone)
       .limit(1);
 
-    if (userData && userData.length > 0) {
-      return res.json({ success: false, error: '该手机号已注册' });
-    }
-
     // 密码加密
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
+    // 如果用户已存在但未设置密码（通过短信登录创建），设置密码
+    if (userData && userData.length > 0) {
+      if (!userData[0].password) {
+        const { error: updateError } = await client
+          .from('users')
+          .update({ password: hashedPassword })
+          .eq('id', userData[0].id);
+        
+        if (updateError) {
+          console.error('设置密码失败:', updateError);
+          return res.json({ success: false, error: '设置密码失败' });
+        }
+
+        // 更新或创建用户资料（角色）
+        const userRole = role === 'teacher' ? 'teacher' : 'student';
+        await client.from('user_profiles').upsert({
+          id: userData[0].id,
+          role: userRole,
+        }, { onConflict: 'id' });
+
+        res.json({ 
+          success: true, 
+          message: '密码设置成功', 
+          user: { id: userData[0].id, phone, role: userRole } 
+        });
+        return;
+      }
+      return res.json({ success: false, error: '该手机号已注册' });
+    }
 
     // 创建用户
     const { data: newUser, error: insertError } = await client
@@ -228,9 +254,37 @@ router.post('/login', async (req, res) => {
 
     const user = userData[0];
 
-    // 验证密码（兼容明文密码和加密密码）
-    const isPasswordValid = await bcrypt.compare(password, user.password)
-      || user.password === password; // 兼容旧明文密码
+    // 如果用户没有设置密码（通过短信登录创建的），提示使用验证码登录
+    if (!user.password) {
+      return res.json({ success: false, error: '该账号未设置密码，请使用验证码登录' });
+    }
+
+    // 兼容旧数据：password 可能是 JSON 对象格式
+    let storedPassword = user.password;
+    if (storedPassword && typeof storedPassword === 'object' && storedPassword.hash) {
+      storedPassword = storedPassword.hash;
+    } else if (typeof storedPassword === 'string') {
+      try {
+        const parsed = JSON.parse(storedPassword);
+        if (parsed && parsed.hash) {
+          storedPassword = parsed.hash;
+        }
+      } catch {
+        // 正常 bcrypt hash 字符串，无需解析
+      }
+    }
+
+    // 验证密码
+    let isPasswordValid = false;
+    try {
+      if (typeof storedPassword === 'string' && storedPassword.startsWith('$2')) {
+        isPasswordValid = await bcrypt.compare(password, storedPassword);
+      } else {
+        isPasswordValid = storedPassword === password;
+      }
+    } catch {
+      isPasswordValid = storedPassword === password;
+    }
 
     if (!isPasswordValid) {
       return res.json({ success: false, error: '用户名或密码错误' });
