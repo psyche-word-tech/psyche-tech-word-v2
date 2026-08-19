@@ -8,12 +8,18 @@ const RADAR_SIZE = Math.min(SCREEN_WIDTH - 60, 350);
 
 // 雷达图数据
 const RADAR_DATA = [
-  { label: '代数', value: 0.85 },
-  { label: '几何', value: 0.72 },
-  { label: '概率', value: 0.68 },
-  { label: '统计', value: 0.75 },
-  { label: '函数', value: 0.80 },
-  { label: '数列', value: 0.65 },
+  { label: '介词', value: 0.40 },
+  { label: '冠词', value: 0.90 },
+  { label: '连词', value: 0.95 },
+  { label: '代词', value: 0.85 },
+  { label: '谓语', value: 0.80 },
+  { label: '动名词', value: 0.84 },
+  { label: '不定式', value: 0.87 },
+  { label: '过去分词', value: 0.68 },
+  { label: '现在分词', value: 0.57 },
+  { label: '形容词', value: 0.82 },
+  { label: '名词', value: 0.92 },
+  { label: '词性变换', value: 0.65 },
 ];
 
 // 绘制雷达图 SVG
