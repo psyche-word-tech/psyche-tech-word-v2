@@ -357,3 +357,38 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 6. **图片裁剪**：`resizeMode="contain"` 替代 `"cover"`
 7. **ESM 非法 require**：`require('fs')` → `fs.existsSync`（已导入）
 
+## 新增功能：教师批改系统
+
+### 功能概述
+学生上传作业图片，教师在线批改（画圈/划线标注 + 文字评语）。
+
+### 数据库表
+- `submissions` - 作业提交表
+  - `id` - UUID 主键
+  - `student_id` - 学生 ID
+  - `teacher_id` - 教师 ID
+  - `image_url` - 图片 URL
+  - `status` - 状态（pending/graded）
+  - `grade` - 分数
+  - `feedback` - 评语
+  - `annotations` - 标注数据（JSONB）
+  - `created_at` / `updated_at` - 时间戳
+
+### Storage Bucket
+- `submissions` - 存储学生上传的作业图片（公开访问）
+
+### 前端页面
+- `submit-homework.tsx` - 学生提交作业（拍照/相册选择）
+- `teacher-review.tsx` - 教师批改列表（待批改/已批改统计）
+- `review-detail.tsx` - 教师批改详情（图片标注 + 评分 + 评语）
+
+### 后端 API
+- `POST /api/submissions` - 提交作业（base64 图片上传）
+- `GET /api/submissions?role=teacher` - 获取提交列表
+- `PUT /api/submissions/:id` - 更新批改结果
+- `GET /api/submissions/:id` - 获取单个提交详情
+
+### 主页入口
+右上角加号图标 → 弹出菜单选择"学生提交作业"或"教师批改作业"
+
+

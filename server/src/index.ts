@@ -19,6 +19,7 @@ import ttsRouter from "./routes/tts";
 import mindmapRouter from "./routes/mindmap";
 import solveProblemRouter from "./routes/solve-problem";
 import favoritesRouter from "./routes/favorites";
+import submissionsRouter from "./routes/submissions";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,6 +153,7 @@ app.use('/api/v1/tts', ttsRouter);
 app.use('/api/v1/mindmap', mindmapRouter);
 app.use('/api/v1/solve-problem', solveProblemRouter);
 app.use('/api/v1/favorites', favoritesRouter);
+app.use('/api/submissions', submissionsRouter);
 
 // SPA fallback: serve index.html for non-API routes
 app.get('*', (req, res) => {

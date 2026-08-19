@@ -37,6 +37,7 @@ export default function StudyScreen() {
   const engravedText = params.engravedText || '';
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSubmissionMenu, setShowSubmissionMenu] = useState(false);
 
   const handleTakePhoto = async () => {
     setShowImagePicker(false);
@@ -270,6 +271,13 @@ export default function StudyScreen() {
             >
               <RadarChartIcon size={22} color="#FFFFFF" />
             </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.searchButton}
+              activeOpacity={0.7}
+              onPress={() => setShowSubmissionMenu(true)}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -392,6 +400,49 @@ export default function StudyScreen() {
                 暂无历史记录
               </Text>
             </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 提交/批改菜单 Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showSubmissionMenu}
+        onRequestClose={() => setShowSubmissionMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSubmissionMenu(false)}
+        >
+          <TouchableOpacity
+            style={styles.submissionMenuContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSubmissionMenu(false);
+                router.push('/submit-homework');
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="cloud-upload-outline" size={24} color="#3B82F6" />
+              <Text style={styles.menuItemText}>学生提交作业</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSubmissionMenu(false);
+                router.push('/teacher-review');
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="checkmark-circle-outline" size={24} color="#10B981" />
+              <Text style={styles.menuItemText}>教师批改作业</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -628,5 +679,28 @@ const styles = StyleSheet.create({
   historyEmptyText: {
     fontSize: 14,
     color: '#999',
+  },
+  submissionMenuContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    width: '70%',
+    maxWidth: 300,
+    alignSelf: 'center',
+    marginTop: '30%',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '500',
   },
 });
