@@ -1,15 +1,21 @@
 import { View, Text, StyleSheet, TouchableOpacity, Switch, Alert, Modal } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { irisRecognitionService } from '@/utils/irisRecognition';
+import { getApiBaseUrl } from '@/utils/apiConfig';
 
 export default function SettingsScreen() {
   const router = useSafeRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [elderMode, setElderMode] = useState(false);
   const [showIrisModal, setShowIrisModal] = useState(false);
+  const [irisEnabled, setIrisEnabled] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const sessionIdRef = useRef<string>('');
 
   const handleLogout = () => {
     logout().then(() => {
@@ -18,6 +24,55 @@ export default function SettingsScreen() {
       console.error('退出登录失败:', error);
       Alert.alert('错误', '退出登录失败，请重试');
     });
+  };
+
+  const startIrisRecognition = async () => {
+    if (!videoRef.current) return;
+    
+    setIsStarting(true);
+    sessionIdRef.current = `session_${Date.now()}`;
+    
+    try {
+      await irisRecognitionService.loadModels();
+      
+      await irisRecognitionService.startVideo(videoRef.current, async (result) => {
+        // 保存识别结果到后端
+        try {
+          const response = await fetch(`${getApiBaseUrl()}/api/iris/iris-data`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sessionId: sessionIdRef.current,
+              emotion: result.emotion,
+              focusScore: result.focusScore,
+              gazeDirection: result.gazeDirection,
+            }),
+          });
+          const data = await response.json();
+          if (!data.success) {
+            console.error('保存虹膜数据失败:', data.error);
+          }
+        } catch (error) {
+          console.error('保存虹膜数据失败:', error);
+        }
+      });
+      
+      setIrisEnabled(true);
+      Alert.alert('提示', '虹膜识别功能已启动，系统将开始监测您的学习状态');
+    } catch (error) {
+      console.error('启动虹膜识别失败:', error);
+      Alert.alert('错误', '启动虹膜识别失败，请检查摄像头权限');
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const stopIrisRecognition = () => {
+    irisRecognitionService.stop();
+    setIrisEnabled(false);
+    Alert.alert('提示', '虹膜识别功能已关闭');
   };
 
   const settingsItems = [
@@ -154,6 +209,15 @@ export default function SettingsScreen() {
 
         {/* Bottom Logout Button */}
         <View style={styles.bottomContainer}>
+          {irisEnabled && (
+            <TouchableOpacity 
+              style={styles.stopIrisButton}
+              activeOpacity={0.8}
+              onPress={stopIrisRecognition}
+            >
+              <Text style={styles.stopIrisText}>关闭虹膜识别</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity 
             style={styles.logoutButton}
             activeOpacity={0.8}
@@ -162,6 +226,15 @@ export default function SettingsScreen() {
             <Text style={styles.logoutText}>退出登录</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Hidden Video Element for Iris Recognition */}
+        <video
+          ref={videoRef}
+          style={{ display: 'none' }}
+          autoPlay
+          playsInline
+          muted
+        />
 
         {/* Iris Recognition Modal */}
         <Modal
@@ -186,14 +259,17 @@ export default function SettingsScreen() {
               </Text>
               <View style={styles.modalButtons}>
                 <TouchableOpacity
-                  style={styles.modalButtonPrimary}
+                  style={[styles.modalButtonPrimary, isStarting && styles.modalButtonDisabled]}
                   onPress={() => {
                     setShowIrisModal(false);
-                    Alert.alert('提示', '虹膜识别功能已开通');
+                    startIrisRecognition();
                   }}
                   activeOpacity={0.7}
+                  disabled={isStarting}
                 >
-                  <Text style={styles.modalButtonPrimaryText}>开通</Text>
+                  <Text style={styles.modalButtonPrimaryText}>
+                    {isStarting ? '启动中...' : '开通'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.modalButtonSecondary}
@@ -312,6 +388,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#FF4D4F',
     fontWeight: '500',
+  },
+  stopIrisButton: {
+    backgroundColor: '#E0E7FF',
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  stopIrisText: {
+    fontSize: 15,
+    color: '#4F46E5',
+    fontWeight: '500',
+  },
+  modalButtonDisabled: {
+    opacity: 0.6,
   },
   modalOverlay: {
     flex: 1,
