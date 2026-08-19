@@ -17,6 +17,7 @@ export default function RegisterPage() {
   const [countdown, setCountdown] = useState(0);
   const [loading, setLoading] = useState(false);
   const [devCode, setDevCode] = useState('');
+  const [role, setRole] = useState<'student' | 'teacher'>('student');
 
   const handleSendCode = async () => {
     if (!phone || phone.length !== 11) {
@@ -79,7 +80,7 @@ export default function RegisterPage() {
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, password, code }),
+        body: JSON.stringify({ phone, password, code, role }),
       });
       const data = await response.json();
 
@@ -90,6 +91,7 @@ export default function RegisterPage() {
           username: data.user.username || phone,
           phone: phone,
           token: '',
+          role: data.user.role || role,
         });
         Alert.alert('注册成功', '欢迎加入！');
         router.replace('/study');
@@ -161,6 +163,27 @@ export default function RegisterPage() {
               keyboardType="number-pad"
               maxLength={6}
             />
+          </View>
+
+          {/* Role Selection */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>选择身份</Text>
+            <View style={styles.roleRow}>
+              <TouchableOpacity
+                style={[styles.roleButton, role === 'student' && styles.roleButtonActive]}
+                onPress={() => setRole('student')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.roleText, role === 'student' && styles.roleTextActive]}>学生</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.roleButton, role === 'teacher' && styles.roleButtonActive]}
+                onPress={() => setRole('teacher')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.roleText, role === 'teacher' && styles.roleTextActive]}>教师</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Password */}
@@ -292,6 +315,32 @@ const styles = StyleSheet.create({
   },
   codeTextDisabled: {
     color: '#FFFFFF',
+  },
+  roleRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  roleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  roleButtonActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  roleText: {
+    fontSize: 14,
+    color: '#666666',
+    fontFamily: 'serif',
+  },
+  roleTextActive: {
+    color: '#3B82F6',
+    fontWeight: '600',
   },
   registerButton: {
     padding: 16,

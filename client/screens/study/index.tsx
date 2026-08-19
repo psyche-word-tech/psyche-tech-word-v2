@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
+import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useState } from 'react';
@@ -33,6 +34,7 @@ const HALF_HEIGHT = SCREEN_HEIGHT / 2; // 一半高度
 
 export default function StudyScreen() {
   const router = useSafeRouter();
+  const { user } = useAuth();
   const params = useSafeSearchParams<{ engravedText?: string }>();
   const engravedText = params.engravedText || '';
   const [showImagePicker, setShowImagePicker] = useState(false);
@@ -274,7 +276,13 @@ export default function StudyScreen() {
             <TouchableOpacity 
               style={styles.searchButton}
               activeOpacity={0.7}
-              onPress={() => setShowSubmissionMenu(true)}
+              onPress={() => {
+                if (user?.role === 'teacher') {
+                  router.push('/teacher-review');
+                } else {
+                  setShowSubmissionMenu(true);
+                }
+              }}
             >
               <Ionicons name="add" size={24} color="#FFFFFF" />
             </TouchableOpacity>
@@ -421,28 +429,32 @@ export default function StudyScreen() {
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
           >
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setShowSubmissionMenu(false);
-                router.push('/submit-homework');
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="cloud-upload-outline" size={24} color="#3B82F6" />
-              <Text style={styles.menuItemText}>学生提交作业</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setShowSubmissionMenu(false);
-                router.push('/teacher-review');
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="checkmark-circle-outline" size={24} color="#10B981" />
-              <Text style={styles.menuItemText}>教师批改作业</Text>
-            </TouchableOpacity>
+            {user?.role !== 'teacher' && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowSubmissionMenu(false);
+                  router.push('/submit-homework');
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="cloud-upload-outline" size={24} color="#3B82F6" />
+                <Text style={styles.menuItemText}>提交作业</Text>
+              </TouchableOpacity>
+            )}
+            {user?.role === 'teacher' && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowSubmissionMenu(false);
+                  router.push('/teacher-review');
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="checkmark-circle-outline" size={24} color="#10B981" />
+                <Text style={styles.menuItemText}>批改作业</Text>
+              </TouchableOpacity>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>

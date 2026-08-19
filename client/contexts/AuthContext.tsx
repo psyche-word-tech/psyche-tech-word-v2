@@ -6,6 +6,7 @@ interface User {
   username: string;
   phone: string;
   token: string;
+  role?: 'student' | 'teacher';
 }
 
 interface AuthContextType {

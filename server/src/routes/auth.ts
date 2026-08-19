@@ -115,7 +115,7 @@ router.post('/send-code', async (req, res) => {
  */
 router.post('/register', async (req, res) => {
   try {
-    const { phone, password, code } = req.body;
+    const { phone, password, code, role } = req.body;
 
     if (!phone || !password || !code) {
       return res.json({ success: false, error: '请填写完整信息' });
@@ -175,6 +175,13 @@ router.post('/register', async (req, res) => {
       return res.json({ success: false, error: '注册失败' });
     }
 
+    // 创建用户资料记录（包含角色）
+    const userRole = role === 'teacher' ? 'teacher' : 'student';
+    await client.from('user_profiles').insert({
+      id: newUser[0].id,
+      role: userRole,
+    });
+
     // 删除已使用的验证码
     try {
       await client.from('verification_codes').delete().eq('phone', phone);
@@ -183,7 +190,11 @@ router.post('/register', async (req, res) => {
     }
     deleteVerificationCode(phone);
 
-    res.json({ success: true, message: '注册成功', user: newUser[0] });
+    res.json({ 
+      success: true, 
+      message: '注册成功', 
+      user: { ...newUser[0], role: userRole } 
+    });
   } catch (error: any) {
     console.error('注册异常:', error);
     res.json({ success: false, error: `注册异常: ${error?.message || String(error)}` });
