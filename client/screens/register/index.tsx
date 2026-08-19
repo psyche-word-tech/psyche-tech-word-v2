@@ -62,6 +62,7 @@ export default function RegisterPage() {
   };
 
   const handleRegister = async () => {
+    console.log('handleRegister called', { phone, password, code, role });
     if (!phone || !password || !code) {
       Alert.alert('提示', '请填写完整信息');
       return;
@@ -72,17 +73,15 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      /**
-       * 服务端文件：server/src/routes/auth.ts
-       * 接口：POST /api/v1/auth/register
-       * Body 参数：phone: string, password: string, code: string
-       */
+      console.log('Sending register request...');
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, password, code, role }),
       });
+      console.log('Register response status:', response.status);
       const data = await response.json();
+      console.log('Register response data:', data);
 
       if (data.success) {
         // 自动登录
