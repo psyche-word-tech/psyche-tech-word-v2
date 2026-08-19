@@ -34,37 +34,31 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      '注销账号',
-      '注销后账号数据将被永久删除且无法恢复，确定要注销吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        { 
-          text: '确定注销', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/delete-account`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user?.id }),
-              });
-              const data = await response.json();
-              if (data.success) {
-                await logout();
-                router.replace('/login');
-                Alert.alert('提示', '账号已注销');
-              } else {
-                Alert.alert('错误', data.error || '注销失败');
-              }
-            } catch (error) {
-              console.error('注销账号失败:', error);
-              Alert.alert('错误', '注销失败，请重试');
-            }
-          }
-        },
-      ]
-    );
+    const confirmed = window.confirm('注销后账号数据将被永久删除且无法恢复，确定要注销吗？');
+    if (!confirmed) return;
+
+    const deleteAccount = async () => {
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/delete-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user?.id }),
+        });
+        const data = await response.json();
+        if (data.success) {
+          await logout();
+          window.alert('账号已注销');
+          router.replace('/login');
+        } else {
+          window.alert('注销失败: ' + (data.error || '未知错误'));
+        }
+      } catch (error) {
+        console.error('注销账号失败:', error);
+        window.alert('注销失败，请重试');
+      }
+    };
+
+    deleteAccount();
   };
 
   const menuItems = [
