@@ -134,7 +134,10 @@ export default function RegisterPage() {
                 placeholder="请输入手机号"
                 placeholderTextColor="#999999"
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(text) => {
+                  console.log('📱 Phone onChange:', text);
+                  setPhone(text);
+                }}
                 keyboardType="phone-pad"
                 maxLength={11}
               />
@@ -158,7 +161,10 @@ export default function RegisterPage() {
               placeholder="请输入验证码"
               placeholderTextColor="#999999"
               value={code}
-              onChangeText={setCode}
+              onChangeText={(text) => {
+                console.log('🔢 Code onChange:', text);
+                setCode(text);
+              }}
               keyboardType="number-pad"
               maxLength={6}
             />
@@ -205,7 +211,10 @@ export default function RegisterPage() {
               placeholder="请设置密码"
               placeholderTextColor="#999999"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                console.log(' Password onChange:', text);
+                setPassword(text);
+              }}
               secureTextEntry
             />
           </View>
