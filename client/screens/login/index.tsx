@@ -79,7 +79,7 @@ export default function LoginPage() {
       <View style={styles.container}>
         {/* Top Header Bar */}
         <View style={styles.headerBar}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.replace('/study')}>
             <Text style={styles.backText}>← 返回</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>密码登录</Text>
