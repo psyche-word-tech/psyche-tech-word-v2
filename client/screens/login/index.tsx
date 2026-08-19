@@ -20,6 +20,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    console.log('=== 登录按钮被点击 ===');
+    console.log('username:', username);
+    console.log('password:', password);
+    
     if (!username.trim()) {
       Alert.alert('提示', '请输入用户名或手机号');
       return;
@@ -31,12 +35,15 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
+      console.log('Sending login request...');
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
       const data = await response.json();
+      console.log('Login response status:', response.status);
+      console.log('Login response data:', data);
 
       if (data.success) {
         // 保存用户信息到本地
@@ -106,8 +113,11 @@ export default function LoginPage() {
               placeholder="请输入密码"
               placeholderTextColor="#999999"
               value={password}
-              onChangeText={setPassword}
-              secureTextEntry
+              onChangeText={(text) => {
+                console.log('Password onChange:', text);
+                setPassword(text);
+              }}
+              secureTextEntry={false}
             />
           </View>
           
