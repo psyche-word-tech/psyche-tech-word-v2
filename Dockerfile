@@ -14,8 +14,8 @@ COPY server/package.json ./server/
 
 WORKDIR /app/server
 
-# 安装依赖
-RUN pnpm install --frozen-lockfile
+# 安装依赖（使用官方 registry，不用 frozen-lockfile）
+RUN pnpm install --registry=https://registry.npmjs.org --no-frozen-lockfile
 
 # 复制后端源码
 COPY server/ .
