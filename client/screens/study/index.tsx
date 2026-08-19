@@ -313,7 +313,7 @@ export default function StudyScreen() {
             <TouchableOpacity 
               style={styles.gridItem}
               activeOpacity={0.9}
-              onPress={() => router.push('/login')}
+              onPress={() => router.push(user ? '/profile' : '/login')}
             >
               <Image source={region4Bg} style={styles.gridImageFull} resizeMode="cover" />
             </TouchableOpacity>
