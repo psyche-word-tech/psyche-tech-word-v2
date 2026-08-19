@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Alert, Modal } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useState } from 'react';
@@ -9,6 +9,7 @@ export default function SettingsScreen() {
   const router = useSafeRouter();
   const { logout } = useAuth();
   const [elderMode, setElderMode] = useState(false);
+  const [showIrisModal, setShowIrisModal] = useState(false);
 
   const handleLogout = () => {
     logout().then(() => {
@@ -73,6 +74,11 @@ export default function SettingsScreen() {
       title: '关于我们',
       arrow: true,
     },
+    {
+      id: 'iris-recognition',
+      title: '虹膜识别',
+      arrow: true,
+    },
   ];
 
   return (
@@ -101,6 +107,11 @@ export default function SettingsScreen() {
                 index === settingsItems.length - 1 && styles.listItemLast,
               ]}
               activeOpacity={item.isToggle ? 1 : 0.7}
+              onPress={() => {
+                if (item.id === 'iris-recognition') {
+                  setShowIrisModal(true);
+                }
+              }}
             >
               <Text style={styles.itemTitle}>{item.title}</Text>
               
@@ -151,6 +162,50 @@ export default function SettingsScreen() {
             <Text style={styles.logoutText}>退出登录</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Iris Recognition Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showIrisModal}
+          onRequestClose={() => setShowIrisModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowIrisModal(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text style={styles.modalTitle}>虹膜识别</Text>
+              <Text style={styles.modalDescription}>
+                开通后系统将识别您的眼神和面部表情数据，您学习时的专注程度，对题目难度的反应将会被推断，结果仅自己可见
+              </Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalButtonPrimary}
+                  onPress={() => {
+                    setShowIrisModal(false);
+                    Alert.alert('提示', '虹膜识别功能已开通');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalButtonPrimaryText}>开通</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalButtonSecondary}
+                  onPress={() => setShowIrisModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalButtonSecondaryText}>暂不开通</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
       </View>
     </Screen>
   );
@@ -256,6 +311,59 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 15,
     color: '#FF4D4F',
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: '#666666',
+    lineHeight: 22,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    gap: 12,
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#4F46E5',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonPrimaryText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  modalButtonSecondary: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonSecondaryText: {
+    fontSize: 15,
+    color: '#666666',
     fontWeight: '500',
   },
 });
