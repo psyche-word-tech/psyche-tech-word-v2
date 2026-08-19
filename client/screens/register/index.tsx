@@ -165,6 +165,18 @@ export default function RegisterPage() {
             />
           </View>
 
+          {/* Dev Code Display - 开发模式下显示验证码 */}
+          {devCode ? (
+            <View style={{ backgroundColor: '#f0f9ff', padding: 12, borderRadius: 8, marginBottom: 16, borderWidth: 1, borderColor: '#bae6fd' }}>
+              <Text style={{ color: '#0369a1', fontSize: 14, fontWeight: '600', marginBottom: 4 }}>
+                开发模式 - 验证码
+              </Text>
+              <Text style={{ color: '#0c4a6e', fontSize: 20, fontWeight: 'bold', letterSpacing: 4 }}>
+                {devCode}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Role Selection */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>选择身份</Text>
