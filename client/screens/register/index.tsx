@@ -226,7 +226,14 @@ export default function RegisterPage() {
           {/* Register Button */}
           <TouchableOpacity 
             style={styles.registerButton}
-            onPress={handleRegister}
+            onPress={() => {
+              console.log('=== 注册按钮被点击 ===');
+              console.log('phone:', phone);
+              console.log('password:', password);
+              console.log('code:', code);
+              console.log('role:', role);
+              handleRegister();
+            }}
           >
             <Text style={styles.registerText}>注册</Text>
           </TouchableOpacity>
