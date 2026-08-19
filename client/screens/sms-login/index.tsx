@@ -82,6 +82,7 @@ export default function SmsLoginPage() {
           username: data.user.username || phone,
           phone: phone,
           token: data.token,
+          role: data.user.role || 'student',
         });
         console.log('[SMSLogin] Auth context updated, navigating to /profile');
         router.replace('/profile');

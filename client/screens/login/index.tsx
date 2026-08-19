@@ -52,6 +52,7 @@ export default function LoginPage() {
           username: data.user.username || username,
           phone: data.user.phone || '',
           token: data.token,
+          role: data.user.role || 'student',
         });
         router.replace('/profile');
       } else {

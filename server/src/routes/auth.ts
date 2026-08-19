@@ -290,6 +290,21 @@ router.post('/login', async (req, res) => {
       return res.json({ success: false, error: '用户名或密码错误' });
     }
 
+    // 查询用户角色
+    let userRole = 'student';
+    try {
+      const { data: profileData } = await client
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .limit(1);
+      if (profileData && profileData.length > 0) {
+        userRole = profileData[0].role || 'student';
+      }
+    } catch {
+      // 表可能不存在，使用默认角色
+    }
+
     // 生成token（简化版，实际应使用JWT）
     const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64');
 
@@ -297,7 +312,7 @@ router.post('/login', async (req, res) => {
       success: true,
       message: '登录成功',
       token,
-      user: { id: user.id, phone: user.phone, username: user.username },
+      user: { id: user.id, phone: user.phone, username: user.username, role: userRole },
     });
   } catch (error: any) {
     console.error('密码登录异常:', error);
@@ -388,6 +403,21 @@ router.post('/sms-login', async (req, res) => {
     }
     deleteVerificationCode(phone);
 
+    // 查询用户角色
+    let userRole = 'student';
+    try {
+      const { data: profileData } = await client
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .limit(1);
+      if (profileData && profileData.length > 0) {
+        userRole = profileData[0].role || 'student';
+      }
+    } catch {
+      // 表可能不存在，使用默认角色
+    }
+
     // 生成token
     const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64');
 
@@ -395,7 +425,7 @@ router.post('/sms-login', async (req, res) => {
       success: true,
       message: '登录成功',
       token,
-      user: { id: user.id, phone: user.phone, username: user.username },
+      user: { id: user.id, phone: user.phone, username: user.username, role: userRole },
     });
   } catch (error: any) {
     console.error('登录异常:', error);

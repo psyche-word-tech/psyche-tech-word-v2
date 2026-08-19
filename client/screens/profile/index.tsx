@@ -8,10 +8,13 @@ export default function ProfileScreen() {
   const router = useSafeRouter();
   const { user, logout } = useAuth();
 
+  const roleLabel = user?.role === 'teacher' ? '教师' : '学生';
+
   // 用户数据（实际应从API获取）
   const userData = {
     username: user?.username || '学习达人',
     phone: user?.phone ? user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未登录',
+    role: roleLabel,
     avatar: null,
     stats: {
       learningDays: 128,
@@ -108,6 +111,9 @@ export default function ProfileScreen() {
         <View style={styles.userInfo}>
           <Text style={styles.username}>{userData.username}</Text>
           <Text style={styles.phone}>{userData.phone}</Text>
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleText}>{userData.role}</Text>
+          </View>
         </View>
         <Ionicons name="chevron-forward" size={20} color="#ccc" />
       </TouchableOpacity>
@@ -248,6 +254,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#999',
     marginTop: 4,
+  },
+  roleBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  roleText: {
+    fontSize: 11,
+    color: '#4CAF50',
+    fontWeight: '500',
   },
   statsContainer: {
     flexDirection: 'row',
