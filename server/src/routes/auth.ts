@@ -403,4 +403,40 @@ router.post('/sms-login', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/v1/auth/delete-account
+ * 注销账号
+ */
+router.post('/delete-account', async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.json({ success: false, error: '用户ID不能为空' });
+    }
+
+    const client = getSupabaseClient();
+
+    // 删除用户资料
+    try {
+      await client.from('user_profiles').delete().eq('id', userId);
+    } catch {
+      // 表可能不存在，忽略
+    }
+
+    // 删除用户
+    const { error } = await client.from('users').delete().eq('id', userId);
+
+    if (error) {
+      console.error('删除用户失败:', error);
+      return res.json({ success: false, error: '注销失败' });
+    }
+
+    res.json({ success: true, message: '账号已注销' });
+  } catch (error: any) {
+    console.error('注销账号异常:', error);
+    res.json({ success: false, error: `注销异常: ${error?.message || String(error)}` });
+  }
+});
+
 export default router;

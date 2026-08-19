@@ -26,6 +26,40 @@ export default function SettingsScreen() {
     });
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      '注销账号',
+      '注销后账号数据将被永久删除且无法恢复，确定要注销吗？',
+      [
+        { text: '取消', style: 'cancel' },
+        { 
+          text: '确定注销', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/delete-account`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user?.id }),
+              });
+              const data = await response.json();
+              if (data.success) {
+                await logout();
+                router.replace('/login');
+                Alert.alert('提示', '账号已注销');
+              } else {
+                Alert.alert('错误', data.error || '注销失败');
+              }
+            } catch (error) {
+              console.error('注销账号失败:', error);
+              Alert.alert('错误', '注销失败，请重试');
+            }
+          }
+        },
+      ]
+    );
+  };
+
   const startIrisRecognition = async () => {
     if (!videoRef.current) return;
     
@@ -225,6 +259,13 @@ export default function SettingsScreen() {
           >
             <Text style={styles.logoutText}>退出登录</Text>
           </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.deleteAccountButton}
+            activeOpacity={0.8}
+            onPress={handleDeleteAccount}
+          >
+            <Text style={styles.deleteAccountText}>注销账号</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Hidden Video Element for Iris Recognition */}
@@ -387,6 +428,18 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 15,
     color: '#FF4D4F',
+    fontWeight: '500',
+  },
+  deleteAccountButton: {
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  deleteAccountText: {
+    fontSize: 15,
+    color: '#999',
     fontWeight: '500',
   },
   stopIrisButton: {
