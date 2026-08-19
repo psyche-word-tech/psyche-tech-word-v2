@@ -3,6 +3,7 @@ import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons, FontAwesome, MaterialIcons } from '@expo/vector-icons';
+import { getApiBaseUrl } from '@/utils/apiConfig';
 
 export default function ProfileScreen() {
   const router = useSafeRouter();
@@ -43,7 +44,6 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { getApiBaseUrl } = await import('@/utils/apiConfig');
               const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/delete-account`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
