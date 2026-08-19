@@ -32,6 +32,41 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      '注销账号',
+      '注销后账号数据将被永久删除且无法恢复，确定要注销吗？',
+      [
+        { text: '取消', style: 'cancel' },
+        { 
+          text: '确定注销', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { getApiBaseUrl } = await import('@/utils/apiConfig');
+              const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/delete-account`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user?.id }),
+              });
+              const data = await response.json();
+              if (data.success) {
+                await logout();
+                router.replace('/login');
+                Alert.alert('提示', '账号已注销');
+              } else {
+                Alert.alert('错误', data.error || '注销失败');
+              }
+            } catch (error) {
+              console.error('注销账号失败:', error);
+              Alert.alert('错误', '注销失败，请重试');
+            }
+          }
+        },
+      ]
+    );
+  };
+
   const menuItems = [
     {
       id: 'vocabulary',
@@ -178,6 +213,11 @@ export default function ProfileScreen() {
       {/* Logout Button */}
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>退出登录</Text>
+      </TouchableOpacity>
+
+      {/* Delete Account Button */}
+      <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount}>
+        <Text style={styles.deleteAccountText}>注销账号</Text>
       </TouchableOpacity>
     </Screen>
   );
@@ -372,5 +412,17 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 15,
     color: '#FF4D4F',
+  },
+  deleteAccountBtn: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 30,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  deleteAccountText: {
+    fontSize: 14,
+    color: '#999',
   },
 });
