@@ -84,7 +84,11 @@ export default function ProfileScreen() {
     <Screen style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.replace('/study')} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>个人中心</Text>
+        <View style={{ width: 32 }} />
       </View>
 
       {/* User Info Card */}
@@ -186,6 +190,9 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 12,
     backgroundColor: '#fff',
+  },
+  backBtn: {
+    padding: 4,
   },
   headerTitle: {
     fontSize: 18,
