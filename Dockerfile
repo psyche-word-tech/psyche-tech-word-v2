@@ -8,8 +8,9 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
-# 先复制 package.json 利用 Docker 缓存层
-COPY server/package.json server/pnpm-lock.yaml ./server/
+# 复制根目录 lockfile 和 server package.json
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY server/package.json ./server/
 
 WORKDIR /app/server
 
