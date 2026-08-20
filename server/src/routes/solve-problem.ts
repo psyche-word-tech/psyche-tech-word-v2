@@ -254,6 +254,26 @@ router.post("/", upload.single("image"), async (req, res) => {
     let result: any;
     try {
       result = JSON.parse(llmResponse.content);
+      
+      // 检查 LLM 是否返回了错误
+      if (result.error) {
+        console.log("[SolveProblem] LLM returned error:", result.error);
+        result = {
+          questions: [
+            {
+              subject: "未知",
+              question: "图片内容无法识别",
+              analysis: result.error,
+              solution: "",
+              answer: "",
+              tips: "建议：确保光线充足、对焦清晰、题目完整",
+              knowledge_points: "",
+              core_competency: "",
+              difficulty: "简单",
+            }
+          ]
+        };
+      }
     } catch (parseError) {
       // 尝试从 markdown 代码块中提取 JSON
       const markdownMatch = llmResponse.content.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -297,30 +317,18 @@ router.post("/", upload.single("image"), async (req, res) => {
                   questions: [
                     {
                       subject: "未知",
-                      question: "无法解析题目内容",
-                      analysis: "解析失败，请重试",
-                    solution: "",
-                    answer: "",
-                  }
-                ]
-              };
+                      question: "图片内容无法识别",
+                      analysis: "解析失败，可能原因：图片模糊、光线不足、题目不完整",
+                      solution: "",
+                      answer: "",
+                      tips: "建议：1.确保光线充足 2.对焦清晰 3.题目完整 4.避免反光",
+                    }
+                  ]
+                };
+              }
             }
           }
         }
-      }
-    } else {
-      console.error("[SolveProblem] No JSON found in response");
-        result = {
-          questions: [
-            {
-              subject: "未知",
-              question: "无法解析题目内容",
-              analysis: "解析失败，请重试",
-              solution: "",
-              answer: "",
-            }
-          ]
-        };
       }
     }
 
