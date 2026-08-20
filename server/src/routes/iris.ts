@@ -34,13 +34,14 @@ router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) =>
       .from('user_profiles')
       .select('iris_enabled')
       .eq('user_id', userData.id)
+      .limit(1)
       .single();
 
     if (error && error.code === 'PGRST116') {
       // 记录不存在，创建一条
       const { data: newData, error: insertError } = await client
         .from('user_profiles')
-        .insert({ user_id: userData.id, role: 'student', iris_enabled: false })
+        .insert({ id: require('crypto').randomUUID(), user_id: userData.id, role: 'student', iris_enabled: false })
         .select('iris_enabled')
         .single();
       
@@ -91,6 +92,7 @@ router.post('/enable', authMiddleware, async (req: AuthRequest, res: Response) =
       .update({ iris_enabled: enabled })
       .eq('user_id', userData.id)
       .select()
+      .limit(1)
       .single();
 
     if (error) {

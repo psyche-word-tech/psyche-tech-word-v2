@@ -300,7 +300,7 @@ router.post('/login', async (req, res) => {
       const { data: profileData } = await client
         .from('user_profiles')
         .select('role')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .limit(1);
       if (profileData && profileData.length > 0) {
         userRole = profileData[0].role || 'student';
@@ -413,7 +413,7 @@ router.post('/sms-login', async (req, res) => {
       const { data: profileData } = await client
         .from('user_profiles')
         .select('role')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .limit(1);
       if (profileData && profileData.length > 0) {
         userRole = profileData[0].role || 'student';
