@@ -63,7 +63,50 @@ export default function ProfileScreen() {
   };
 
   const [showIrisModal, setShowIrisModal] = useState(false);
+  const [showIrisEnableModal, setShowIrisEnableModal] = useState(false);
+  const [irisEnabled, setIrisEnabled] = useState(false);
   const [irisData, setIrisData] = useState<any>(null);
+
+  const checkIrisStatus = async () => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/iris/status`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setIrisEnabled(data.enabled || false);
+      }
+    } catch (error) {
+      console.error('检查虹膜状态失败:', error);
+    }
+  };
+
+  const handleIrisButtonClick = () => {
+    checkIrisStatus();
+    setShowIrisEnableModal(true);
+  };
+
+  const handleEnableIris = async () => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/iris/enable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setIrisEnabled(true);
+        setShowIrisEnableModal(false);
+        Alert.alert('成功', '虹膜识别已开通');
+      } else {
+        Alert.alert('错误', data.error || '开通失败');
+      }
+    } catch (error) {
+      console.error('开通虹膜识别失败:', error);
+      Alert.alert('错误', '开通失败，请重试');
+    }
+  };
 
   const loadIrisData = async () => {
     try {
@@ -250,12 +293,15 @@ export default function ProfileScreen() {
         ))}
 
         {/* Iris Recognition Button */}
-        <TouchableOpacity style={styles.settingsItem} onPress={loadIrisData}>
+        <TouchableOpacity style={styles.settingsItem} onPress={handleIrisButtonClick}>
           <View style={styles.settingsLeft}>
             <Ionicons name="eye-outline" size={20} color="#4CAF50" />
-            <Text style={[styles.settingsText, { color: '#4CAF50' }]}>学习状态</Text>
+            <Text style={[styles.settingsText, { color: '#4CAF50' }]}>虹膜识别</Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={[styles.statusBadge, { backgroundColor: irisEnabled ? '#4CAF50' : '#999' }]} />
+            <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -268,6 +314,43 @@ export default function ProfileScreen() {
       <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount}>
         <Text style={styles.deleteAccountText}>注销账号</Text>
       </TouchableOpacity>
+
+      {/* Iris Enable Modal */}
+      {showIrisEnableModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>虹膜识别</Text>
+              <TouchableOpacity onPress={() => setShowIrisEnableModal(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.irisEnableContent}>
+              <Ionicons name="eye-outline" size={64} color="#4CAF50" style={{ marginBottom: 16 }} />
+              <Text style={styles.irisEnableTitle}>
+                {irisEnabled ? '虹膜识别已开通' : '开通虹膜识别'}
+              </Text>
+              <Text style={styles.irisEnableDesc}>
+                {irisEnabled
+                  ? '虹膜识别功能已开启，系统将实时监测您的学习状态'
+                  : '开通后，系统将实时监测您的专注度、情绪和视线方向，帮助您更好地管理学习状态'}
+              </Text>
+              {irisEnabled ? (
+                <TouchableOpacity style={styles.irisViewDataBtn} onPress={() => {
+                  setShowIrisEnableModal(false);
+                  loadIrisData();
+                }}>
+                  <Text style={styles.irisViewDataText}>查看学习数据</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.irisEnableBtn} onPress={handleEnableIris}>
+                  <Text style={styles.irisEnableBtnText}>立即开通</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Iris Analysis Modal */}
       {showIrisModal && (
@@ -586,5 +669,17 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 14,
     paddingVertical: 20,
+  },
+  irisEnableBtn: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  irisEnableBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
