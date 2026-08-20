@@ -48,7 +48,7 @@ export default function StudyScreen() {
   const handleLoadIrisData = async () => {
     setLoadingIris(true);
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/v1/iris/iris-data`);
+      const response = await fetch(`${getApiBaseUrl()}/api/iris/iris-data`);
       const data = await response.json();
       if (data.success) {
         setIrisData(data.data || []);
