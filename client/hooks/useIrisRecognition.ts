@@ -204,6 +204,7 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
         }),
       });
       setLatestData(data);
+      console.log('[Iris] 数据发送成功:', data);
     } catch (error) {
       console.error('[Iris] 发送数据失败:', error);
     }

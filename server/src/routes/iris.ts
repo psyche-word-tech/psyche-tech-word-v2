@@ -110,15 +110,11 @@ router.post('/enable', authMiddleware, async (req: AuthRequest, res: Response) =
 // 保存虹膜识别数据
 router.post('/iris-data', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { sessionId, emotion, focusScore, gazeDirection, difficultyReaction } = req.body;
+    const { sessionId, emotion, focus_score, gaze_direction, difficulty_reaction } = req.body;
     const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({ success: false, error: '未登录' });
-    }
-
-    if (!sessionId) {
-      return res.status(400).json({ success: false, error: '缺少 sessionId' });
     }
 
     const client = getSupabaseClient();
@@ -126,11 +122,11 @@ router.post('/iris-data', authMiddleware, async (req: AuthRequest, res: Response
       .from('iris_recognition_data')
       .insert({
         user_id: userId,
-        session_id: sessionId,
+        session_id: sessionId || `session_${Date.now()}`,
         emotion: emotion || 'neutral',
-        focus_score: focusScore || 0,
-        gaze_direction: gazeDirection || 'center',
-        difficulty_reaction: difficultyReaction || null,
+        focus_score: focus_score || 0,
+        gaze_direction: gaze_direction || 'center',
+        difficulty_reaction: difficulty_reaction || null,
       })
       .select()
       .single();
@@ -161,8 +157,8 @@ router.get('/iris-data', authMiddleware, async (req: AuthRequest, res: Response)
     let query = client
       .from('iris_recognition_data')
       .select('*')
-      .eq('id', userId)
-      .order('timestamp', { ascending: false })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
       .limit(Number(limit));
 
     if (sessionId) {
