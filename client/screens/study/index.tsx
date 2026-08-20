@@ -40,6 +40,24 @@ export default function StudyScreen() {
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSubmissionMenu, setShowSubmissionMenu] = useState(false);
+  const [showIrisAnalysis, setShowIrisAnalysis] = useState(false);
+  const [irisData, setIrisData] = useState<any[]>([]);
+  const [loadingIris, setLoadingIris] = useState(false);
+
+  const handleLoadIrisData = async () => {
+    setLoadingIris(true);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/iris/iris-data`);
+      const data = await response.json();
+      if (data.success) {
+        setIrisData(data.data || []);
+      }
+    } catch (error) {
+      console.error('加载虹膜数据失败:', error);
+    } finally {
+      setLoadingIris(false);
+    }
+  };
 
   const handleTakePhoto = async () => {
     setShowImagePicker(false);
@@ -399,15 +417,136 @@ export default function StudyScreen() {
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>历史记录</Text>
-              <TouchableOpacity onPress={() => setShowHistory(false)}>
-                <Text style={styles.modalCloseBtn}>✕</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowHistory(false);
+                    handleLoadIrisData();
+                    setShowIrisAnalysis(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="eye-outline" size={22} color="#3B82F6" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowHistory(false)}>
+                  <Text style={styles.modalCloseBtn}></Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.modalBody}>
               <Text style={{ color: '#999', textAlign: 'center', marginTop: 40 }}>
                 暂无历史记录
               </Text>
             </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 虹膜分析结果 Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showIrisAnalysis}
+        onRequestClose={() => setShowIrisAnalysis(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowIrisAnalysis(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>学习状态分析</Text>
+              <TouchableOpacity onPress={() => setShowIrisAnalysis(false)}>
+                <Text style={styles.modalCloseBtn}></Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              {irisData.length === 0 ? (
+                <Text style={{ color: '#999', textAlign: 'center', marginTop: 40 }}>
+                  暂无学习状态数据
+                </Text>
+              ) : (
+                <>
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{ color: '#666', fontSize: 14, marginBottom: 8 }}>
+                      平均专注度
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View
+                        style={{
+                          flex: 1,
+                          height: 8,
+                          backgroundColor: '#E5E7EB',
+                          borderRadius: 4,
+                          marginRight: 12,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: `${avgFocus}%`,
+                            height: '100%',
+                            backgroundColor: '#10B981',
+                            borderRadius: 4,
+                          }}
+                        />
+                      </View>
+                      <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 16 }}>
+                        {avgFocus.toFixed(1)}%
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{ color: '#666', fontSize: 14, marginBottom: 8 }}>
+                      情绪分布
+                    </Text>
+                    {Object.entries(emotionDistribution).map(([emotion, count]) => (
+                      <View key={emotion} style={{ flexDirection: 'row', marginBottom: 6 }}>
+                        <Text style={{ color: '#333', width: 60 }}>{emotion}</Text>
+                        <View style={{ flex: 1, height: 6, backgroundColor: '#E5E7EB', borderRadius: 3 }}>
+                          <View
+                            style={{
+                              width: `${(count / irisData.length) * 100}%`,
+                              height: '100%',
+                              backgroundColor: '#3B82F6',
+                              borderRadius: 3,
+                            }}
+                          />
+                        </View>
+                        <Text style={{ color: '#666', marginLeft: 8 }}>{count}次</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View>
+                    <Text style={{ color: '#666', fontSize: 14, marginBottom: 8 }}>
+                      视线分布
+                    </Text>
+                    {Object.entries(gazeDistribution).map(([gaze, count]) => (
+                      <View key={gaze} style={{ flexDirection: 'row', marginBottom: 6 }}>
+                        <Text style={{ color: '#333', width: 60 }}>{gaze}</Text>
+                        <View style={{ flex: 1, height: 6, backgroundColor: '#E5E7EB', borderRadius: 3 }}>
+                          <View
+                            style={{
+                              width: `${(count / irisData.length) * 100}%`,
+                              height: '100%',
+                              backgroundColor: '#8B5CF6',
+                              borderRadius: 3,
+                            }}
+                          />
+                        </View>
+                        <Text style={{ color: '#666', marginLeft: 8 }}>{count}次</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+            </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
