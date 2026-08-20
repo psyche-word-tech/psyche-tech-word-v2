@@ -16,13 +16,40 @@ router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) =>
     }
 
     const client = getSupabaseClient();
-    const { data, error } = await client
-      .from('user_profiles')
-      .select('iris_enabled')
+    
+    // 先查询 users 表获取用户信息
+    const { data: userData, error: userError } = await client
+      .from('users')
+      .select('id, phone, username')
       .eq('id', userId)
       .single();
 
-    if (error) {
+    if (userError || !userData) {
+      console.error('Get user info error:', userError);
+      return res.status(500).json({ success: false, error: '获取用户信息失败' });
+    }
+
+    // 查询 user_profiles 表，如果没有记录则创建一条
+    let { data, error } = await client
+      .from('user_profiles')
+      .select('iris_enabled')
+      .eq('user_id', userData.id)
+      .single();
+
+    if (error && error.code === 'PGRST116') {
+      // 记录不存在，创建一条
+      const { data: newData, error: insertError } = await client
+        .from('user_profiles')
+        .insert({ user_id: userData.id, role: 'student', iris_enabled: false })
+        .select('iris_enabled')
+        .single();
+      
+      if (insertError) {
+        console.error('Create user profile error:', insertError);
+        return res.status(500).json({ success: false, error: '创建用户档案失败' });
+      }
+      data = newData;
+    } else if (error) {
       console.error('Get iris status error:', error);
       return res.status(500).json({ success: false, error: '查询失败' });
     }
@@ -45,10 +72,24 @@ router.post('/enable', authMiddleware, async (req: AuthRequest, res: Response) =
     }
 
     const client = getSupabaseClient();
+    
+    // 先查询 users 表获取用户信息
+    const { data: userData, error: userError } = await client
+      .from('users')
+      .select('id, phone, username')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !userData) {
+      console.error('Get user info error:', userError);
+      return res.status(500).json({ success: false, error: '获取用户信息失败' });
+    }
+
+    // 用 users 表的 phone 更新 user_profiles 表（通过 phone 关联）
     const { data, error } = await client
       .from('user_profiles')
       .update({ iris_enabled: enabled })
-      .eq('id', userId)
+      .eq('phone', userData.phone)
       .select()
       .single();
 
@@ -118,7 +159,7 @@ router.get('/iris-data', authMiddleware, async (req: AuthRequest, res: Response)
     let query = client
       .from('iris_recognition_data')
       .select('*')
-      .eq('user_id', userId)
+      .eq('id', userId)
       .order('timestamp', { ascending: false })
       .limit(Number(limit));
 
@@ -153,7 +194,7 @@ router.get('/iris-stats', authMiddleware, async (req: AuthRequest, res: Response
     const { data, error } = await client
       .from('iris_recognition_data')
       .select('focus_score, emotion')
-      .eq('user_id', userId)
+      .eq('id', userId)
       .order('timestamp', { ascending: false })
       .limit(1000);
 

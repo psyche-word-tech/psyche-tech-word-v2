@@ -10,10 +10,21 @@ router.get('/status', authMiddleware, async (req, res) => {
             return res.status(401).json({ success: false, error: '未登录' });
         }
         const client = getSupabaseClient();
+        // 先查询 users 表获取用户信息
+        const { data: userData, error: userError } = await client
+            .from('users')
+            .select('id, phone, username')
+            .eq('id', userId)
+            .single();
+        if (userError || !userData) {
+            console.error('Get user info error:', userError);
+            return res.status(500).json({ success: false, error: '获取用户信息失败' });
+        }
+        // 用 users 表的 phone 查询 user_profiles 表
         const { data, error } = await client
             .from('user_profiles')
             .select('iris_enabled')
-            .eq('user_id', userId)
+            .eq('phone', userData.phone)
             .single();
         if (error) {
             console.error('Get iris status error:', error);
@@ -35,10 +46,21 @@ router.post('/enable', authMiddleware, async (req, res) => {
             return res.status(401).json({ success: false, error: '未登录' });
         }
         const client = getSupabaseClient();
+        // 先查询 users 表获取用户信息
+        const { data: userData, error: userError } = await client
+            .from('users')
+            .select('id, phone, username')
+            .eq('id', userId)
+            .single();
+        if (userError || !userData) {
+            console.error('Get user info error:', userError);
+            return res.status(500).json({ success: false, error: '获取用户信息失败' });
+        }
+        // 用 users 表的 phone 更新 user_profiles 表
         const { data, error } = await client
             .from('user_profiles')
             .update({ iris_enabled: enabled })
-            .eq('user_id', userId)
+            .eq('phone', userData.phone)
             .select()
             .single();
         if (error) {
@@ -99,7 +121,7 @@ router.get('/iris-data', authMiddleware, async (req, res) => {
         let query = client
             .from('iris_recognition_data')
             .select('*')
-            .eq('user_id', userId)
+            .eq('id', userId)
             .order('timestamp', { ascending: false })
             .limit(Number(limit));
         if (sessionId) {
@@ -128,7 +150,7 @@ router.get('/iris-stats', authMiddleware, async (req, res) => {
         const { data, error } = await client
             .from('iris_recognition_data')
             .select('focus_score, emotion')
-            .eq('user_id', userId)
+            .eq('id', userId)
             .order('timestamp', { ascending: false })
             .limit(1000);
         if (error) {
