@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, Modal } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons, FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { getApiBaseUrl } from '@/utils/apiConfig';
+import { useState } from 'react';
 
 export default function ProfileScreen() {
   const router = useSafeRouter();
@@ -59,6 +60,51 @@ export default function ProfileScreen() {
     };
 
     deleteAccount();
+  };
+
+  const [showIrisModal, setShowIrisModal] = useState(false);
+  const [irisData, setIrisData] = useState<any>(null);
+
+  const loadIrisData = async () => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/iris/iris-data`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      if (data.success && data.data && data.data.length > 0) {
+        const records = data.data;
+        const avgFocus = records.reduce((sum: number, r: any) => sum + (r.focus_score || 0), 0) / records.length;
+        const emotions = records.map((r: any) => r.emotion).filter(Boolean);
+        const mainEmotion = emotions.length > 0 ? emotions.reduce((a: string, b: string) =>
+          emotions.filter((v: string) => v === a).length >= emotions.filter((v: string) => v === b).length ? a : b
+        ) : '未知';
+        const gazeCounts = records.reduce((acc: any, r: any) => {
+          const dir = r.gaze_direction || 'center';
+          acc[dir] = (acc[dir] || 0) + 1;
+          return acc;
+        }, {});
+        const total = records.length;
+        setIrisData({
+          avgFocus: Math.round(avgFocus * 100),
+          mainEmotion,
+          gazeDistribution: {
+            up: Math.round((gazeCounts['up'] || 0) / total * 100),
+            down: Math.round((gazeCounts['down'] || 0) / total * 100),
+            left: Math.round((gazeCounts['left'] || 0) / total * 100),
+            right: Math.round((gazeCounts['right'] || 0) / total * 100),
+            center: Math.round((gazeCounts['center'] || 0) / total * 100),
+          },
+          totalRecords: total,
+        });
+      } else {
+        setIrisData(null);
+      }
+      setShowIrisModal(true);
+    } catch (error) {
+      console.error('加载虹膜数据失败:', error);
+      Alert.alert('错误', '加载虹膜数据失败');
+    }
   };
 
   const menuItems = [
@@ -202,6 +248,15 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color="#ccc" />
           </TouchableOpacity>
         ))}
+
+        {/* Iris Recognition Button */}
+        <TouchableOpacity style={styles.settingsItem} onPress={loadIrisData}>
+          <View style={styles.settingsLeft}>
+            <Ionicons name="eye-outline" size={20} color="#4CAF50" />
+            <Text style={[styles.settingsText, { color: '#4CAF50' }]}>学习状态</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#ccc" />
+        </TouchableOpacity>
       </View>
 
       {/* Logout Button */}
@@ -213,6 +268,57 @@ export default function ProfileScreen() {
       <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount}>
         <Text style={styles.deleteAccountText}>注销账号</Text>
       </TouchableOpacity>
+
+      {/* Iris Analysis Modal */}
+      {showIrisModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>学习状态</Text>
+              <TouchableOpacity onPress={() => setShowIrisModal(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              {irisData.length === 0 ? (
+                <Text style={styles.noDataText}>暂无学习状态数据</Text>
+              ) : (
+                <>
+                  <View style={styles.irisCard}>
+                    <Text style={styles.irisLabel}>平均专注度</Text>
+                    <Text style={styles.irisValue}>
+                      {Math.round(irisData.reduce((s, d) => s + (d.focusScore || 0), 0) / irisData.length * 100)}%
+                    </Text>
+                  </View>
+                  <View style={styles.irisCard}>
+                    <Text style={styles.irisLabel}>主要情绪</Text>
+                    <Text style={styles.irisValue}>
+                      {(() => {
+                        const emotions = irisData.map(d => d.emotion || 'neutral');
+                        const counts: Record<string, number> = {};
+                        emotions.forEach(e => counts[e] = (counts[e] || 0) + 1);
+                        return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'neutral';
+                      })()}
+                    </Text>
+                  </View>
+                  <View style={styles.irisCard}>
+                    <Text style={styles.irisLabel}>视线分布</Text>
+                    <Text style={styles.irisValue}>
+                      {(() => {
+                        const directions = irisData.map(d => d.gazeDirection || 'center');
+                        const counts: Record<string, number> = {};
+                        directions.forEach(d => counts[d] = (counts[d] || 0) + 1);
+                        return Object.entries(counts).map(([k, v]) => `${k}: ${Math.round(v / irisData.length * 100)}%`).join(', ');
+                      })()}
+                    </Text>
+                  </View>
+                  <Text style={styles.dataCount}>共 {irisData.length} 条数据</Text>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </Screen>
   );
 }
@@ -418,5 +524,67 @@ const styles = StyleSheet.create({
   deleteAccountText: {
     fontSize: 14,
     color: '#999',
+  },
+  irisButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  irisButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  irisStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  irisStatLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  irisStatValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  irisNoData: {
+    textAlign: 'center',
+    color: '#999',
+    fontSize: 14,
+    paddingVertical: 20,
   },
 });
