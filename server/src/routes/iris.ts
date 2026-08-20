@@ -3,6 +3,64 @@ import { getSupabaseClient } from '../storage/database/supabase-client';
 
 const router = Router();
 
+// 获取虹膜识别状态
+router.get('/status', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: '未登录' });
+    }
+
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from('user_profiles')
+      .select('iris_enabled')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('Get iris status error:', error);
+      return res.status(500).json({ success: false, error: '查询失败' });
+    }
+
+    res.json({ success: true, enabled: data?.iris_enabled || false });
+  } catch (error) {
+    console.error('Get iris status error:', error);
+    res.status(500).json({ success: false, error: '服务器错误' });
+  }
+});
+
+// 开通/关闭虹膜识别
+router.post('/enable', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const { enabled } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: '未登录' });
+    }
+
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from('user_profiles')
+      .update({ iris_enabled: enabled })
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Update iris status error:', error);
+      return res.status(500).json({ success: false, error: '更新失败' });
+    }
+
+    res.json({ success: true, enabled: data?.iris_enabled || false });
+  } catch (error) {
+    console.error('Update iris status error:', error);
+    res.status(500).json({ success: false, error: '服务器错误' });
+  }
+});
+
 // 保存虹膜识别数据
 router.post('/iris-data', async (req: Request, res: Response) => {
   try {
