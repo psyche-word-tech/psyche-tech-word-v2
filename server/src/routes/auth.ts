@@ -174,7 +174,7 @@ router.post('/register', async (req, res) => {
 
         // 更新或创建用户资料（角色）
         const userRole = role === 'teacher' ? 'teacher' : 'student';
-        const profileId = require('crypto').randomUUID();
+        const profileId = `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`;
         await client.from('user_profiles').upsert({
           id: profileId,
           user_id: userData[0].id,
@@ -205,7 +205,7 @@ router.post('/register', async (req, res) => {
 
     // 创建用户资料记录（包含角色）
     const userRole = role === 'teacher' ? 'teacher' : 'student';
-    const profileId = require('crypto').randomUUID();
+    const profileId = `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`;
     await client.from('user_profiles').insert({
       id: profileId,
       user_id: newUser[0].id,

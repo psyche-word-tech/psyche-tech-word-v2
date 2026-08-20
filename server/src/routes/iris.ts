@@ -41,7 +41,7 @@ router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) =>
       // 记录不存在，创建一条
       const { data: newData, error: insertError } = await client
         .from('user_profiles')
-        .insert({ id: require('crypto').randomUUID(), user_id: userData.id, role: 'student', iris_enabled: false })
+        .insert({ id: `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`, user_id: userData.id, role: 'student', iris_enabled: false })
         .select('iris_enabled')
         .single();
       
@@ -119,10 +119,8 @@ router.post('/iris-data', authMiddleware, async (req: AuthRequest, res: Response
 
     const client = getSupabaseClient();
     
-    // 生成有效的 UUID 作为 session_id
-    const validSessionId = sessionId && sessionId.length === 36 
-      ? sessionId 
-      : require('crypto').randomUUID();
+    // 生成唯一 session_id（不依赖 crypto 模块）
+    const validSessionId = sessionId || `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`;
     
     const { data, error } = await client
       .from('iris_recognition_data')
