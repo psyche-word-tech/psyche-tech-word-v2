@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useState } from 'react';
+import { getApiBaseUrl } from '@/utils/apiConfig';
 
 // 雷达图 SVG 图标组件
 const RadarChartIcon = ({ size = 22, color = '#FFFFFF' }) => (
