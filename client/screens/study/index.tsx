@@ -45,6 +45,11 @@ export default function StudyScreen() {
   const [irisData, setIrisData] = useState<any[]>([]);
   const [loadingIris, setLoadingIris] = useState(false);
 
+  // 计算平均专注度
+  const avgFocus = irisData.length > 0
+    ? irisData.reduce((sum, item) => sum + (item.focus_score || 0), 0) / irisData.length * 100
+    : 0;
+
   const handleLoadIrisData = async () => {
     setLoadingIris(true);
     try {
