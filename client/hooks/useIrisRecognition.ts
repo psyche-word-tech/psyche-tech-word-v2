@@ -25,13 +25,33 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const faceapiRef = useRef<any>(null);
 
-  // 动态加载 Face-API.js（避免导入时崩溃）
+  // 动态加载 Face-API.js（通过 CDN 避免 npm 包兼容性问题）
   const loadFaceApi = useCallback(async () => {
     if (faceapiRef.current) return true;
     try {
-      const faceapi = await import('face-api.js');
-      faceapiRef.current = faceapi;
-      return true;
+      // 检查是否已通过 script 标签加载
+      if ((window as any).faceapi) {
+        faceapiRef.current = (window as any).faceapi;
+        return true;
+      }
+
+      // 动态创建 script 标签加载 CDN 版本
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+      script.async = true;
+
+      await new Promise<void>((resolve, reject) => {
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('CDN 加载失败'));
+        document.head.appendChild(script);
+      });
+
+      if ((window as any).faceapi) {
+        faceapiRef.current = (window as any).faceapi;
+        console.log('[Iris] face-api.js 通过 CDN 加载成功');
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error('[Iris] face-api.js 加载失败:', error);
       return false;
