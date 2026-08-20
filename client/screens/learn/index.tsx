@@ -127,7 +127,10 @@ export default function LearnPage() {
 	// 页面加载时启动虹膜识别监测
 	useEffect(() => {
 		if (irisEnabled && !isMonitoring) {
+			console.log('[Learn] 虹膜识别已开通，启动监测');
 			startMonitoring();
+		} else if (!irisEnabled) {
+			console.log('[Learn] 虹膜识别未开通，请在个人中心开通');
 		}
 		return () => {
 			if (isMonitoring) {
@@ -264,13 +267,17 @@ export default function LearnPage() {
 					</TouchableOpacity>
 					<View style={styles.headerCenter}>
 						<Text style={styles.title}>词汇预览</Text>
-						{irisEnabled && (
+						{irisEnabled ? (
 							<View style={styles.irisIndicator}>
 								<View style={[styles.irisDot, isMonitoring && styles.irisDotActive]} />
 								<Text style={styles.irisText}>
 									{isMonitoring ? '监测中' : '已开通'}
 								</Text>
 							</View>
+						) : (
+							<TouchableOpacity onPress={() => router.push('/profile')}>
+								<Text style={styles.irisEnableText}>开通虹膜</Text>
+							</TouchableOpacity>
 						)}
 					</View>
 					<TouchableOpacity onPress={() => router.push('/calendar')}>
@@ -379,6 +386,11 @@ const styles = StyleSheet.create({
 	irisText: {
 		fontSize: 10,
 		color: '#666',
+	},
+	irisEnableText: {
+		fontSize: 10,
+		color: '#4CAF50',
+		marginTop: 4,
 	},
 	placeholder: {
 		width: 50,
