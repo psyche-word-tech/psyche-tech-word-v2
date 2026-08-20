@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import * as faceapi from 'face-api.js';
 import { fetchWithRetry } from '@/utils/apiClient';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 
@@ -24,10 +23,26 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const faceapiRef = useRef<any>(null);
+
+  // 动态加载 Face-API.js（避免导入时崩溃）
+  const loadFaceApi = useCallback(async () => {
+    if (faceapiRef.current) return true;
+    try {
+      const faceapi = await import('face-api.js');
+      faceapiRef.current = faceapi;
+      return true;
+    } catch (error) {
+      console.error('[Iris] face-api.js 加载失败:', error);
+      return false;
+    }
+  }, []);
 
   // 加载 Face-API.js 模型
   const loadModels = useCallback(async () => {
     if (modelsLoaded) return true;
+    const faceapi = faceapiRef.current;
+    if (!faceapi) return false;
     try {
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
       await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
@@ -113,6 +128,8 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
   // 使用 Face-API.js 分析面部
   const analyzeFace = useCallback(async (): Promise<IrisData | null> => {
     if (!videoRef.current || !canvasRef.current) return null;
+    const faceapi = faceapiRef.current;
+    if (!faceapi) return null;
 
     try {
       const video = videoRef.current;
@@ -196,6 +213,13 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
   const startMonitoring = useCallback(async () => {
     if (!enabled || !irisEnabled) return;
 
+    // 动态加载 face-api.js
+    const faceapiLoaded = await loadFaceApi();
+    if (!faceapiLoaded) {
+      console.warn('[Iris] face-api.js 不可用，跳过监测');
+      return;
+    }
+
     // 加载模型
     const modelsReady = await loadModels();
     if (!modelsReady) return;
@@ -219,7 +243,7 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
         await sendIrisData(data);
       }
     }, intervalMs);
-  }, [enabled, irisEnabled, loadModels, initCamera, analyzeFace, sendIrisData, intervalMs]);
+  }, [enabled, irisEnabled, loadFaceApi, loadModels, initCamera, analyzeFace, sendIrisData, intervalMs]);
 
   // 停止监测
   const stopMonitoring = useCallback(() => {
