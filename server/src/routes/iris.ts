@@ -136,8 +136,8 @@ router.post('/iris-data', authMiddleware, async (req: AuthRequest, res: Response
       .single();
 
     if (error) {
-      console.error('Save iris data error:', error);
-      return res.status(500).json({ success: false, error: '保存失败' });
+      console.error('Save iris data error:', JSON.stringify(error, null, 2));
+      return res.status(500).json({ success: false, error: '保存失败', details: error.message });
     }
 
     res.json({ success: true, data });
