@@ -119,8 +119,16 @@ router.post('/iris-data', authMiddleware, async (req: AuthRequest, res: Response
 
     const client = getSupabaseClient();
     
-    // 生成唯一 session_id（不依赖 crypto 模块）
-    const validSessionId = sessionId || `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`;
+    // 生成标准 UUID 格式的 session_id
+    const generateUUID = () => {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    };
+    
+    const validSessionId = sessionId || generateUUID();
     
     const { data, error } = await client
       .from('iris_recognition_data')
