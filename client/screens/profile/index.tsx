@@ -98,13 +98,13 @@ export default function ProfileScreen() {
       if (data.success) {
         setIrisEnabled(true);
         setShowIrisEnableModal(false);
-        Alert.alert('成功', '虹膜识别已开通');
+        window.alert('虹膜识别已开通');
       } else {
-        Alert.alert('错误', data.error || '开通失败');
+        window.alert(data.error || '开通失败');
       }
     } catch (error) {
       console.error('开通虹膜识别失败:', error);
-      Alert.alert('错误', '开通失败，请重试');
+      window.alert('开通失败，请重试');
     }
   };
 
