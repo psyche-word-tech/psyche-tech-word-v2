@@ -1,12 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { getSupabaseClient } from '../storage/database/supabase-client';
+import { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // 获取虹膜识别状态
-router.get('/status', async (req: Request, res: Response) => {
+router.get('/status', async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({ success: false, error: '未登录' });
@@ -32,9 +33,9 @@ router.get('/status', async (req: Request, res: Response) => {
 });
 
 // 开通/关闭虹膜识别
-router.post('/enable', async (req: Request, res: Response) => {
+router.post('/enable', async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.userId;
     const { enabled } = req.body;
 
     if (!userId) {
@@ -62,10 +63,10 @@ router.post('/enable', async (req: Request, res: Response) => {
 });
 
 // 保存虹膜识别数据
-router.post('/iris-data', async (req: Request, res: Response) => {
+router.post('/iris-data', async (req: AuthRequest, res: Response) => {
   try {
     const { sessionId, emotion, focusScore, gazeDirection, difficultyReaction } = req.body;
-    const userId = (req as any).user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({ success: false, error: '未登录' });
@@ -102,9 +103,9 @@ router.post('/iris-data', async (req: Request, res: Response) => {
 });
 
 // 获取用户的虹膜识别数据
-router.get('/iris-data', async (req: Request, res: Response) => {
+router.get('/iris-data', async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.userId;
     const { sessionId, limit = 100 } = req.query;
 
     if (!userId) {
@@ -138,9 +139,9 @@ router.get('/iris-data', async (req: Request, res: Response) => {
 });
 
 // 获取专注度统计
-router.get('/iris-stats', async (req: Request, res: Response) => {
+router.get('/iris-stats', async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({ success: false, error: '未登录' });
