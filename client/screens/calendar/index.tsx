@@ -5,11 +5,15 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
+  Modal,
+  Alert,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { FontAwesome6 } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
+import { getApiBaseUrl } from '@/utils/apiConfig';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DaySegment {
   day: string;
@@ -23,6 +27,13 @@ interface StatsData {
   known: number;
   vague: number;
   unknown: number;
+}
+
+interface IrisAnalysisData {
+  avgFocusScore: number;
+  dominantEmotion: string;
+  gazeDistribution: { up: number; down: number; left: number; right: number; center: number };
+  dataPoints: number;
 }
 
 function getLast7Days(): DaySegment[] {
@@ -92,8 +103,12 @@ function SegmentBar({
 
 export default function CalendarPage() {
   const router = useSafeRouter();
+  const { user } = useAuth();
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [irisModalVisible, setIrisModalVisible] = useState(false);
+  const [irisLoading, setIrisLoading] = useState(false);
+  const [irisData, setIrisData] = useState<IrisAnalysisData | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +172,25 @@ export default function CalendarPage() {
     router.push(route);
   };
 
+  const loadIrisAnalysis = async () => {
+    setIrisModalVisible(true);
+    setIrisLoading(true);
+    try {
+      const response = await fetchWithRetry('/api/v1/iris/analysis');
+      const data = await response.json();
+      if (data.success && data.data) {
+        setIrisData(data.data);
+      } else {
+        setIrisData(null);
+      }
+    } catch (error) {
+      console.error('加载虹膜分析失败:', error);
+      setIrisData(null);
+    } finally {
+      setIrisLoading(false);
+    }
+  };
+
   return (
     <Screen>
       <ScrollView className="flex-1 bg-white" contentContainerStyle={{ paddingBottom: 40 }}>
@@ -166,7 +200,9 @@ export default function CalendarPage() {
             <FontAwesome6 name="arrow-left" size={20} color="#3E2723" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>我的足迹</Text>
-          
+          <TouchableOpacity onPress={loadIrisAnalysis} style={styles.irisButton}>
+            <FontAwesome6 name="eye" size={18} color="#5D4037" />
+          </TouchableOpacity>
         </View>
 
         {/* 柱状图区域 */}
@@ -237,6 +273,68 @@ export default function CalendarPage() {
           </View>
         </View>
       </ScrollView>
+
+      {/* 虹膜分析弹窗 */}
+      <Modal
+        visible={irisModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIrisModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>学习状态分析</Text>
+              <TouchableOpacity onPress={() => setIrisModalVisible(false)}>
+                <FontAwesome6 name="xmark" size={20} color="#8D6E63" />
+              </TouchableOpacity>
+            </View>
+
+            {irisLoading ? (
+              <View style={styles.modalLoading}>
+                <ActivityIndicator size="large" color="#5D4037" />
+                <Text style={styles.modalLoadingText}>正在分析...</Text>
+              </View>
+            ) : irisData ? (
+              <View style={styles.modalBody}>
+                <View style={styles.statRow}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>平均专注度</Text>
+                    <Text style={styles.statValue}>{Math.round(irisData.averageFocus)}%</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>主要情绪</Text>
+                    <Text style={styles.statValue}>{irisData.dominantEmotion}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.gazeSection}>
+                  <Text style={styles.gazeTitle}>视线分布</Text>
+                  {Object.entries(irisData.gazeDistribution).map(([direction, value]) => (
+                    <View key={direction} style={styles.gazeRow}>
+                      <Text style={styles.gazeLabel}>{direction}</Text>
+                      <View style={styles.gazeBarBg}>
+                        <View style={[styles.gazeBarFill, { width: `${value}%` }]} />
+                      </View>
+                      <Text style={styles.gazeValue}>{Math.round(value)}%</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <Text style={styles.modalFooter}>
+                  共 {irisData.dataPoints} 个数据点
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.modalEmpty}>
+                <FontAwesome6 name="eye-slash" size={40} color="#BDBDBD" />
+                <Text style={styles.modalEmptyText}>暂无虹膜分析数据</Text>
+                <Text style={styles.modalEmptyHint}>请先在设置中开启虹膜识别</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -334,5 +432,73 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 11,
     color: '#5D4037',
+  },
+  irisBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  irisBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#FFF8F0',
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#5D4037',
+    marginBottom: 16,
+  },
+  irisStat: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0E6D3',
+  },
+  irisStatLabel: {
+    fontSize: 14,
+    color: '#8D6E63',
+  },
+  irisStatValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5D4037',
+  },
+  irisEmpty: {
+    paddingVertical: 30,
+    alignItems: 'center',
+  },
+  irisEmptyText: {
+    fontSize: 14,
+    color: '#8D6E63',
+  },
+  modalCloseBtn: {
+    marginTop: 16,
+    backgroundColor: '#5D4037',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
