@@ -212,22 +212,38 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
 
   // 开始监测
   const startMonitoring = useCallback(async () => {
-    if (!enabled || !irisEnabled) return;
+    console.log('[Iris] startMonitoring called, enabled:', enabled, 'irisEnabled:', irisEnabled);
+    if (!enabled || !irisEnabled) {
+      console.log('[Iris] 条件不满足，跳过');
+      return;
+    }
 
     // 动态加载 face-api.js
+    console.log('[Iris] 加载 face-api.js...');
     const faceapiLoaded = await loadFaceApi();
     if (!faceapiLoaded) {
       console.warn('[Iris] face-api.js 不可用，跳过监测');
       return;
     }
+    console.log('[Iris] face-api.js 加载成功');
 
     // 加载模型
+    console.log('[Iris] 加载模型...');
     const modelsReady = await loadModels();
-    if (!modelsReady) return;
+    if (!modelsReady) {
+      console.warn('[Iris] 模型加载失败');
+      return;
+    }
+    console.log('[Iris] 模型加载成功');
 
     // 初始化摄像头
+    console.log('[Iris] 初始化摄像头...');
     const cameraReady = await initCamera();
-    if (!cameraReady) return;
+    if (!cameraReady) {
+      console.warn('[Iris] 摄像头初始化失败');
+      return;
+    }
+    console.log('[Iris] 摄像头初始化成功');
 
     setIsMonitoring(true);
 

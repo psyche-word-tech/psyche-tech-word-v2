@@ -137,7 +137,7 @@ export default function LearnPage() {
 				stopMonitoring();
 			}
 		};
-	}, [irisEnabled]);
+	}, [irisEnabled, isMonitoring, startMonitoring, stopMonitoring]);
 
 	const categoryColors = ['#4CAF50', '#FF9800', '#F44336'];
 	const categoryNames = ['已会', '模糊', '不会'];
