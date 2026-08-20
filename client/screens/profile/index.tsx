@@ -4,6 +4,7 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons, FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { getApiBaseUrl } from '@/utils/apiConfig';
+import { fetchWithRetry } from '@/utils/apiClient';
 import { useState } from 'react';
 
 export default function ProfileScreen() {
@@ -69,9 +70,8 @@ export default function ProfileScreen() {
 
   const checkIrisStatus = async () => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/iris/status`, {
+      const response = await fetchWithRetry(`${getApiBaseUrl()}/api/iris/status`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
       });
       const data = await response.json();
       if (data.success) {
@@ -89,9 +89,8 @@ export default function ProfileScreen() {
 
   const handleEnableIris = async () => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/iris/enable`, {
+      const response = await fetchWithRetry(`${getApiBaseUrl()}/api/iris/enable`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: true }),
       });
       const data = await response.json();
@@ -110,9 +109,8 @@ export default function ProfileScreen() {
 
   const loadIrisData = async () => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/iris/iris-data`, {
+      const response = await fetchWithRetry(`${getApiBaseUrl()}/api/iris/iris-data`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
       });
       const data = await response.json();
       if (data.success && data.data && data.data.length > 0) {
