@@ -1,11 +1,13 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
+import type { Request, Response } from 'express';
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { AuthRequest } from '../middleware/auth';
+import { authMiddleware } from '../middleware/auth';
+import type { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // 获取虹膜识别状态
-router.get('/status', async (req: AuthRequest, res: Response) => {
+router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
 
@@ -33,7 +35,7 @@ router.get('/status', async (req: AuthRequest, res: Response) => {
 });
 
 // 开通/关闭虹膜识别
-router.post('/enable', async (req: AuthRequest, res: Response) => {
+router.post('/enable', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     const { enabled } = req.body;
@@ -63,7 +65,7 @@ router.post('/enable', async (req: AuthRequest, res: Response) => {
 });
 
 // 保存虹膜识别数据
-router.post('/iris-data', async (req: AuthRequest, res: Response) => {
+router.post('/iris-data', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { sessionId, emotion, focusScore, gazeDirection, difficultyReaction } = req.body;
     const userId = req.userId;
@@ -103,7 +105,7 @@ router.post('/iris-data', async (req: AuthRequest, res: Response) => {
 });
 
 // 获取用户的虹膜识别数据
-router.get('/iris-data', async (req: AuthRequest, res: Response) => {
+router.get('/iris-data', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
     const { sessionId, limit = 100 } = req.query;
@@ -139,7 +141,7 @@ router.get('/iris-data', async (req: AuthRequest, res: Response) => {
 });
 
 // 获取专注度统计
-router.get('/iris-stats', async (req: AuthRequest, res: Response) => {
+router.get('/iris-stats', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
 
