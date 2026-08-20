@@ -85,11 +85,11 @@ router.post('/enable', authMiddleware, async (req: AuthRequest, res: Response) =
       return res.status(500).json({ success: false, error: '获取用户信息失败' });
     }
 
-    // 用 users 表的 phone 更新 user_profiles 表（通过 phone 关联）
+    // 用 users 表的 id 更新 user_profiles 表（通过 user_id 关联）
     const { data, error } = await client
       .from('user_profiles')
       .update({ iris_enabled: enabled })
-      .eq('phone', userData.phone)
+      .eq('user_id', userData.id)
       .select()
       .single();
 

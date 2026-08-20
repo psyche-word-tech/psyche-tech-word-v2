@@ -174,10 +174,12 @@ router.post('/register', async (req, res) => {
 
         // 更新或创建用户资料（角色）
         const userRole = role === 'teacher' ? 'teacher' : 'student';
+        const profileId = require('crypto').randomUUID();
         await client.from('user_profiles').upsert({
-          id: userData[0].id,
+          id: profileId,
+          user_id: userData[0].id,
           role: userRole,
-        }, { onConflict: 'id' });
+        }, { onConflict: 'user_id' });
 
         res.json({ 
           success: true, 
@@ -203,8 +205,10 @@ router.post('/register', async (req, res) => {
 
     // 创建用户资料记录（包含角色）
     const userRole = role === 'teacher' ? 'teacher' : 'student';
+    const profileId = require('crypto').randomUUID();
     await client.from('user_profiles').insert({
-      id: newUser[0].id,
+      id: profileId,
+      user_id: newUser[0].id,
       role: userRole,
     });
 
