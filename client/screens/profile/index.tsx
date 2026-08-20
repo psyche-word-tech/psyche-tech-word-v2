@@ -625,7 +625,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   modalOverlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -635,7 +639,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     width: '85%',
-    maxHeight: '70%',
+    maxHeight: 400,
   },
   modalHeader: {
     flexDirection: 'row',
