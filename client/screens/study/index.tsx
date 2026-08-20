@@ -50,6 +50,13 @@ export default function StudyScreen() {
     ? irisData.reduce((sum, item) => sum + (item.focus_score || 0), 0) / irisData.length * 100
     : 0;
 
+  // 计算情绪分布
+  const emotionDistribution = irisData.reduce((acc, item) => {
+    const emotion = item.emotion || 'neutral';
+    acc[emotion] = (acc[emotion] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   const handleLoadIrisData = async () => {
     setLoadingIris(true);
     try {
