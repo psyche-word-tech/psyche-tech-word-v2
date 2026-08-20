@@ -6,20 +6,25 @@
 export function authMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.log('[Auth] Missing token, authHeader:', authHeader);
         return res.status(401).json({ error: 'Unauthorized: missing token' });
     }
     const token = authHeader.slice(7);
+    console.log('[Auth] Token received:', token);
     try {
         const decoded = Buffer.from(token, 'base64').toString('utf-8');
+        console.log('[Auth] Decoded token:', decoded);
         const [userIdStr] = decoded.split(':');
         const userId = parseInt(userIdStr, 10);
+        console.log('[Auth] Parsed userId:', userId);
         if (!userId || isNaN(userId)) {
             return res.status(401).json({ error: 'Unauthorized: invalid token' });
         }
         req.userId = userId;
         next();
     }
-    catch {
+    catch (err) {
+        console.log('[Auth] Token decode error:', err);
         return res.status(401).json({ error: 'Unauthorized: invalid token' });
     }
 }
