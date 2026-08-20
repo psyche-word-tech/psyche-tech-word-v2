@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import * as faceapi from 'face-api.js';
 import { fetchWithRetry } from '@/utils/apiClient';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 
@@ -13,13 +14,32 @@ interface UseIrisRecognitionOptions {
   intervalMs?: number;
 }
 
+const MODEL_URL = '/models';
+
 export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecognitionOptions) {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [irisEnabled, setIrisEnabled] = useState(false);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [latestData, setLatestData] = useState<IrisData | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // 加载 Face-API.js 模型
+  const loadModels = useCallback(async () => {
+    if (modelsLoaded) return true;
+    try {
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+      setModelsLoaded(true);
+      console.log('[Iris] 模型加载成功');
+      return true;
+    } catch (error) {
+      console.error('[Iris] 模型加载失败:', error);
+      return false;
+    }
+  }, [modelsLoaded]);
 
   // 检查虹膜识别是否已开通
   const checkIrisStatus = useCallback(async () => {
@@ -45,22 +65,31 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 320, height: 240, facingMode: 'user' }
       });
-      
+
       if (!videoRef.current) {
         videoRef.current = document.createElement('video');
         videoRef.current.style.display = 'none';
         document.body.appendChild(videoRef.current);
       }
-      
+
       videoRef.current.srcObject = stream;
       videoRef.current.autoplay = true;
-      
+      videoRef.current.playsInline = true;
+
+      // 等待视频流准备好
+      await new Promise<void>((resolve) => {
+        videoRef.current!.onloadedmetadata = () => {
+          videoRef.current!.play();
+          resolve();
+        };
+      });
+
       if (!canvasRef.current) {
         canvasRef.current = document.createElement('canvas');
         canvasRef.current.width = 320;
         canvasRef.current.height = 240;
       }
-      
+
       return true;
     } catch (error) {
       console.error('[Iris] 初始化摄像头失败:', error);
@@ -81,18 +110,68 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
     }
   }, []);
 
-  // 分析面部（模拟数据，实际应使用 Face-API.js）
-  const analyzeFace = useCallback((): IrisData => {
-    // 模拟分析结果
-    // 实际实现需要加载 Face-API.js 模型并分析视频帧
-    const emotions = ['happy', 'neutral', 'focused', 'confused', 'tired'];
-    const gazeDirections = ['center', 'left', 'right', 'up', 'down'];
-    
-    return {
-      focusScore: Math.random() * 0.4 + 0.6, // 0.6 - 1.0
-      emotion: emotions[Math.floor(Math.random() * emotions.length)],
-      gazeDirection: gazeDirections[Math.floor(Math.random() * gazeDirections.length)],
-    };
+  // 使用 Face-API.js 分析面部
+  const analyzeFace = useCallback(async (): Promise<IrisData | null> => {
+    if (!videoRef.current || !canvasRef.current) return null;
+
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      // 将视频帧绘制到 canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // 检测面部、特征点和表情
+      const detection = await faceapi
+        .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceExpressions();
+
+      if (!detection) {
+        // 未检测到面部
+        return {
+          focusScore: 0,
+          emotion: 'no_face',
+          gazeDirection: 'unknown',
+        };
+      }
+
+      // 计算专注度（基于面部是否在画面中心）
+      const box = detection.detection.box;
+      const centerX = box.x + box.width / 2;
+      const centerY = box.y + box.height / 2;
+      const canvasCenterX = canvas.width / 2;
+      const canvasCenterY = canvas.height / 2;
+
+      const offsetX = Math.abs(centerX - canvasCenterX) / canvasCenterX;
+      const offsetY = Math.abs(centerY - canvasCenterY) / canvasCenterY;
+      const focusScore = Math.max(0, 1 - (offsetX + offsetY) / 2);
+
+      // 获取主要情绪
+      const expressions = detection.expressions;
+      const emotionEntries = Object.entries(expressions) as [string, number][];
+      emotionEntries.sort((a, b) => b[1] - a[1]);
+      const mainEmotion = emotionEntries[0]?.[0] || 'neutral';
+
+      // 估算视线方向（基于面部位置）
+      let gazeDirection = 'center';
+      if (offsetX > 0.3) {
+        gazeDirection = centerX < canvasCenterX ? 'left' : 'right';
+      } else if (offsetY > 0.3) {
+        gazeDirection = centerY < canvasCenterY ? 'up' : 'down';
+      }
+
+      return {
+        focusScore: Math.round(focusScore * 100) / 100,
+        emotion: mainEmotion,
+        gazeDirection,
+      };
+    } catch (error) {
+      console.error('[Iris] 面部分析失败:', error);
+      return null;
+    }
   }, []);
 
   // 发送虹膜数据到服务器
@@ -116,22 +195,31 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
   // 开始监测
   const startMonitoring = useCallback(async () => {
     if (!enabled || !irisEnabled) return;
-    
+
+    // 加载模型
+    const modelsReady = await loadModels();
+    if (!modelsReady) return;
+
+    // 初始化摄像头
     const cameraReady = await initCamera();
     if (!cameraReady) return;
-    
+
     setIsMonitoring(true);
-    
+
     // 立即采集一次
-    const data = analyzeFace();
-    await sendIrisData(data);
-    
+    const data = await analyzeFace();
+    if (data) {
+      await sendIrisData(data);
+    }
+
     // 设置定时器
     intervalRef.current = setInterval(async () => {
-      const data = analyzeFace();
-      await sendIrisData(data);
+      const data = await analyzeFace();
+      if (data) {
+        await sendIrisData(data);
+      }
     }, intervalMs);
-  }, [enabled, irisEnabled, initCamera, analyzeFace, sendIrisData, intervalMs]);
+  }, [enabled, irisEnabled, loadModels, initCamera, analyzeFace, sendIrisData, intervalMs]);
 
   // 停止监测
   const stopMonitoring = useCallback(() => {
@@ -158,6 +246,7 @@ export function useIrisRecognition({ enabled, intervalMs = 30000 }: UseIrisRecog
   return {
     irisEnabled,
     isMonitoring,
+    modelsLoaded,
     latestData,
     startMonitoring,
     stopMonitoring,
