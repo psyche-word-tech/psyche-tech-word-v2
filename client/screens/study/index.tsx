@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal, Platform, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
