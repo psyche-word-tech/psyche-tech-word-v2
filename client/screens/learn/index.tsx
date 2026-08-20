@@ -7,6 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { fetchWithRetry } from '@/utils/apiClient';
 import { API_BASE_URL } from '@/utils/apiConfig';
+import { useIrisRecognition } from '@/hooks/useIrisRecognition';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -116,6 +117,24 @@ export default function LearnPage() {
 	const [allWords, setAllWords] = useState<Word[]>([]);
 	const [categoryCounts, setCategoryCounts] = useState({ x: 0, y: 0, z: 0 });
 	const [error, setError] = useState<string | null>(null);
+	
+	// 虹膜识别
+	const { irisEnabled, isMonitoring, latestData, startMonitoring, stopMonitoring } = useIrisRecognition({
+		enabled: true,
+		intervalMs: 30000,
+	});
+	
+	// 页面加载时启动虹膜识别监测
+	useEffect(() => {
+		if (irisEnabled && !isMonitoring) {
+			startMonitoring();
+		}
+		return () => {
+			if (isMonitoring) {
+				stopMonitoring();
+			}
+		};
+	}, [irisEnabled]);
 
 	const categoryColors = ['#4CAF50', '#FF9800', '#F44336'];
 	const categoryNames = ['已会', '模糊', '不会'];
@@ -243,10 +262,20 @@ export default function LearnPage() {
 					<TouchableOpacity onPress={() => router.back()}>
 						<Text style={styles.backText}>back</Text>
 					</TouchableOpacity>
-					<Text style={styles.title}>词汇预览</Text>
+					<View style={styles.headerCenter}>
+						<Text style={styles.title}>词汇预览</Text>
+						{irisEnabled && (
+							<View style={styles.irisIndicator}>
+								<View style={[styles.irisDot, isMonitoring && styles.irisDotActive]} />
+								<Text style={styles.irisText}>
+									{isMonitoring ? '监测中' : '已开通'}
+								</Text>
+							</View>
+						)}
+					</View>
 					<TouchableOpacity onPress={() => router.push('/calendar')}>
-							<FontAwesome6 name="calendar-days" size={22} color="#333333" />
-						</TouchableOpacity>
+						<FontAwesome6 name="calendar-days" size={22} color="#333333" />
+					</TouchableOpacity>
 				</View>
 
 				<View style={styles.centerContainer}>
@@ -320,6 +349,9 @@ const styles = StyleSheet.create({
 		padding: 20,
 		backgroundColor: '#E5E5E5',
 	},
+	headerCenter: {
+		alignItems: 'center',
+	},
 	backText: {
 		fontSize: 14,
 		color: '#000000',
@@ -328,6 +360,25 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		color: '#333333',
 		fontWeight: '600',
+	},
+	irisIndicator: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginTop: 4,
+	},
+	irisDot: {
+		width: 6,
+		height: 6,
+		borderRadius: 3,
+		backgroundColor: '#999',
+		marginRight: 4,
+	},
+	irisDotActive: {
+		backgroundColor: '#4CAF50',
+	},
+	irisText: {
+		fontSize: 10,
+		color: '#666',
 	},
 	placeholder: {
 		width: 50,
