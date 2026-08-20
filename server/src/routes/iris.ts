@@ -19,7 +19,7 @@ router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) =>
     const { data, error } = await client
       .from('user_profiles')
       .select('iris_enabled')
-      .eq('user_id', userId)
+      .eq('id', userId)
       .single();
 
     if (error) {
@@ -48,7 +48,7 @@ router.post('/enable', authMiddleware, async (req: AuthRequest, res: Response) =
     const { data, error } = await client
       .from('user_profiles')
       .update({ iris_enabled: enabled })
-      .eq('user_id', userId)
+      .eq('id', userId)
       .select()
       .single();
 
