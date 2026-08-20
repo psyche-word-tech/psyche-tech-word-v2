@@ -5,11 +5,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons, FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 import { fetchWithRetry } from '@/utils/apiClient';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function ProfileScreen() {
   const router = useSafeRouter();
   const { user, logout } = useAuth();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // 检查登录状态
+  useEffect(() => {
+    if (!user) {
+      router.replace('/login');
+    } else {
+      setIsCheckingAuth(false);
+    }
+  }, [user]);
 
   const roleLabel = user?.role === 'teacher' ? '教师' : '学生';
 
@@ -89,11 +99,15 @@ export default function ProfileScreen() {
 
   const handleEnableIris = async () => {
     try {
+      console.log('[Iris] 用户数据:', user);
+      console.log('[Iris] 用户 token:', user?.token);
       const response = await fetchWithRetry(`${getApiBaseUrl()}/api/iris/enable`, {
         method: 'POST',
         body: JSON.stringify({ enabled: true }),
       });
+      console.log('[Iris] 响应状态:', response.status);
       const data = await response.json();
+      console.log('[Iris] 响应数据:', data);
       if (data.success) {
         setIrisEnabled(true);
         setShowIrisEnableModal(false);
@@ -198,6 +212,22 @@ export default function ProfileScreen() {
     }
     return <Ionicons {...iconProps} />;
   };
+
+  // 检查登录状态时显示加载界面
+  if (isCheckingAuth) {
+    return (
+      <Screen style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, color: '#666' }}>加载中...</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  // 未登录时不渲染内容（会在 useEffect 中跳转）
+  if (!user) {
+    return null;
+  }
 
   return (
     <Screen style={styles.container}>
