@@ -57,6 +57,13 @@ export default function StudyScreen() {
     return acc;
   }, {} as Record<string, number>);
 
+  // 计算视线分布
+  const gazeDistribution = irisData.reduce((acc, item) => {
+    const gaze = item.gaze_direction || 'center';
+    acc[gaze] = (acc[gaze] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   const handleLoadIrisData = async () => {
     setLoadingIris(true);
     try {
