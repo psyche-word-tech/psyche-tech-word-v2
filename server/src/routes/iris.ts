@@ -118,11 +118,17 @@ router.post('/iris-data', authMiddleware, async (req: AuthRequest, res: Response
     }
 
     const client = getSupabaseClient();
+    
+    // 生成有效的 UUID 作为 session_id
+    const validSessionId = sessionId && sessionId.length === 36 
+      ? sessionId 
+      : require('crypto').randomUUID();
+    
     const { data, error } = await client
       .from('iris_recognition_data')
       .insert({
         user_id: userId,
-        session_id: sessionId || `session_${Date.now()}`,
+        session_id: validSessionId,
         emotion: emotion || 'neutral',
         focus_score: focus_score || 0,
         gaze_direction: gaze_direction || 'center',
