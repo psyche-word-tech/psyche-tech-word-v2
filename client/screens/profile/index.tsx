@@ -193,7 +193,7 @@ export default function ProfileScreen() {
       icon: 'trophy',
       iconType: 'fontawesome',
       color: '#FAAD14',
-      route: '/study',
+      route: '/achievements',
     },
   ];
 

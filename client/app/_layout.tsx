@@ -58,11 +58,14 @@ export default function RootLayout() {
           <Stack.Screen name="submit-homework" options={{ title: "" }} />
           <Stack.Screen name="teacher-review" options={{ title: "" }} />
           <Stack.Screen name="review-detail" options={{ title: "" }} />
+          <Stack.Screen name="vocabulary-books" options={{ title: "" }} />
+          <Stack.Screen name="word-book" options={{ title: "" }} />
           <Stack.Screen name="progress" options={{ title: "" }} />
           <Stack.Screen name="achievements" options={{ title: "" }} />
           <Stack.Screen name="account-settings" options={{ title: "" }} />
-          <Stack.Screen name="reminders" options={{ title: "" }} />
-          <Stack.Screen name="privacy" options={{ title: "" }} />
+          <Stack.Screen name="reminder" options={{ title: "" }} />
+          <Stack.Screen name="display-settings" options={{ title: "" }} />
+          <Stack.Screen name="privacy-settings" options={{ title: "" }} />
           <Stack.Screen name="about" options={{ title: "" }} />
           <Stack.Screen name="splash-preview" options={{ title: "" }} />
         </Stack>
