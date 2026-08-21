@@ -157,8 +157,12 @@ app.use('/api/v1/favorites', favoritesRouter);
 app.use('/api/submissions', submissionsRouter);
 app.use('/api/iris', irisRouter);
 
-// SPA fallback: serve index.html for non-API routes
+// SPA fallback: serve index.html for non-API routes (exclude /models/)
 app.get('*', (req, res) => {
+  // Don't intercept /models/ requests - let static middleware handle them
+  if (req.path.startsWith('/models/')) {
+    return res.status(404).send('Not found');
+  }
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
