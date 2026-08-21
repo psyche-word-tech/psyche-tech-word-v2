@@ -310,7 +310,7 @@ export default function StudyScreen() {
               activeOpacity={0.7}
               onPress={() => {
                 handleLoadIrisData();
-                setShowIrisAnalysis(true);
+                setShowHistory(true);
               }}
             >
               <Ionicons name="time-outline" size={22} color="#FFFFFF" />
