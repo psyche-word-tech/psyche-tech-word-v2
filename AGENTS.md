@@ -356,6 +356,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 5. **图片加载慢**：压缩 `rock.jpg` 11MB→48KB，`purchase-books.webp` 968KB→28KB
 6. **图片裁剪**：`resizeMode="contain"` 替代 `"cover"`
 7. **ESM 非法 require**：`require('fs')` → `fs.existsSync`（已导入）
+8. **模型文件丢失**：构建脚本会备份/恢复 `server/public/models/`，模型源文件存放在 `server/models/`
+9. **模型文件返回 HTML**：Express 添加 `/models` 路由早期返回，避免 SPA fallback 拦截
 
 ## 新增功能：教师批改系统
 

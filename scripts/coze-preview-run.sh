@@ -22,8 +22,27 @@ cd "$PROJECT_DIR"
 
 # ==================== 复制前端到 server/public ====================
 echo "[2/4] 复制前端文件到 server/public..."
+# 先备份模型文件（如果存在）
+if [ -d "server/public/models" ]; then
+    echo "  备份模型文件..."
+    rm -rf /tmp/face-models-backup
+    cp -r server/public/models /tmp/face-models-backup
+fi
+
 rm -rf server/public
 cp -r client/dist server/public
+
+# 恢复模型文件
+if [ -d "/tmp/face-models-backup" ]; then
+    echo "  恢复模型文件..."
+    cp -r /tmp/face-models-backup server/public/models
+fi
+
+# 如果模型文件不存在，从备用位置复制
+if [ ! -d "server/public/models" ] && [ -d "server/models" ]; then
+    echo "  从 server/models 复制模型文件..."
+    cp -r server/models server/public/models
+fi
 
 # ==================== 启动后端服务 ====================
 echo "[3/4] 启动后端服务 (端口 5000)..."
