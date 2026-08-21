@@ -22,6 +22,7 @@ import favoritesRouter from "./routes/favorites";
 import submissionsRouter from "./routes/submissions";
 import irisRouter from "./routes/iris";
 import accountRouter from "./routes/account";
+import settingsRouter from "./routes/settings";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -162,6 +163,7 @@ app.use('/api/v1/favorites', favoritesRouter);
 app.use('/api/v1/submissions', submissionsRouter);
 app.use('/api/v1/iris', irisRouter);
 app.use('/api/v1/user', accountRouter);
+app.use('/api/v1/settings', settingsRouter);
 app.use('/api/submissions', submissionsRouter);
 app.use('/api/iris', irisRouter);
 
