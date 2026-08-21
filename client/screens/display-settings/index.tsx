@@ -1,173 +1,257 @@
-import { View, Text, ScrollView, TouchableOpacity, Switch, Slider } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Screen } from '@/components/Screen';
-import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { Header } from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 
 export default function DisplaySettingsScreen() {
-  const router = useSafeRouter();
-  const [fontSize, setFontSize] = useState(16);
-  const [darkMode, setDarkMode] = useState(false);
+  const [fontSize, setFontSize] = useState('medium');
+  const [theme, setTheme] = useState('system');
   const [autoPlayAudio, setAutoPlayAudio] = useState(true);
-  const [showTranslation, setShowTranslation] = useState(true);
   const [showPhonetic, setShowPhonetic] = useState(true);
   const [showExample, setShowExample] = useState(true);
 
   const fontSizes = [
-    { label: '小', value: 14 },
-    { label: '标准', value: 16 },
-    { label: '大', value: 18 },
-    { label: '超大', value: 20 },
+    { label: '小', value: 'small', size: 14 },
+    { label: '中', value: 'medium', size: 16 },
+    { label: '大', value: 'large', size: 18 },
+    { label: '超大', value: 'xlarge', size: 20 },
+  ];
+
+  const themes = [
+    { label: '跟随系统', value: 'system', icon: 'phone-portrait' },
+    { label: '浅色模式', value: 'light', icon: 'sunny' },
+    { label: '深色模式', value: 'dark', icon: 'moon' },
   ];
 
   return (
-    <Screen title="显示设置">
+    <Screen>
+      <Header title="显示设置" />
       <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ padding: 16 }}>
         {/* 字体大小 */}
-        <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">字体大小</Text>
-          
-          <View className="flex-row justify-between mb-4">
-            {fontSizes.map((size) => (
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937', marginBottom: 16 }}>
+            字体大小
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {fontSizes.map((item) => (
               <TouchableOpacity
-                key={size.value}
-                className={`flex-1 items-center py-3 rounded-xl mx-1 ${
-                  fontSize === size.value ? 'bg-blue-500' : 'bg-gray-100'
-                }`}
-                onPress={() => setFontSize(size.value)}
+                key={item.value}
+                onPress={() => setFontSize(item.value)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  backgroundColor: fontSize === item.value ? '#3b82f6' : '#f3f4f6',
+                  alignItems: 'center',
+                }}
               >
-                <Text className={`font-medium ${
-                  fontSize === size.value ? 'text-white' : 'text-gray-700'
-                }`}>
-                  {size.label}
-                </Text>
-                <Text className={`text-xs mt-1 ${
-                  fontSize === size.value ? 'text-white/80' : 'text-gray-500'
-                }`}>
-                  {size.value}
+                <Text
+                  style={{
+                    fontSize: item.size,
+                    color: fontSize === item.value ? '#fff' : '#4b5563',
+                    fontWeight: fontSize === item.value ? '600' : '400',
+                  }}
+                >
+                  {item.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+        </View>
 
-          {/* 预览 */}
-          <View className="bg-gray-50 rounded-xl p-4">
-            <Text className="text-gray-900" style={{ fontSize }}>
-              这是字体大小预览文本。English Word Preview.
-            </Text>
+        {/* 主题模式 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937', marginBottom: 16 }}>
+            主题模式
+          </Text>
+          <View style={{ gap: 8 }}>
+            {themes.map((item) => (
+              <TouchableOpacity
+                key={item.value}
+                onPress={() => setTheme(item.value)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 12,
+                  borderRadius: 8,
+                  backgroundColor: theme === item.value ? '#eff6ff' : '#f9fafb',
+                  borderWidth: theme === item.value ? 2 : 1,
+                  borderColor: theme === item.value ? '#3b82f6' : '#e5e7eb',
+                }}
+              >
+                <Ionicons
+                  name={item.icon as any}
+                  size={20}
+                  color={theme === item.value ? '#3b82f6' : '#6b7280'}
+                  style={{ marginRight: 12 }}
+                />
+                <Text
+                  style={{
+                    fontSize: 15,
+                    color: theme === item.value ? '#3b82f6' : '#4b5563',
+                    fontWeight: theme === item.value ? '600' : '400',
+                  }}
+                >
+                  {item.label}
+                </Text>
+                {theme === item.value && (
+                  <Ionicons
+                    name="checkmark"
+                    size={20}
+                    color="#3b82f6"
+                    style={{ marginLeft: 'auto' }}
+                  />
+                )}
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
-        {/* 主题设置 */}
-        <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">主题设置</Text>
-          
-          <View className="flex-row items-center justify-between py-3 border-b border-gray-100">
-            <View className="flex-row items-center">
-              <Ionicons name="moon" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">深色模式</Text>
+        {/* 显示选项 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            overflow: 'hidden',
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => setAutoPlayAudio(!autoPlayAudio)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: '#f3f4f6',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="volume-high" size={20} color="#6b7280" style={{ marginRight: 12 }} />
+              <Text style={{ fontSize: 15, color: '#1f2937' }}>自动播放发音</Text>
             </View>
-            <Switch
-              value={darkMode}
-              onValueChange={setDarkMode}
-              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-              thumbColor={darkMode ? '#3b82f6' : '#f4f3f4'}
-            />
-          </View>
-
-          <View className="flex-row items-center justify-between py-3">
-            <View className="flex-row items-center">
-              <Ionicons name="color-palette" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">跟随系统</Text>
-            </View>
-            <Switch
-              value={true}
-              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-              thumbColor={'#3b82f6'}
-            />
-          </View>
-        </View>
-
-        {/* 学习内容显示 */}
-        <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">学习内容显示</Text>
-          
-          <View className="flex-row items-center justify-between py-3 border-b border-gray-100">
-            <View className="flex-row items-center">
-              <Ionicons name="volume-high" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">自动播放发音</Text>
-            </View>
-            <Switch
-              value={autoPlayAudio}
-              onValueChange={setAutoPlayAudio}
-              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-              thumbColor={autoPlayAudio ? '#3b82f6' : '#f4f3f4'}
-            />
-          </View>
-
-          <View className="flex-row items-center justify-between py-3 border-b border-gray-100">
-            <View className="flex-row items-center">
-              <Ionicons name="translate" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">显示中文释义</Text>
-            </View>
-            <Switch
-              value={showTranslation}
-              onValueChange={setShowTranslation}
-              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-              thumbColor={showTranslation ? '#3b82f6' : '#f4f3f4'}
-            />
-          </View>
-
-          <View className="flex-row items-center justify-between py-3 border-b border-gray-100">
-            <View className="flex-row items-center">
-              <Ionicons name="text" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">显示音标</Text>
-            </View>
-            <Switch
-              value={showPhonetic}
-              onValueChange={setShowPhonetic}
-              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-              thumbColor={showPhonetic ? '#3b82f6' : '#f4f3f4'}
-            />
-          </View>
-
-          <View className="flex-row items-center justify-between py-3">
-            <View className="flex-row items-center">
-              <Ionicons name="list" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">显示例句</Text>
-            </View>
-            <Switch
-              value={showExample}
-              onValueChange={setShowExample}
-              trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-              thumbColor={showExample ? '#3b82f6' : '#f4f3f4'}
-            />
-          </View>
-        </View>
-
-        {/* 其他设置 */}
-        <View className="bg-white rounded-2xl p-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">其他设置</Text>
-          
-          <TouchableOpacity className="flex-row items-center justify-between py-3 border-b border-gray-100">
-            <View className="flex-row items-center">
-              <Ionicons name="refresh" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">每日新词数量</Text>
-            </View>
-            <View className="flex-row items-center">
-              <Text className="text-gray-500 mr-2">20 个</Text>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            <View
+              style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: autoPlayAudio ? '#3b82f6' : '#e5e7eb',
+                justifyContent: 'center',
+                paddingHorizontal: 2,
+              }}
+            >
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  backgroundColor: '#fff',
+                  marginLeft: autoPlayAudio ? 20 : 0,
+                }}
+              />
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity className="flex-row items-center justify-between py-3">
-            <View className="flex-row items-center">
-              <Ionicons name="repeat" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">每日复习数量</Text>
+          <TouchableOpacity
+            onPress={() => setShowPhonetic(!showPhonetic)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: '#f3f4f6',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="text" size={20} color="#6b7280" style={{ marginRight: 12 }} />
+              <Text style={{ fontSize: 15, color: '#1f2937' }}>显示音标</Text>
             </View>
-            <View className="flex-row items-center">
-              <Text className="text-gray-500 mr-2">100 个</Text>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            <View
+              style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: showPhonetic ? '#3b82f6' : '#e5e7eb',
+                justifyContent: 'center',
+                paddingHorizontal: 2,
+              }}
+            >
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  backgroundColor: '#fff',
+                  marginLeft: showPhonetic ? 20 : 0,
+                }}
+              />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setShowExample(!showExample)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: 16,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="list" size={20} color="#6b7280" style={{ marginRight: 12 }} />
+              <Text style={{ fontSize: 15, color: '#1f2937' }}>显示例句</Text>
+            </View>
+            <View
+              style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: showExample ? '#3b82f6' : '#e5e7eb',
+                justifyContent: 'center',
+                paddingHorizontal: 2,
+              }}
+            >
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  backgroundColor: '#fff',
+                  marginLeft: showExample ? 20 : 0,
+                }}
+              />
             </View>
           </TouchableOpacity>
         </View>

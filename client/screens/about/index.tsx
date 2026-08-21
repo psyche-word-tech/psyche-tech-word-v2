@@ -1,138 +1,165 @@
 import { View, Text, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { Screen } from '@/components/Screen';
-import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { Header } from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function AboutScreen() {
-  const router = useSafeRouter();
+  const appVersion = '1.0.0';
 
-  const handleCheckUpdate = () => {
-    alert('当前已是最新版本');
-  };
-
-  const handleOpenWebsite = () => {
-    Linking.openURL('https://www.example.com');
-  };
-
-  const handleContactUs = () => {
-    Linking.openURL('mailto:support@example.com');
-  };
-
-  const handleFeedback = () => {
-    alert('反馈功能开发中');
-  };
+  const menuItems = [
+    {
+      icon: 'document-text',
+      title: '用户协议',
+      onPress: () => Linking.openURL('https://example.com/terms'),
+    },
+    {
+      icon: 'shield-checkmark',
+      title: '隐私政策',
+      onPress: () => Linking.openURL('https://example.com/privacy'),
+    },
+    {
+      icon: 'help-circle',
+      title: '帮助中心',
+      onPress: () => Linking.openURL('https://example.com/help'),
+    },
+    {
+      icon: 'chatbubble-ellipses',
+      title: '意见反馈',
+      onPress: () => Linking.openURL('mailto:feedback@example.com'),
+    },
+    {
+      icon: 'share-social',
+      title: '分享给朋友',
+      onPress: () => {
+        // 在实际应用中，这里会调用分享功能
+        alert('分享功能开发中');
+      },
+    },
+    {
+      icon: 'star',
+      title: '给我们评分',
+      onPress: () => {
+        // 在实际应用中，这里会打开应用商店评分页面
+        alert('评分功能开发中');
+      },
+    },
+  ];
 
   return (
-    <Screen title="关于我们">
+    <Screen>
+      <Header title="关于我们" />
       <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ padding: 16 }}>
-        {/* 应用信息 */}
-        <View className="bg-white rounded-2xl p-6 mb-4 shadow-sm items-center">
-          <View className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl items-center justify-center mb-4">
-            <Text className="text-white text-3xl font-bold">单</Text>
+        {/* App 信息 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 24,
+            alignItems: 'center',
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <View
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 20,
+              backgroundColor: '#3b82f6',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+            }}
+          >
+            <Ionicons name="book" size={40} color="#fff" />
           </View>
-          <Text className="text-xl font-bold text-gray-900">单词学习</Text>
-          <Text className="text-gray-500 mt-2">版本 1.0.0</Text>
-          <Text className="text-gray-400 text-sm mt-1">让学习更简单</Text>
-        </View>
-
-        {/* 应用介绍 */}
-        <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-3">应用介绍</Text>
-          <Text className="text-gray-600 leading-relaxed">
-            单词学习是一款专业的英语学习应用，采用科学的记忆算法，帮助您高效记忆单词。
-            应用提供丰富的学习模式，包括学习、复习、测试等，让您的学习过程更加有趣和高效。
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#1f2937', marginBottom: 4 }}>
+            单词 Voyage
           </Text>
+          <Text style={{ fontSize: 14, color: '#6b7280' }}>版本 {appVersion}</Text>
         </View>
 
-        {/* 功能列表 */}
-        <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">主要功能</Text>
-          
-          <View className="space-y-3">
-            <View className="flex-row items-center">
-              <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center mr-3">
-                <Ionicons name="book" size={18} color="#3b82f6" />
+        {/* 功能菜单 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            overflow: 'hidden',
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          {menuItems.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              onPress={item.onPress}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: 16,
+                borderBottomWidth: index < menuItems.length - 1 ? 1 : 0,
+                borderBottomColor: '#f3f4f6',
+              }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  backgroundColor: '#f3f4f6',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name={item.icon as any} size={20} color="#4b5563" />
               </View>
-              <Text className="text-gray-700 flex-1">科学记忆算法</Text>
+              <Text style={{ fontSize: 15, color: '#1f2937', flex: 1 }}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* 联系信息 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937', marginBottom: 12 }}>
+            联系我们
+          </Text>
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="mail" size={18} color="#6b7280" style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>support@example.com</Text>
             </View>
-            <View className="flex-row items-center">
-              <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mr-3">
-                <Ionicons name="stats-chart" size={18} color="#10b981" />
-              </View>
-              <Text className="text-gray-700 flex-1">学习进度追踪</Text>
-            </View>
-            <View className="flex-row items-center">
-              <View className="w-8 h-8 bg-purple-100 rounded-full items-center justify-center mr-3">
-                <Ionicons name="trophy" size={18} color="#8b5cf6" />
-              </View>
-              <Text className="text-gray-700 flex-1">成就系统</Text>
-            </View>
-            <View className="flex-row items-center">
-              <View className="w-8 h-8 bg-orange-100 rounded-full items-center justify-center mr-3">
-                <Ionicons name="eye" size={18} color="#f97316" />
-              </View>
-              <Text className="text-gray-700 flex-1">虹膜识别监测</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="globe" size={18} color="#6b7280" style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>www.example.com</Text>
             </View>
           </View>
-        </View>
-
-        {/* 其他信息 */}
-        <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">其他信息</Text>
-          
-          <TouchableOpacity 
-            className="flex-row items-center justify-between p-4 bg-gray-50 rounded-xl mb-2"
-            onPress={handleCheckUpdate}
-          >
-            <View className="flex-row items-center">
-              <Ionicons name="refresh" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">检查更新</Text>
-            </View>
-            <View className="flex-row items-center">
-              <Text className="text-gray-500 mr-2">当前已是最新</Text>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            className="flex-row items-center justify-between p-4 bg-gray-50 rounded-xl mb-2"
-            onPress={handleOpenWebsite}
-          >
-            <View className="flex-row items-center">
-              <Ionicons name="globe" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">官方网站</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            className="flex-row items-center justify-between p-4 bg-gray-50 rounded-xl mb-2"
-            onPress={handleContactUs}
-          >
-            <View className="flex-row items-center">
-              <Ionicons name="mail" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">联系我们</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            className="flex-row items-center justify-between p-4 bg-gray-50 rounded-xl"
-            onPress={handleFeedback}
-          >
-            <View className="flex-row items-center">
-              <Ionicons name="chatbubble" size={24} color="#6b7280" />
-              <Text className="text-gray-700 ml-3">意见反馈</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
         </View>
 
         {/* 版权信息 */}
-        <View className="items-center py-4">
-          <Text className="text-gray-400 text-sm">© 2024 单词学习</Text>
-          <Text className="text-gray-400 text-sm mt-1">保留所有权利</Text>
-        </View>
+        <Text style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', marginTop: 24 }}>
+          © 2024 单词 Voyage. All rights reserved.
+        </Text>
       </ScrollView>
     </Screen>
   );

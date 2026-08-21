@@ -1,5 +1,6 @@
-import { View, Text, ScrollView, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/Header';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
@@ -9,14 +10,13 @@ import { useAuth } from '@/contexts/AuthContext';
 interface VocabularyBook {
   id: string;
   name: string;
-  description: string;
+  cover?: string;
   wordCount: number;
   learnedCount: number;
-  cover: string;
   category: string;
 }
 
-export default function MyVocabularyBooksScreen() {
+export default function VocabularyBooksScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
   const [books, setBooks] = useState<VocabularyBook[]>([]);
@@ -28,14 +28,14 @@ export default function MyVocabularyBooksScreen() {
 
   const loadBooks = async () => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/v1/vocabulary-books`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/wordbooks`, {
         headers: {
           'Authorization': `Bearer ${user?.token}`,
         },
       });
       if (response.ok) {
         const data = await response.json();
-        setBooks(data.data || []);
+        setBooks(data.books || []);
       }
     } catch (error) {
       console.error('加载词汇书失败:', error);
@@ -44,106 +44,104 @@ export default function MyVocabularyBooksScreen() {
     }
   };
 
-  const categories = [
-    { id: 'all', name: '全部', icon: 'grid' },
-    { id: 'cet4', name: '四级', icon: 'book' },
-    { id: 'cet6', name: '六级', icon: 'book' },
-    { id: 'ielts', name: '雅思', icon: 'globe' },
-    { id: 'toefl', name: '托福', icon: 'globe' },
-    { id: 'gre', name: 'GRE', icon: 'school' },
-  ];
-
-  const [selectedCategory, setSelectedCategory] = useState('all');
-
-  const filteredBooks = selectedCategory === 'all' 
-    ? books 
-    : books.filter(book => book.category === selectedCategory);
-
-  const renderBookItem = ({ item }: { item: VocabularyBook }) => {
-    const progress = item.wordCount > 0 ? (item.learnedCount / item.wordCount) * 100 : 0;
-    
+  if (loading) {
     return (
-      <TouchableOpacity 
-        className="bg-white rounded-2xl p-4 mb-3 shadow-sm"
-        onPress={() => router.push({ pathname: '/vocabulary-book-detail', params: { id: item.id } })}
-      >
-        <View className="flex-row">
-          <View className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-xl items-center justify-center mr-4">
-            <Ionicons name="book" size={32} color="white" />
-          </View>
-          
-          <View className="flex-1">
-            <Text className="text-lg font-bold text-gray-900">{item.name}</Text>
-            <Text className="text-gray-500 text-sm mt-1">{item.description}</Text>
-            
-            <View className="flex-row items-center mt-2">
-              <View className="flex-1 h-2 bg-gray-200 rounded-full mr-2">
-                <View 
-                  className="h-full bg-blue-500 rounded-full"
-                  style={{ width: `${progress}%` }}
-                />
-              </View>
-              <Text className="text-sm text-gray-500">
-                {item.learnedCount}/{item.wordCount}
-              </Text>
-            </View>
-          </View>
+      <Screen>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, color: '#666' }}>加载中...</Text>
         </View>
-      </TouchableOpacity>
+      </Screen>
     );
-  };
+  }
 
   return (
-    <Screen title="我的词汇书">
-      <ScrollView className="flex-1 bg-gray-50">
-        {/* 分类筛选 */}
-        <View className="bg-white px-4 py-3 mb-2">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="flex-row">
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category.id}
-                  className={`px-4 py-2 rounded-full mr-2 ${
-                    selectedCategory === category.id 
-                      ? 'bg-blue-500' 
-                      : 'bg-gray-100'
-                  }`}
-                  onPress={() => setSelectedCategory(category.id)}
-                >
-                  <Text className={`font-medium ${
-                    selectedCategory === category.id ? 'text-white' : 'text-gray-700'
-                  }`}>
-                    {category.name}
+    <Screen>
+      <Header title="我的词汇书" />
+      <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ padding: 16 }}>
+        {books.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+            <Ionicons name="book-outline" size={64} color="#ccc" />
+            <Text style={{ fontSize: 16, color: '#999', marginTop: 16 }}>暂无词汇书</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/vocabulary')}
+              style={{
+                marginTop: 24,
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                backgroundColor: '#3b82f6',
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 14 }}>去选购</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ gap: 12 }}>
+            {books.map((book) => (
+              <TouchableOpacity
+                key={book.id}
+                onPress={() => router.push('/word-list', { bookId: book.id })}
+                style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              >
+                {book.cover ? (
+                  <Image
+                    source={{ uri: book.cover }}
+                    style={{ width: 60, height: 80, borderRadius: 8, marginRight: 16 }}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: 60,
+                      height: 80,
+                      borderRadius: 8,
+                      backgroundColor: '#e5e7eb',
+                      marginRight: 16,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="book" size={32} color="#9ca3af" />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#1f2937', marginBottom: 4 }}>
+                    {book.name}
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-
-        {/* 词汇书列表 */}
-        <View className="px-4 py-2">
-          {loading ? (
-            <View className="items-center py-20">
-              <Text className="text-gray-500">加载中...</Text>
-            </View>
-          ) : filteredBooks.length === 0 ? (
-            <View className="items-center py-20">
-              <Ionicons name="book-outline" size={64} color="#d1d5db" />
-              <Text className="text-gray-500 mt-4">暂无词汇书</Text>
-              <TouchableOpacity className="mt-4 bg-blue-500 px-6 py-3 rounded-full">
-                <Text className="text-white font-medium">去添加</Text>
+                  <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
+                    {book.category}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flex: 1, height: 6, backgroundColor: '#e5e7eb', borderRadius: 3 }}>
+                      <View
+                        style={{
+                          width: `${(book.learnedCount / book.wordCount) * 100}%`,
+                          height: '100%',
+                          backgroundColor: '#3b82f6',
+                          borderRadius: 3,
+                        }}
+                      />
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                      {book.learnedCount}/{book.wordCount}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
               </TouchableOpacity>
-            </View>
-          ) : (
-            <FlatList
-              data={filteredBooks}
-              renderItem={renderBookItem}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-            />
-          )}
-        </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </Screen>
   );

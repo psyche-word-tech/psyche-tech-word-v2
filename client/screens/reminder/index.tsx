@@ -1,174 +1,195 @@
-import { View, Text, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { Screen } from '@/components/Screen';
-import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { Header } from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useEffect } from 'react';
-import { getApiBaseUrl } from '@/utils/apiConfig';
-import { useAuth } from '@/contexts/AuthContext';
-
-interface Reminder {
-  id: string;
-  time: string;
-  enabled: boolean;
-  title: string;
-  message: string;
-}
+import { useState } from 'react';
 
 export default function ReminderScreen() {
-  const router = useSafeRouter();
-  const { user } = useAuth();
-  const [reminders, setReminders] = useState<Reminder[]>([
-    { id: '1', time: '08:00', enabled: true, title: '晨间学习', message: '新的一天，开始学习吧！' },
-    { id: '2', time: '12:30', enabled: false, title: '午间复习', message: '午休时间，复习一下上午学的内容' },
-    { id: '3', time: '20:00', enabled: true, title: '晚间学习', message: '晚上是学习的好时光' },
-    { id: '4', time: '21:30', enabled: false, title: '睡前复习', message: '睡前复习，巩固记忆' },
-  ]);
-  const [globalEnabled, setGlobalEnabled] = useState(true);
+  const [dailyReminder, setDailyReminder] = useState(true);
+  const [reminderTime, setReminderTime] = useState('09:00');
+  const [weeklyReport, setWeeklyReport] = useState(true);
+  const [achievementNotify, setAchievementNotify] = useState(true);
 
-  const toggleReminder = (id: string) => {
-    setReminders(prev => prev.map(r => 
-      r.id === id ? { ...r, enabled: !r.enabled } : r
-    ));
-  };
-
-  const toggleGlobal = () => {
-    setGlobalEnabled(!globalEnabled);
-  };
-
-  const addReminder = () => {
-    Alert.prompt(
-      '添加提醒',
-      '请输入提醒时间（格式：HH:MM）',
-      (time) => {
-        if (time && /^\d{2}:\d{2}$/.test(time)) {
-          setReminders(prev => [...prev, {
-            id: Date.now().toString(),
-            time,
-            enabled: true,
-            title: '学习提醒',
-            message: '该学习啦！',
-          }]);
-        } else if (time) {
-          Alert.alert('错误', '请输入正确的时间格式，如 09:00');
-        }
-      },
-      'plain-text',
-      '09:00'
-    );
-  };
-
-  const deleteReminder = (id: string) => {
-    Alert.alert(
-      '删除提醒',
-      '确定要删除这个提醒吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        { 
-          text: '删除', 
-          style: 'destructive',
-          onPress: () => {
-            setReminders(prev => prev.filter(r => r.id !== id));
-          }
-        },
-      ]
-    );
-  };
+  const timeSlots = ['08:00', '09:00', '10:00', '12:00', '14:00', '18:00', '20:00', '21:00'];
 
   return (
-    <Screen title="学习提醒">
+    <Screen>
+      <Header title="学习提醒" />
       <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ padding: 16 }}>
-        {/* 总开关 */}
-        <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm flex-row items-center justify-between">
-          <View className="flex-row items-center">
-            <Ionicons name="notifications" size={24} color="#3b82f6" />
-            <Text className="text-gray-900 font-bold ml-3">学习提醒</Text>
-          </View>
-          <Switch
-            value={globalEnabled}
-            onValueChange={toggleGlobal}
-            trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-            thumbColor={globalEnabled ? '#3b82f6' : '#f4f3f4'}
-          />
-        </View>
-
-        {/* 提醒列表 */}
-        <View className="bg-white rounded-2xl mb-4 shadow-sm overflow-hidden">
-          <View className="flex-row items-center justify-between p-4 border-b border-gray-100">
-            <Text className="text-lg font-bold text-gray-900">提醒时间</Text>
-            <TouchableOpacity 
-              className="bg-blue-500 rounded-full px-4 py-2 flex-row items-center"
-              onPress={addReminder}
-            >
-              <Ionicons name="add" size={20} color="white" />
-              <Text className="text-white font-medium ml-1">添加</Text>
-            </TouchableOpacity>
-          </View>
-
-          {reminders.map((reminder) => (
-            <View 
-              key={reminder.id}
-              className={`flex-row items-center justify-between p-4 border-b border-gray-100 ${
-                !globalEnabled || !reminder.enabled ? 'opacity-50' : ''
-              }`}
-            >
-              <View className="flex-row items-center flex-1">
-                <View className="bg-blue-100 rounded-full w-12 h-12 items-center justify-center mr-4">
-                  <Text className="text-blue-600 font-bold text-lg">{reminder.time}</Text>
-                </View>
-                <View className="flex-1">
-                  <Text className="text-gray-900 font-medium">{reminder.title}</Text>
-                  <Text className="text-gray-500 text-sm">{reminder.message}</Text>
-                </View>
+        {/* 每日提醒 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  backgroundColor: '#dbeafe',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name="alarm" size={20} color="#3b82f6" />
               </View>
-              <View className="flex-row items-center">
-                <Switch
-                  value={reminder.enabled}
-                  onValueChange={() => toggleReminder(reminder.id)}
-                  disabled={!globalEnabled}
-                  trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-                  thumbColor={reminder.enabled ? '#3b82f6' : '#f4f3f4'}
-                />
-                <TouchableOpacity 
-                  className="ml-3 p-2"
-                  onPress={() => deleteReminder(reminder.id)}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                </TouchableOpacity>
+              <View>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>每日学习提醒</Text>
+                <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>每天定时提醒学习</Text>
               </View>
             </View>
-          ))}
+            <Switch
+              value={dailyReminder}
+              onValueChange={setDailyReminder}
+              trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+              thumbColor={dailyReminder ? '#3b82f6' : '#9ca3af'}
+            />
+          </View>
+
+          {dailyReminder && (
+            <View>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 12 }}>选择提醒时间</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {timeSlots.map((time) => (
+                  <TouchableOpacity
+                    key={time}
+                    onPress={() => setReminderTime(time)}
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      backgroundColor: reminderTime === time ? '#3b82f6' : '#f3f4f6',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: reminderTime === time ? '#fff' : '#4b5563',
+                        fontWeight: reminderTime === time ? '600' : '400',
+                      }}
+                    >
+                      {time}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
-        {/* 提醒设置 */}
-        <View className="bg-white rounded-2xl p-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">提醒设置</Text>
-          
-          <View className="space-y-4">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-gray-700">提醒方式</Text>
-              <Text className="text-gray-500">应用内通知</Text>
+        {/* 通知设置 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            overflow: 'hidden',
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: '#f3f4f6',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  backgroundColor: '#fef3c7',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name="stats-chart" size={20} color="#f59e0b" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 15, color: '#1f2937' }}>每周学习报告</Text>
+                <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>每周一发送学习总结</Text>
+              </View>
             </View>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-gray-700">重复</Text>
-              <Text className="text-gray-500">每天</Text>
+            <Switch
+              value={weeklyReport}
+              onValueChange={setWeeklyReport}
+              trackColor={{ false: '#e5e7eb', true: '#fef3c7' }}
+              thumbColor={weeklyReport ? '#f59e0b' : '#9ca3af'}
+            />
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: 16,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  backgroundColor: '#d1fae5',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name="trophy" size={20} color="#10b981" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 15, color: '#1f2937' }}>成就通知</Text>
+                <Text style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>解锁成就时通知</Text>
+              </View>
             </View>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-gray-700">免打扰时段</Text>
-              <TouchableOpacity>
-                <Text className="text-blue-500">设置</Text>
-              </TouchableOpacity>
-            </View>
+            <Switch
+              value={achievementNotify}
+              onValueChange={setAchievementNotify}
+              trackColor={{ false: '#e5e7eb', true: '#d1fae5' }}
+              thumbColor={achievementNotify ? '#10b981' : '#9ca3af'}
+            />
           </View>
         </View>
 
-        {/* 提示信息 */}
-        <View className="bg-blue-50 rounded-2xl p-4 mt-4">
-          <View className="flex-row items-start">
-            <Ionicons name="information-circle" size={20} color="#3b82f6" className="mt-0.5" />
-            <Text className="text-blue-700 text-sm ml-2 flex-1">
-              开启学习提醒后，系统会在设定时间提醒您学习。建议每天保持固定的学习时间，养成良好的学习习惯。
-            </Text>
-          </View>
+        {/* 提示 */}
+        <View
+          style={{
+            backgroundColor: '#eff6ff',
+            borderRadius: 12,
+            padding: 16,
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+          }}
+        >
+          <Ionicons name="information-circle" size={20} color="#3b82f6" style={{ marginRight: 8, marginTop: 2 }} />
+          <Text style={{ fontSize: 13, color: '#1e40af', flex: 1 }}>
+            开启提醒后，系统会在设定时间推送学习提醒，帮助你保持学习习惯。
+          </Text>
         </View>
       </ScrollView>
     </Screen>

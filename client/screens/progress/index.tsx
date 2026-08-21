@@ -1,124 +1,169 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { Header } from '@/components/Header';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface ProgressData {
+  totalWords: number;
+  learnedWords: number;
+  masteredWords: number;
+  learningDays: number;
+  dailyAverage: number;
+  streak: number;
+}
 
 export default function ProgressScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
-  const [stats, setStats] = useState({
-    totalWords: 0,
-    masteredWords: 0,
-    learningWords: 0,
-    studyDays: 0,
-    streakDays: 0,
-    todayWords: 0,
-    weekWords: 0,
-    monthWords: 0,
-  });
+  const [progress, setProgress] = useState<ProgressData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadStats();
+    loadProgress();
   }, []);
 
-  const loadStats = async () => {
+  const loadProgress = async () => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/v1/progress/stats`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/user/progress`, {
         headers: {
           'Authorization': `Bearer ${user?.token}`,
         },
       });
-      const data = await response.json();
-      if (data.success) {
-        setStats(data.data);
+      if (response.ok) {
+        const data = await response.json();
+        setProgress(data);
       }
     } catch (error) {
       console.error('加载学习进度失败:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const masteryRate = stats.totalWords > 0 ? Math.round((stats.masteredWords / stats.totalWords) * 100) : 0;
+  if (loading) {
+    return (
+      <Screen>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, color: '#666' }}>加载中...</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const stats = [
+    { label: '学习天数', value: progress?.learningDays || 0, icon: 'calendar', color: '#3b82f6' },
+    { label: '已学单词', value: progress?.learnedWords || 0, icon: 'book', color: '#10b981' },
+    { label: '已掌握', value: progress?.masteredWords || 0, icon: 'checkmark-circle', color: '#f59e0b' },
+    { label: '连续学习', value: `${progress?.streak || 0}天`, icon: 'flame', color: '#ef4444' },
+  ];
 
   return (
-    <Screen title="学习进度">
+    <Screen>
+      <Header title="学习进度" />
       <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ padding: 16 }}>
-        {/* 总体进度 */}
-        <View className="bg-white rounded-2xl p-6 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">总体进度</Text>
-          <View className="mb-4">
-            <View className="flex-row justify-between mb-2">
-              <Text className="text-gray-600">掌握率</Text>
-              <Text className="font-bold text-green-600">{masteryRate}%</Text>
+        {/* 统计卡片 */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+          {stats.map((stat, index) => (
+            <View
+              key={index}
+              style={{
+                width: '48%',
+                backgroundColor: '#fff',
+                borderRadius: 12,
+                padding: 16,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    backgroundColor: `${stat.color}20`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 8,
+                  }}
+                >
+                  <Ionicons name={stat.icon as any} size={18} color={stat.color} />
+                </View>
+                <Text style={{ fontSize: 13, color: '#6b7280' }}>{stat.label}</Text>
+              </View>
+              <Text style={{ fontSize: 24, fontWeight: '700', color: '#1f2937' }}>
+                {stat.value}
+              </Text>
             </View>
-            <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
-              <View 
-                className="h-full bg-green-500 rounded-full"
-                style={{ width: `${masteryRate}%` }}
+          ))}
+        </View>
+
+        {/* 学习趋势 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: '600', color: '#1f2937', marginBottom: 16 }}>
+            学习趋势
+          </Text>
+          <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+            <Ionicons name="stats-chart" size={48} color="#e5e7eb" />
+            <Text style={{ fontSize: 14, color: '#9ca3af', marginTop: 12 }}>
+              学习趋势图表开发中
+            </Text>
+          </View>
+        </View>
+
+        {/* 每日目标 */}
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: '600', color: '#1f2937', marginBottom: 16 }}>
+            每日目标
+          </Text>
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>今日学习</Text>
+              <Text style={{ fontSize: 14, color: '#3b82f6', fontWeight: '600' }}>
+                {progress?.dailyAverage || 0} / 50 词
+              </Text>
+            </View>
+            <View style={{ height: 8, backgroundColor: '#e5e7eb', borderRadius: 4 }}>
+              <View
+                style={{
+                  width: `${Math.min(((progress?.dailyAverage || 0) / 50) * 100, 100)}%`,
+                  height: '100%',
+                  backgroundColor: '#3b82f6',
+                  borderRadius: 4,
+                }}
               />
             </View>
           </View>
-          <View className="flex-row justify-between">
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-gray-900">{stats.totalWords}</Text>
-              <Text className="text-sm text-gray-500">总词汇</Text>
-            </View>
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-green-600">{stats.masteredWords}</Text>
-              <Text className="text-sm text-gray-500">已掌握</Text>
-            </View>
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-blue-600">{stats.learningWords}</Text>
-              <Text className="text-sm text-gray-500">学习中</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 学习天数 */}
-        <View className="bg-white rounded-2xl p-6 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">学习天数</Text>
-          <View className="flex-row justify-between">
-            <View className="items-center flex-1">
-              <Text className="text-3xl font-bold text-orange-500">{stats.studyDays}</Text>
-              <Text className="text-sm text-gray-500 mt-1">累计学习</Text>
-            </View>
-            <View className="items-center flex-1">
-              <Text className="text-3xl font-bold text-red-500">{stats.streakDays}</Text>
-              <Text className="text-sm text-gray-500 mt-1">连续天数</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 学习统计 */}
-        <View className="bg-white rounded-2xl p-6 mb-4 shadow-sm">
-          <Text className="text-lg font-bold text-gray-900 mb-4">学习统计</Text>
-          <View className="space-y-4">
-            <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
-              <Text className="text-gray-600">今日学习</Text>
-              <Text className="font-bold text-gray-900">{stats.todayWords} 词</Text>
-            </View>
-            <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
-              <Text className="text-gray-600">本周学习</Text>
-              <Text className="font-bold text-gray-900">{stats.weekWords} 词</Text>
-            </View>
-            <View className="flex-row justify-between items-center py-2">
-              <Text className="text-gray-600">本月学习</Text>
-              <Text className="font-bold text-gray-900">{stats.monthWords} 词</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 学习建议 */}
-        <View className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl p-6 shadow-sm">
-          <Text className="text-lg font-bold text-white mb-2">学习建议</Text>
-          <Text className="text-white/90 text-sm">
-            {masteryRate < 30 ? '继续加油！建议每天学习 20-30 个新单词，保持学习节奏。' :
-             masteryRate < 60 ? ' progress 不错！建议复习已学单词，巩固记忆。' :
-             masteryRate < 80 ? '表现优秀！可以尝试挑战更高难度的词汇。' :
-             '太棒了！你已经掌握了大部分词汇，建议定期复习保持记忆。'}
-          </Text>
         </View>
       </ScrollView>
     </Screen>
