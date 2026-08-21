@@ -308,7 +308,10 @@ export default function StudyScreen() {
             <TouchableOpacity 
               style={styles.searchButton}
               activeOpacity={0.7}
-              onPress={() => setShowHistory(true)}
+              onPress={() => {
+                handleLoadIrisData();
+                setShowIrisAnalysis(true);
+              }}
             >
               <Ionicons name="time-outline" size={22} color="#FFFFFF" />
             </TouchableOpacity>
@@ -462,9 +465,68 @@ export default function StudyScreen() {
               </View>
             </View>
             <View style={styles.modalBody}>
-              <Text style={{ color: '#999', textAlign: 'center', marginTop: 40 }}>
-                暂无历史记录
-              </Text>
+              {irisData.length === 0 ? (
+                <Text style={{ color: '#999', textAlign: 'center', marginTop: 40 }}>
+                  暂无历史记录
+                </Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 400 }}>
+                  {irisData.map((item: any, index: number) => (
+                    <View key={item.id || index} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ fontSize: 14, color: '#333', fontWeight: '600' }}>
+                          学习记录 {index + 1}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#999' }}>
+                          {new Date(item.created_at).toLocaleString('zh-CN')}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 16 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>专注度</Text>
+                          <View style={{ height: 6, backgroundColor: '#f0f0f0', borderRadius: 3, overflow: 'hidden' }}>
+                            <View style={{ height: '100%', width: `${(item.focus_score || 0) * 100}%`, backgroundColor: '#3B82F6', borderRadius: 3 }} />
+                          </View>
+                          <Text style={{ fontSize: 12, color: '#3B82F6', marginTop: 4 }}>
+                            {Math.round((item.focus_score || 0) * 100)}%
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>情绪</Text>
+                          <Text style={{ fontSize: 14, color: '#333', fontWeight: '500' }}>
+                            {item.emotion === 'happy' ? '开心' : item.emotion === 'sad' ? '悲伤' : item.emotion === 'angry' ? '愤怒' : item.emotion === 'surprised' ? '惊讶' : '平静'}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>视线方向</Text>
+                        <Text style={{ fontSize: 13, color: '#333' }}>
+                          {item.gaze_direction === 'left' ? '向左' : item.gaze_direction === 'right' ? '向右' : item.gaze_direction === 'up' ? '向上' : item.gaze_direction === 'down' ? '向下' : '居中'}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+              {irisData.length > 0 && (
+                <TouchableOpacity
+                  style={{
+                    margin: 16,
+                    padding: 12,
+                    backgroundColor: '#3B82F6',
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => {
+                    setShowHistory(false);
+                    setShowIrisAnalysis(true);
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
+                    查看学习状态分析
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
