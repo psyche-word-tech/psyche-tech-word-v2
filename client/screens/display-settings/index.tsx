@@ -29,14 +29,21 @@ export default function DisplaySettingsScreen() {
 
   // 加载设置
   useEffect(() => {
-    loadSettings();
-  }, []);
+    if (user?.token) {
+      loadSettings();
+    }
+  }, [user?.token]);
 
   const loadSettings = async () => {
+    if (!user?.token) {
+      setLoading(false);
+      return;
+    }
+    
     try {
       const response = await fetch(`${apiBaseUrl}/api/v1/settings/display`, {
         headers: {
-          'Authorization': `Bearer ${user?.token}`,
+          'Authorization': `Bearer ${user.token}`,
         },
       });
       const result = await response.json();
@@ -52,6 +59,11 @@ export default function DisplaySettingsScreen() {
 
   // 保存设置
   const saveSettings = async (newSettings: Partial<DisplaySettings>) => {
+    if (!user?.token) {
+      Alert.alert('提示', '请先登录');
+      return;
+    }
+    
     // 先更新 UI（乐观更新）
     setSettings({ ...settings, ...newSettings });
     
@@ -60,7 +72,7 @@ export default function DisplaySettingsScreen() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.token}`,
+          'Authorization': `Bearer ${user.token}`,
         },
         body: JSON.stringify({ ...settings, ...newSettings }),
       });

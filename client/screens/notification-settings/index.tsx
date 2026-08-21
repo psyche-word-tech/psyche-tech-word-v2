@@ -18,14 +18,18 @@ export default function NotificationSettingsScreen() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadSettings();
-  }, []);
+    if (user?.token) {
+      loadSettings();
+    }
+  }, [user?.token]);
 
   const loadSettings = async () => {
+    if (!user?.token) return;
+    
     try {
       const response = await fetch(`${getApiBaseUrl()}/api/v1/user/notification-settings`, {
         headers: {
-          'Authorization': `Bearer ${user?.token}`,
+          'Authorization': `Bearer ${user.token}`,
         },
       });
       const data = await response.json();
@@ -38,6 +42,11 @@ export default function NotificationSettingsScreen() {
   };
 
   const handleToggle = async (key: string, value: boolean) => {
+    if (!user?.token) {
+      Alert.alert('提示', '请先登录');
+      return;
+    }
+    
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
     setLoading(true);
@@ -47,10 +56,10 @@ export default function NotificationSettingsScreen() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.token}`,
+          'Authorization': `Bearer ${user.token}`,
         },
         body: JSON.stringify({
-          userId: user?.id,
+          userId: user.id,
           settings: newSettings,
         }),
       });
