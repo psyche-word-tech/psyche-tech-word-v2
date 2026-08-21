@@ -37,6 +37,10 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Serve face-api.js models from server/models/ (not public/models/)
+// This ensures models are never deleted when public/ is rebuilt
+app.use('/models', express.static(path.join(__dirname, '../models')));
+
 /**
  * 根路径 - 优先 serve 前端 index.html，不存在时返回 API 状态
  */
