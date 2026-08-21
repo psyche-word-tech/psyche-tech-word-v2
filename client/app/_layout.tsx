@@ -67,6 +67,11 @@ export default function RootLayout() {
           <Stack.Screen name="display-settings" options={{ title: "" }} />
           <Stack.Screen name="privacy-settings" options={{ title: "" }} />
           <Stack.Screen name="about" options={{ title: "" }} />
+          <Stack.Screen name="change-password" options={{ title: "" }} />
+          <Stack.Screen name="change-phone" options={{ title: "" }} />
+          <Stack.Screen name="notification-settings" options={{ title: "" }} />
+          <Stack.Screen name="data-backup" options={{ title: "" }} />
+          <Stack.Screen name="delete-account" options={{ title: "" }} />
           <Stack.Screen name="splash-preview" options={{ title: "" }} />
         </Stack>
       </Provider>

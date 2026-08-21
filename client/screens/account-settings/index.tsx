@@ -11,47 +11,23 @@ export default function AccountSettingsScreen() {
   const { user, logout } = useAuth();
 
   const handleChangePassword = () => {
-    Alert.alert('修改密码', '密码修改功能开发中');
+    router.push('/change-password');
   };
 
   const handleChangePhone = () => {
-    Alert.alert('修改手机号', '手机号修改功能开发中');
+    router.push('/change-phone');
+  };
+
+  const handleNotificationSettings = () => {
+    router.push('/notification-settings');
+  };
+
+  const handleDataBackup = () => {
+    router.push('/data-backup');
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      '注销账号',
-      '注销后账号数据将被永久删除且无法恢复，确定要注销吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确定注销',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/delete-account`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${user?.token}`,
-                },
-                body: JSON.stringify({ userId: user?.id }),
-              });
-              const data = await response.json();
-              if (data.success) {
-                await logout();
-                Alert.alert('成功', '账号已注销');
-                router.replace('/login');
-              } else {
-                Alert.alert('错误', data.error || '注销失败');
-              }
-            } catch (error) {
-              Alert.alert('错误', '网络错误，请稍后重试');
-            }
-          },
-        },
-      ]
-    );
+    router.push('/delete-account');
   };
 
   const menuItems = [
@@ -71,13 +47,13 @@ export default function AccountSettingsScreen() {
       icon: 'notifications',
       title: '消息通知',
       subtitle: '管理推送通知设置',
-      onPress: () => Alert.alert('提示', '功能开发中'),
+      onPress: handleNotificationSettings,
     },
     {
       icon: 'cloud-upload',
       title: '数据备份',
       subtitle: '自动备份学习数据',
-      onPress: () => Alert.alert('提示', '功能开发中'),
+      onPress: handleDataBackup,
     },
   ];
 
