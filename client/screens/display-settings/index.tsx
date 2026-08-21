@@ -4,6 +4,7 @@ import { Header } from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DisplaySettings {
   fontSize: 'small' | 'medium' | 'large' | 'xlarge';
@@ -14,6 +15,7 @@ interface DisplaySettings {
 }
 
 export default function DisplaySettingsScreen() {
+  const { user } = useAuth();
   const [settings, setSettings] = useState<DisplaySettings>({
     fontSize: 'medium',
     theme: 'system',
@@ -32,10 +34,9 @@ export default function DisplaySettingsScreen() {
 
   const loadSettings = async () => {
     try {
-      const token = await import('@/utils/auth').then(m => m.getToken());
       const response = await fetch(`${apiBaseUrl}/api/v1/settings/display`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${user?.token}`,
         },
       });
       const result = await response.json();
@@ -51,22 +52,28 @@ export default function DisplaySettingsScreen() {
 
   // 保存设置
   const saveSettings = async (newSettings: Partial<DisplaySettings>) => {
+    // 先更新 UI（乐观更新）
+    setSettings({ ...settings, ...newSettings });
+    
     try {
-      const token = await import('@/utils/auth').then(m => m.getToken());
       const response = await fetch(`${apiBaseUrl}/api/v1/settings/display`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${user?.token}`,
         },
         body: JSON.stringify({ ...settings, ...newSettings }),
       });
       const result = await response.json();
-      if (result.success) {
-        setSettings({ ...settings, ...newSettings });
+      if (!result.success) {
+        // 如果保存失败，回滚状态
+        setSettings(settings);
+        Alert.alert('提示', result.message || '保存失败');
       }
     } catch (error) {
       console.error('保存显示设置失败:', error);
+      // 回滚状态
+      setSettings(settings);
       Alert.alert('错误', '保存设置失败');
     }
   };
