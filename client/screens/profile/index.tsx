@@ -169,7 +169,7 @@ export default function ProfileScreen() {
       icon: 'book',
       iconType: 'fontawesome',
       color: '#FF6B35',
-      route: '/my-vocabulary',
+      route: '/vocabulary-books',
     },
     {
       id: 'notebook',
@@ -177,7 +177,7 @@ export default function ProfileScreen() {
       icon: 'edit',
       iconType: 'fontawesome',
       color: '#4A90D9',
-      route: '/notebook',
+      route: '/word-book',
     },
     {
       id: 'progress',
@@ -185,7 +185,7 @@ export default function ProfileScreen() {
       icon: 'chart-line',
       iconType: 'fontawesome',
       color: '#52C41A',
-      route: '/study',
+      route: '/progress',
     },
     {
       id: 'achievements',
@@ -198,11 +198,11 @@ export default function ProfileScreen() {
   ];
 
   const settingsItems = [
-    { id: 'account', title: '账号管理', icon: 'person', route: '/settings' },
-    { id: 'reminder', title: '学习提醒', icon: 'notifications', route: '/settings' },
-    { id: 'display', title: '显示设置', icon: 'settings', route: '/settings' },
-    { id: 'privacy', title: '隐私设置', icon: 'lock', route: '/settings' },
-    { id: 'about', title: '关于我们', icon: 'info-circle', route: '/settings' },
+    { id: 'account', title: '账号管理', icon: 'person', route: '/account-settings' },
+    { id: 'reminder', title: '学习提醒', icon: 'notifications', route: '/reminder' },
+    { id: 'display', title: '显示设置', icon: 'settings', route: '/display-settings' },
+    { id: 'privacy', title: '隐私设置', icon: 'lock', route: '/privacy-settings' },
+    { id: 'about', title: '关于我们', icon: 'info-circle', route: '/about' },
   ];
 
   const renderIcon = (item: any) => {
