@@ -1,12 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { getSupabaseClient } from '../storage/database/supabase-client';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// 所有设置接口都需要认证
+router.use(authMiddleware);
+
 // 获取显示设置
-router.get('/display', async (req: Request, res: Response) => {
+router.get('/display', async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.userId;
     if (!userId) {
       return res.status(401).json({ success: false, message: '未登录' });
     }
@@ -40,9 +44,9 @@ router.get('/display', async (req: Request, res: Response) => {
 });
 
 // 更新显示设置
-router.post('/display', async (req: Request, res: Response) => {
+router.post('/display', async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.userId;
     if (!userId) {
       return res.status(401).json({ success: false, message: '未登录' });
     }
