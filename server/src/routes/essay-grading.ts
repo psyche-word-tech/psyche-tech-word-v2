@@ -16,8 +16,10 @@ interface ErrorAnnotation {
   original: string;
   correction: string;
   explanation: string;
-  line?: number;
-  wordIndex?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
 }
 
 interface GradingResult {
@@ -108,6 +110,7 @@ ${referenceAnswer}
    - 结构分（20%）：段落组织、逻辑连贯
    - 书写分（10%）：字迹工整度
 4. 给出具体修改建议和评语
+5. **标注位置**：为每个错误返回在图片中的精确像素坐标（x, y, width, height）
 
 ## 输出格式（JSON）
 请严格按照以下 JSON 格式输出，不要输出其他内容：
@@ -126,8 +129,10 @@ ${referenceAnswer}
       "original": "错误原文",
       "correction": "正确写法",
       "explanation": "错误原因说明",
-      "line": 行号（必须）,
-      "wordIndex": 单词序号（必须）
+      "x": x 坐标（必须，像素）,
+      "y": y 坐标（必须，像素）,
+      "width": 宽度（必须，像素）,
+      "height": 高度（必须，像素）
     }
   ],
   "comments": "总体评语",
@@ -214,29 +219,16 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     const width = metadata.width || 800;
     const height = metadata.height || 600;
 
-    // 估算每行的高度和单词宽度
-    // 假设作文有 10-15 行，行高均匀分布
-    const estimatedLineCount = 12; // 估计行数
-    const lineHeight = height / estimatedLineCount;
-    const avgWordWidth = 60; // 平均单词宽度（像素）
-    const leftMargin = 50; // 左边距
-
     // 创建 SVG 标注层
     let svgAnnotations = '';
     const color = '#FF0000'; // 红色（像老师用红笔）
 
     errors.forEach((error, index) => {
-      // 根据 line 和 wordIndex 估算位置
-      const line = error.line || 1;
-      const wordIndex = error.wordIndex || 1;
-      
-      // 估算 y 坐标（行位置）
-      const y = (line - 1) * lineHeight + lineHeight / 2;
-      
-      // 估算 x 坐标（单词位置）
-      const x = leftMargin + (wordIndex - 1) * avgWordWidth;
-      const wordWidth = avgWordWidth;
-      const wordHeight = lineHeight * 0.6;
+      // 使用模型返回的精确坐标
+      const x = error.x || 0;
+      const y = error.y || 0;
+      const wordWidth = error.width || 60;
+      const wordHeight = error.height || 20;
         
         // 1. 在错误单词上画删除线（红色横线）
         svgAnnotations += `
