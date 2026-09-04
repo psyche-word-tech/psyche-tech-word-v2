@@ -211,9 +211,9 @@ async function extractWordPositions(imageBase64: string): Promise<Array<{word: s
     const buffer = Buffer.from(base64Data, 'base64');
     
     // 使用 Tesseract 进行 OCR 识别
-    const result = await Tesseract.recognize(buffer, 'eng', {
-      logger: () => {} // 禁用日志
-    });
+    const worker = await Tesseract.createWorker('eng');
+    const result = await worker.recognize(buffer);
+    await worker.terminate();
     
     const wordPositions: Array<{word: string, x: number, y: number, width: number, height: number}> = [];
     
