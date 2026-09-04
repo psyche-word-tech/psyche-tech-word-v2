@@ -78,6 +78,10 @@ router.post('/grade', authMiddleware, async (req: AuthRequest, res) => {
     // 2. 调用千问 VL 模型批改作文
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
 
+    // 计算总分
+    gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
+    gradingResult.max_score = max_score;
+
     // 3. 在原图上标注错误（使用 OCR 精确位置）
     const markedImage = await annotateImage(image, gradingResult.errors, ocrWords);
 
@@ -359,8 +363,20 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           wordWidth = matchedWord.width;
           wordHeight = matchedWord.height;
         } else {
-          console.log(`未找到匹配单词: "${error.original}"`);
-          return;
+          // 找不到匹配单词时，使用位置估算方案
+          console.log(`未找到匹配单词: "${error.original}"，使用位置估算`);
+          const totalLines = 12;
+          const padding = 40;
+          const lineHeight = (height - padding * 2) / totalLines;
+          const avgWordWidth = 60;
+          
+          const line = (error as any).line || 1;
+          const wordIndex = (error as any).wordIndex || 1;
+          
+          x = padding + (wordIndex - 1) * avgWordWidth;
+          y = padding + (line - 1) * lineHeight;
+          wordWidth = avgWordWidth;
+          wordHeight = lineHeight * 0.6;
         }
       }
       
