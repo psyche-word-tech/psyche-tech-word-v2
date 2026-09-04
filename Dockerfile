@@ -11,11 +11,15 @@ WORKDIR /app
 # 复制所有源码
 COPY . .
 
-# 安装所有依赖
+# 安装 server 依赖
+WORKDIR /app/server
+RUN pnpm install --registry=https://registry.npmjs.org --no-frozen-lockfile
+
+# 安装 client 依赖
+WORKDIR /app/client
 RUN pnpm install --registry=https://registry.npmjs.org --no-frozen-lockfile
 
 # 构建前端
-WORKDIR /app/client
 RUN npx expo export --platform web
 
 # 复制前端静态文件到 server/public 目录
