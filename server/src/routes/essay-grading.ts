@@ -48,12 +48,11 @@ router.post('/grade', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(400).json({ success: false, error: '缺少作文图片' });
     }
 
-    if (!reference_answer) {
-      return res.status(400).json({ success: false, error: '缺少参考答案' });
-    }
+    // 参考答案可选
+    const refAnswer = reference_answer || '';
 
     // 调用千问 VL 模型批改作文
-    const gradingResult = await callQwenVL(image, reference_answer, max_score);
+    const gradingResult = await callQwenVL(image, refAnswer, max_score);
 
     // 在原图上标注错误
     const markedImage = await annotateImage(image, gradingResult.errors);
