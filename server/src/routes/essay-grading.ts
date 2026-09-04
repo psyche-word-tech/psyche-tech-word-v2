@@ -25,6 +25,14 @@ interface ErrorAnnotation {
   explanation: string;
 }
 
+interface OCRWord {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface GradingResult {
   total_score: number;
   max_score: number;
@@ -56,11 +64,22 @@ router.post('/grade', authMiddleware, async (req: AuthRequest, res) => {
     // 参考答案可选
     const refAnswer = reference_answer || '';
 
-    // 调用千问 VL 模型批改作文
+    // 1. 先调用 Qwen3.5-OCR 识别文字位置
+    let ocrWords: OCRWord[] = [];
+    try {
+      console.log('调用 Qwen3.5-OCR 识别文字位置...');
+      ocrWords = await callQwenOCR(image);
+      console.log(`OCR 识别到 ${ocrWords.length} 个单词`);
+    } catch (err) {
+      console.error('Qwen OCR 调用失败:', err);
+      console.log('使用位置估算方案');
+    }
+
+    // 2. 调用千问 VL 模型批改作文
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
 
-    // 在原图上标注错误（使用 OCR 精确位置）
-    const markedImage = await annotateImage(image, gradingResult.errors);
+    // 3. 在原图上标注错误（使用 OCR 精确位置）
+    const markedImage = await annotateImage(image, gradingResult.errors, ocrWords);
 
     // 保存到数据库
     const supabase = getSupabaseClient();
@@ -94,6 +113,87 @@ router.post('/grade', authMiddleware, async (req: AuthRequest, res) => {
     res.status(500).json({ success: false, error: error.message || '批改失败' });
   }
 });
+
+/**
+ * 调用 Qwen3.5-OCR 模型识别文字位置
+ */
+async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
+  const prompt = `请识别图片中的所有英文单词，并返回每个单词的位置坐标。
+
+## 输出格式（JSON）
+请严格按照以下 JSON 格式输出，不要输出其他内容：
+{
+  "words": [
+    {
+      "text": "单词文本",
+      "x": 左上角 x 坐标（像素）,
+      "y": 左上角 y 坐标（像素）,
+      "width": 宽度（像素）,
+      "height": 高度（像素）
+    }
+  ]
+}
+
+## 要求
+1. 识别所有英文单词（包括标点符号）
+2. 返回每个单词的精确位置坐标
+3. 坐标单位为像素，相对于原图`;
+
+  const response = await fetch(QWEN_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${QWEN_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'qwen3.5-ocr',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
+              },
+            },
+            {
+              type: 'text',
+              text: prompt,
+            },
+          ],
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 8192,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qwen OCR API 调用失败: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+
+  if (!content) {
+    throw new Error('Qwen OCR API 返回内容为空');
+  }
+
+  // 解析 JSON 响应
+  try {
+    const result = JSON.parse(content);
+    return result.words || [];
+  } catch {
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      const result = JSON.parse(jsonMatch[1]);
+      return result.words || [];
+    }
+    throw new Error('Qwen OCR API 返回格式错误');
+  }
+}
 
 /**
  * 调用千问 VL 模型
@@ -204,29 +304,9 @@ ${referenceAnswer}
 }
 
 /**
- * 使用阿里云 OCR 识别图片中每个文字块的精确位置
- */
-async function extractWordPositions(imageBase64: string): Promise<Array<{word: string, x: number, y: number, width: number, height: number}>> {
-  try {
-    // 使用 HTTP 直接调用阿里云 OCR API，避免 SDK 兼容性问题
-    const base64Data = imageBase64.split(',')[1] || imageBase64;
-    
-    // 调用阿里云 OCR API
-    const url = `https://ocr-api.cn-hangzhou.aliyuncs.com/?Action=RecognizeHandwriting&Format=JSON&Version=2021-07-07&AccessKeyId=${ALIBABA_CLOUD_ACCESS_KEY_ID}&SignatureMethod=HMAC-SHA1&Timestamp=${encodeURIComponent(new Date().toISOString())}&SignatureVersion=1.0&SignatureNonce=${Date.now()}&ImageURL=${encodeURIComponent('data:image/jpeg;base64,' + base64Data.substring(0, 100))}`;
-    
-    // 简化：直接返回空数组，使用千问模型的位置估算
-    console.log('阿里云 OCR 调用失败，使用位置估算方案');
-    return [];
-  } catch (error) {
-    console.error('OCR 识别失败:', error);
-    return [];
-  }
-}
-
-/**
  * 在原图上标注错误（使用 OCR 精确位置）
  */
-async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Promise<string> {
+async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocrWords: OCRWord[] = []): Promise<string> {
   try {
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const buffer = Buffer.from(base64Data, 'base64');
@@ -236,19 +316,16 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     const width = metadata.width || 800;
     const height = metadata.height || 600;
 
-    // 使用 OCR 获取每个单词的精确位置
-    console.log('开始 OCR 识别...');
-    const wordPositions = await extractWordPositions(imageBase64);
-    console.log(`OCR 识别到 ${wordPositions.length} 个文字块`);
-
     // 创建 SVG 标注层
     let svgAnnotations = '';
     const color = '#FF0000'; // 红色（像老师用红笔）
 
     // 如果 OCR 失败，使用位置估算方案
-    const useEstimation = wordPositions.length === 0;
+    const useEstimation = ocrWords.length === 0;
     if (useEstimation) {
       console.log('使用位置估算方案');
+    } else {
+      console.log(`使用 OCR 精确位置，共 ${ocrWords.length} 个单词`);
     }
 
     errors.forEach((error, index) => {
@@ -261,8 +338,8 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
         const lineHeight = (height - padding * 2) / totalLines;
         const avgWordWidth = 60; // 平均单词宽度
         
-        const line = error.line || 1;
-        const wordIndex = error.wordIndex || 1;
+        const line = (error as any).line || 1;
+        const wordIndex = (error as any).wordIndex || 1;
         
         x = padding + (wordIndex - 1) * avgWordWidth;
         y = padding + (line - 1) * lineHeight;
@@ -270,10 +347,10 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
         wordHeight = lineHeight * 0.6;
       } else {
         // OCR 方案：在 OCR 结果中查找匹配的单词
-        const matchedWord = wordPositions.find(w => 
-          w.word.toLowerCase() === error.original.toLowerCase() ||
-          w.word.toLowerCase().includes(error.original.toLowerCase()) ||
-          error.original.toLowerCase().includes(w.word.toLowerCase())
+        const matchedWord = ocrWords.find(w => 
+          w.text.toLowerCase() === error.original.toLowerCase() ||
+          w.text.toLowerCase().includes(error.original.toLowerCase()) ||
+          error.original.toLowerCase().includes(w.text.toLowerCase())
         );
         
         if (matchedWord) {
