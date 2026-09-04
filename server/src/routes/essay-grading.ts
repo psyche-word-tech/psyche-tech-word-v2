@@ -3,8 +3,6 @@ import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { authMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
-import OcrApi20210707, * as $OcrApi20210707 from '@alicloud/ocr-api20210707';
-import * as $OpenApi from '@alicloud/openapi-client';
 
 const router = Router();
 
@@ -19,7 +17,7 @@ interface ErrorAnnotation {
   correction: string;
   explanation: string;
   line?: number;
-  column?: number;
+  wordIndex?: number;
 }
 
 interface GradingResult {
@@ -128,8 +126,8 @@ ${referenceAnswer}
       "original": "错误原文",
       "correction": "正确写法",
       "explanation": "错误原因说明",
-      "line": 行号（可选）,
-      "column": 列号（可选）
+      "line": 行号（必须）,
+      "wordIndex": 单词序号（必须）
     }
   ],
   "comments": "总体评语",
@@ -204,57 +202,7 @@ ${referenceAnswer}
 }
 
 /**
- * 使用阿里云 OCR 识别图片中每个单词的精确位置
- */
-async function extractWordPositions(imageBase64: string): Promise<Array<{word: string, x: number, y: number, width: number, height: number}>> {
-  try {
-    const base64Data = imageBase64.split(',')[1] || imageBase64;
-    
-    // 创建阿里云 OCR 客户端
-    const config = new $OpenApi.Config({
-      accessKeyId: process.env.ALIBABA_CLOUD_ACCESS_KEY_ID || '',
-      accessKeySecret: process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || '',
-      endpoint: 'ocr-api.cn-hangzhou.aliyuncs.com',
-    });
-    
-    const client = new OcrApi20210707.default(config);
-    
-    // 调用手写体 OCR 识别
-    const request = new $OcrApi20210707.RecognizeHandwritingRequest({
-      body: base64Data,
-    });
-    
-    const response = await client.recognizeHandwriting(request);
-    
-    const wordPositions: Array<{word: string, x: number, y: number, width: number, height: number}> = [];
-    
-    // 解析 OCR 结果
-    if (response.body?.data) {
-      const ocrData = JSON.parse(response.body.data);
-      if (ocrData.prism_wordsInfo) {
-        for (const wordInfo of ocrData.prism_wordsInfo) {
-          if (wordInfo.word && wordInfo.word.trim()) {
-            wordPositions.push({
-              word: wordInfo.word.trim(),
-              x: wordInfo.pos[0].x || 0,
-              y: wordInfo.pos[0].y || 0,
-              width: (wordInfo.pos[2].x || 0) - (wordInfo.pos[0].x || 0),
-              height: (wordInfo.pos[2].y || 0) - (wordInfo.pos[0].y || 0),
-            });
-          }
-        }
-      }
-    }
-    
-    return wordPositions;
-  } catch (error) {
-    console.error('阿里云 OCR 识别失败:', error);
-    return [];
-  }
-}
-
-/**
- * 在原图上标注错误（使用 OCR 精确位置）
+ * 在原图上标注错误（根据行号和单词序号估算位置）
  */
 async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Promise<string> {
   try {
@@ -266,28 +214,29 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     const width = metadata.width || 800;
     const height = metadata.height || 600;
 
-    // 使用 OCR 获取每个单词的精确位置
-    console.log('开始 OCR 识别...');
-    const wordPositions = await extractWordPositions(imageBase64);
-    console.log(`OCR 识别到 ${wordPositions.length} 个单词`);
+    // 估算每行的高度和单词宽度
+    // 假设作文有 10-15 行，行高均匀分布
+    const estimatedLineCount = 12; // 估计行数
+    const lineHeight = height / estimatedLineCount;
+    const avgWordWidth = 60; // 平均单词宽度（像素）
+    const leftMargin = 50; // 左边距
 
     // 创建 SVG 标注层
     let svgAnnotations = '';
-    const color = '#FF0000'; // 统一使用红色（像老师用红笔）
+    const color = '#FF0000'; // 红色（像老师用红笔）
 
     errors.forEach((error, index) => {
-      // 在 OCR 结果中查找匹配的单词
-      const matchedWord = wordPositions.find(w => 
-        w.word.toLowerCase() === error.original.toLowerCase() ||
-        w.word.toLowerCase().includes(error.original.toLowerCase()) ||
-        error.original.toLowerCase().includes(w.word.toLowerCase())
-      );
+      // 根据 line 和 wordIndex 估算位置
+      const line = error.line || 1;
+      const wordIndex = error.wordIndex || 1;
       
-      if (matchedWord) {
-        const x = matchedWord.x;
-        const y = matchedWord.y;
-        const wordWidth = matchedWord.width;
-        const wordHeight = matchedWord.height;
+      // 估算 y 坐标（行位置）
+      const y = (line - 1) * lineHeight + lineHeight / 2;
+      
+      // 估算 x 坐标（单词位置）
+      const x = leftMargin + (wordIndex - 1) * avgWordWidth;
+      const wordWidth = avgWordWidth;
+      const wordHeight = lineHeight * 0.6;
         
         // 1. 在错误单词上画删除线（红色横线）
         svgAnnotations += `
@@ -315,10 +264,6 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
             </text>
           `;
         }
-      } else {
-        // 如果没有找到匹配的单词，使用估算位置
-        console.log(`未找到匹配单词: "${error.original}"`);
-      }
     });
 
     // 在图片底部添加标注列表
