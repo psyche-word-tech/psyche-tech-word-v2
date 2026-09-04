@@ -202,7 +202,7 @@ ${referenceAnswer}
 }
 
 /**
- * 在原图上标注错误
+ * 在原图上标注错误（像老师批改作业一样）
  */
 async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Promise<string> {
   try {
@@ -218,16 +218,17 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     let svgAnnotations = '';
     const colors = {
       grammar: '#FF0000',      // 红色 - 语法错误
-      spelling: '#FF6600',     // 橙色 - 拼写错误
-      punctuation: '#9900FF',  // 紫色 - 标点错误
-      word_choice: '#0066FF',  // 蓝色 - 用词不当
-      sentence_structure: '#009900', // 绿色 - 句式问题
+      spelling: '#FF0000',     // 红色 - 拼写错误
+      punctuation: '#FF0000',  // 红色 - 标点错误
+      word_choice: '#FF0000',  // 红色 - 用词不当
+      sentence_structure: '#FF0000', // 红色 - 句式问题
     };
 
     // 估算每行高度（假设图片是作文纸，约 20-25 行）
     const estimatedLines = 20;
     const lineHeight = height / estimatedLines;
-    const startX = 50; // 左边距
+    const startX = 60; // 左边距
+    const charWidth = 12; // 每个字符宽度估算
 
     errors.forEach((error, index) => {
       const color = colors[error.type] || '#FF0000';
@@ -235,39 +236,62 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
       // 如果有行号信息，在对应位置绘制标记
       if (error.line && error.line > 0) {
         const y = (error.line - 1) * lineHeight + lineHeight / 2;
-        const x = startX + (error.column || 1) * 8; // 估算列位置
+        const x = startX + ((error.column || 1) - 1) * charWidth;
+        const wordWidth = error.original.length * charWidth;
         
-        // 绘制红色下划线
+        // 1. 在错误单词上画删除线（红色横线）
         svgAnnotations += `
-          <line x1="${x}" y1="${y + 5}" x2="${x + error.original.length * 8}" y2="${y + 5}" 
-                stroke="${color}" stroke-width="2" stroke-dasharray="4,2"/>
+          <line x1="${x}" y1="${y}" x2="${x + wordWidth}" y2="${y}" 
+                stroke="${color}" stroke-width="2"/>
         `;
         
-        // 绘制错误序号圆圈
+        // 2. 在错误单词上方画圆圈标记
         svgAnnotations += `
-          <circle cx="${x - 15}" cy="${y}" r="10" fill="${color}" opacity="0.8"/>
-          <text x="${x - 15}" y="${y + 4}" font-size="10" fill="white" text-anchor="middle" font-weight="bold">
+          <circle cx="${x + wordWidth / 2}" cy="${y - 15}" r="8" fill="none" stroke="${color}" stroke-width="1.5"/>
+          <text x="${x + wordWidth / 2}" y="${y - 11}" font-size="9" fill="${color}" text-anchor="middle" font-weight="bold">
             ${index + 1}
           </text>
         `;
+        
+        // 3. 在旁边写正确的单词（红色，斜体）
+        if (error.correction && error.correction !== error.original) {
+          const correctionX = x + wordWidth + 5;
+          svgAnnotations += `
+            <text x="${correctionX}" y="${y - 5}" font-size="11" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
+              ${error.correction}
+            </text>
+          `;
+        }
       }
-      
-      // 在图片底部添加标注列表
-      const listY = height + 20 + index * 22;
-      svgAnnotations += `
-        <text x="10" y="${listY}" font-size="11" fill="${color}" font-family="Arial">
-          ${index + 1}. [${getErrorTypeName(error.type)}] ${error.original} → ${error.correction}
+    });
+
+    // 在图片底部添加标注列表
+    const listStartY = height + 10;
+    const listHeight = errors.length * 20 + 20;
+    
+    let listSvg = `
+      <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="#FFF9E6"/>
+      <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#FFCC00" stroke-width="2"/>
+      <text x="10" y="${listStartY}" font-size="12" fill="#333" font-family="Arial" font-weight="bold">
+        批改标注：
+      </text>
+    `;
+    
+    errors.forEach((error, index) => {
+      const color = colors[error.type] || '#FF0000';
+      const itemY = listStartY + 18 + index * 20;
+      listSvg += `
+        <text x="10" y="${itemY}" font-size="11" fill="${color}" font-family="Arial">
+          ${index + 1}. ${error.original} → ${error.correction}
         </text>
       `;
     });
 
     // 创建标注图片（原图 + 底部标注列表）
-    const listHeight = errors.length * 22 + 30;
     const svgOverlay = `
       <svg width="${width}" height="${height + listHeight}">
-        <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="white"/>
-        <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#CCCCCC" stroke-width="1"/>
         ${svgAnnotations}
+        ${listSvg}
       </svg>
     `;
 
@@ -275,7 +299,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     const annotatedBuffer = await sharp(buffer)
       .extend({
         bottom: listHeight,
-        background: { r: 255, g: 255, b: 255, alpha: 1 },
+        background: { r: 255, g: 249, b: 230, alpha: 1 },
       })
       .composite([
         {
