@@ -27,6 +27,14 @@ export default function HomeScreen() {
           >
             <Ionicons name="search" size={24} color="#FFFFFF" />
           </TouchableOpacity>
+          {/* Essay Grading Icon - Top Left */}
+          <TouchableOpacity 
+            style={styles.essayButton}
+            activeOpacity={0.7}
+            onPress={() => router.push('/essay-grading')}
+          >
+            <Ionicons name="create-outline" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
           <View style={styles.imageOverlay}>
             <Text style={styles.imageLabel}>刻字</Text>
           </View>
@@ -122,6 +130,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 20,
     right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  essayButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
     width: 44,
     height: 44,
     borderRadius: 22,
