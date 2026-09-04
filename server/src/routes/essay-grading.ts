@@ -202,7 +202,45 @@ ${referenceAnswer}
 }
 
 /**
- * 在原图上标注错误（像老师批改作业一样）
+ * 使用 OCR 识别图片中每个单词的精确位置
+ */
+async function extractWordPositions(imageBase64: string): Promise<Array<{word: string, x: number, y: number, width: number, height: number}>> {
+  try {
+    const Tesseract = await import('tesseract.js');
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // 使用 Tesseract 进行 OCR 识别
+    const result = await Tesseract.recognize(buffer, 'eng', {
+      logger: () => {} // 禁用日志
+    });
+    
+    const wordPositions: Array<{word: string, x: number, y: number, width: number, height: number}> = [];
+    
+    // 提取每个单词的位置信息
+    if (result.data.words) {
+      for (const word of result.data.words) {
+        if (word.text && word.text.trim()) {
+          wordPositions.push({
+            word: word.text.trim(),
+            x: word.bbox.x0,
+            y: word.bbox.y0,
+            width: word.bbox.x1 - word.bbox.x0,
+            height: word.bbox.y1 - word.bbox.y0,
+          });
+        }
+      }
+    }
+    
+    return wordPositions;
+  } catch (error) {
+    console.error('OCR 识别失败:', error);
+    return [];
+  }
+}
+
+/**
+ * 在原图上标注错误（使用 OCR 精确位置）
  */
 async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Promise<string> {
   try {
@@ -214,41 +252,41 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     const width = metadata.width || 800;
     const height = metadata.height || 600;
 
+    // 使用 OCR 获取每个单词的精确位置
+    console.log('开始 OCR 识别...');
+    const wordPositions = await extractWordPositions(imageBase64);
+    console.log(`OCR 识别到 ${wordPositions.length} 个单词`);
+
     // 创建 SVG 标注层
     let svgAnnotations = '';
-    const colors = {
-      grammar: '#FF0000',      // 红色 - 语法错误
-      spelling: '#FF0000',     // 红色 - 拼写错误
-      punctuation: '#FF0000',  // 红色 - 标点错误
-      word_choice: '#FF0000',  // 红色 - 用词不当
-      sentence_structure: '#FF0000', // 红色 - 句式问题
-    };
-
-    // 估算每行高度（假设图片是作文纸，约 20-25 行）
-    const estimatedLines = 20;
-    const lineHeight = height / estimatedLines;
-    const startX = 60; // 左边距
-    const charWidth = 12; // 每个字符宽度估算
+    const color = '#FF0000'; // 统一使用红色（像老师用红笔）
 
     errors.forEach((error, index) => {
-      const color = colors[error.type] || '#FF0000';
+      // 在 OCR 结果中查找匹配的单词
+      const matchedWord = wordPositions.find(w => 
+        w.word.toLowerCase() === error.original.toLowerCase() ||
+        w.word.toLowerCase().includes(error.original.toLowerCase()) ||
+        error.original.toLowerCase().includes(w.word.toLowerCase())
+      );
       
-      // 如果有行号信息，在对应位置绘制标记
-      if (error.line && error.line > 0) {
-        const y = (error.line - 1) * lineHeight + lineHeight / 2;
-        const x = startX + ((error.column || 1) - 1) * charWidth;
-        const wordWidth = error.original.length * charWidth;
+      if (matchedWord) {
+        const x = matchedWord.x;
+        const y = matchedWord.y;
+        const wordWidth = matchedWord.width;
+        const wordHeight = matchedWord.height;
         
         // 1. 在错误单词上画删除线（红色横线）
         svgAnnotations += `
-          <line x1="${x}" y1="${y}" x2="${x + wordWidth}" y2="${y}" 
+          <line x1="${x}" y1="${y + wordHeight / 2}" x2="${x + wordWidth}" y2="${y + wordHeight / 2}" 
                 stroke="${color}" stroke-width="2"/>
         `;
         
         // 2. 在错误单词上方画圆圈标记
+        const circleX = x + wordWidth / 2;
+        const circleY = y - 10;
         svgAnnotations += `
-          <circle cx="${x + wordWidth / 2}" cy="${y - 15}" r="8" fill="none" stroke="${color}" stroke-width="1.5"/>
-          <text x="${x + wordWidth / 2}" y="${y - 11}" font-size="9" fill="${color}" text-anchor="middle" font-weight="bold">
+          <circle cx="${circleX}" cy="${circleY}" r="8" fill="none" stroke="${color}" stroke-width="1.5"/>
+          <text x="${circleX}" y="${circleY + 3}" font-size="9" fill="${color}" text-anchor="middle" font-weight="bold">
             ${index + 1}
           </text>
         `;
@@ -256,18 +294,22 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
         // 3. 在旁边写正确的单词（红色，斜体）
         if (error.correction && error.correction !== error.original) {
           const correctionX = x + wordWidth + 5;
+          const correctionY = y - 5;
           svgAnnotations += `
-            <text x="${correctionX}" y="${y - 5}" font-size="11" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
+            <text x="${correctionX}" y="${correctionY}" font-size="11" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
               ${error.correction}
             </text>
           `;
         }
+      } else {
+        // 如果没有找到匹配的单词，使用估算位置
+        console.log(`未找到匹配单词: "${error.original}"`);
       }
     });
 
     // 在图片底部添加标注列表
     const listStartY = height + 10;
-    const listHeight = errors.length * 20 + 20;
+    const listHeight = errors.length * 20 + 30;
     
     let listSvg = `
       <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="#FFF9E6"/>
@@ -278,7 +320,6 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     `;
     
     errors.forEach((error, index) => {
-      const color = colors[error.type] || '#FF0000';
       const itemY = listStartY + 18 + index * 20;
       listSvg += `
         <text x="10" y="${itemY}" font-size="11" fill="${color}" font-family="Arial">
