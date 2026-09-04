@@ -7,7 +7,6 @@ dist
 *.log
 .env
 .DS_Store
-client/
 scripts/
 .coze
 .cozeproj
