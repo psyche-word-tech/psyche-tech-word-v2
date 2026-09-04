@@ -245,49 +245,73 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     let svgAnnotations = '';
     const color = '#FF0000'; // 红色（像老师用红笔）
 
+    // 如果 OCR 失败，使用位置估算方案
+    const useEstimation = wordPositions.length === 0;
+    if (useEstimation) {
+      console.log('使用位置估算方案');
+    }
+
     errors.forEach((error, index) => {
-      // 在 OCR 结果中查找匹配的单词
-      const matchedWord = wordPositions.find(w => 
-        w.word.toLowerCase() === error.original.toLowerCase() ||
-        w.word.toLowerCase().includes(error.original.toLowerCase()) ||
-        error.original.toLowerCase().includes(w.word.toLowerCase())
-      );
+      let x: number, y: number, wordWidth: number, wordHeight: number;
       
-      if (matchedWord) {
-        const x = matchedWord.x;
-        const y = matchedWord.y;
-        const wordWidth = matchedWord.width;
-        const wordHeight = matchedWord.height;
+      if (useEstimation) {
+        // 位置估算方案：根据行号和单词序号计算位置
+        const totalLines = 12; // 估计行数
+        const padding = 40; // 边距
+        const lineHeight = (height - padding * 2) / totalLines;
+        const avgWordWidth = 60; // 平均单词宽度
         
-        // 1. 在错误单词上画删除线（红色横线）
-        svgAnnotations += `
-          <line x1="${x}" y1="${y + wordHeight / 2}" x2="${x + wordWidth}" y2="${y + wordHeight / 2}" 
-                stroke="${color}" stroke-width="2"/>
-        `;
+        const line = error.line || 1;
+        const wordIndex = error.wordIndex || 1;
         
-        // 2. 在错误单词上方画圆圈标记
-        const circleX = x + wordWidth / 2;
-        const circleY = y - 10;
+        x = padding + (wordIndex - 1) * avgWordWidth;
+        y = padding + (line - 1) * lineHeight;
+        wordWidth = avgWordWidth;
+        wordHeight = lineHeight * 0.6;
+      } else {
+        // OCR 方案：在 OCR 结果中查找匹配的单词
+        const matchedWord = wordPositions.find(w => 
+          w.word.toLowerCase() === error.original.toLowerCase() ||
+          w.word.toLowerCase().includes(error.original.toLowerCase()) ||
+          error.original.toLowerCase().includes(w.word.toLowerCase())
+        );
+        
+        if (matchedWord) {
+          x = matchedWord.x;
+          y = matchedWord.y;
+          wordWidth = matchedWord.width;
+          wordHeight = matchedWord.height;
+        } else {
+          console.log(`未找到匹配单词: "${error.original}"`);
+          return;
+        }
+      }
+      
+      // 1. 在错误单词上画删除线（红色横线）
+      svgAnnotations += `
+        <line x1="${x}" y1="${y + wordHeight / 2}" x2="${x + wordWidth}" y2="${y + wordHeight / 2}" 
+              stroke="${color}" stroke-width="2"/>
+      `;
+      
+      // 2. 在错误单词上方画圆圈标记
+      const circleX = x + wordWidth / 2;
+      const circleY = y - 10;
+      svgAnnotations += `
+        <circle cx="${circleX}" cy="${circleY}" r="8" fill="none" stroke="${color}" stroke-width="1.5"/>
+        <text x="${circleX}" y="${circleY + 3}" font-size="9" fill="${color}" text-anchor="middle" font-weight="bold">
+          ${index + 1}
+        </text>
+      `;
+      
+      // 3. 在旁边写正确的单词（红色，斜体）
+      if (error.correction && error.correction !== error.original) {
+        const correctionX = x + wordWidth + 5;
+        const correctionY = y - 5;
         svgAnnotations += `
-          <circle cx="${circleX}" cy="${circleY}" r="8" fill="none" stroke="${color}" stroke-width="1.5"/>
-          <text x="${circleX}" y="${circleY + 3}" font-size="9" fill="${color}" text-anchor="middle" font-weight="bold">
-            ${index + 1}
+          <text x="${correctionX}" y="${correctionY}" font-size="11" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
+            ${error.correction}
           </text>
         `;
-        
-        // 3. 在旁边写正确的单词（红色，斜体）
-        if (error.correction && error.correction !== error.original) {
-          const correctionX = x + wordWidth + 5;
-          const correctionY = y - 5;
-          svgAnnotations += `
-            <text x="${correctionX}" y="${correctionY}" font-size="11" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
-              ${error.correction}
-            </text>
-          `;
-        }
-      } else {
-        // 未找到匹配的单词，跳过标注
-        console.log(`未找到匹配单词: "${error.original}"`);
       }
     });
 
