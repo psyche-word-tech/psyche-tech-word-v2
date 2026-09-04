@@ -8,19 +8,29 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
-# 复制根目录 lockfile 和 server package.json
+# 复制根目录 lockfile 和 workspace 配置
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# 复制 client 和 server 的 package.json
+COPY client/package.json ./client/
 COPY server/package.json ./server/
 
-WORKDIR /app/server
-
-# 安装依赖（使用官方 registry，不用 frozen-lockfile）
+# 安装所有依赖
 RUN pnpm install --registry=https://registry.npmjs.org --no-frozen-lockfile
 
+# 构建前端
+WORKDIR /app/client
+COPY client/ .
+RUN npx expo export --platform web
+
 # 复制后端源码
+WORKDIR /app/server
 COPY server/ .
 
-# 构建（使用 build.js 编译 dist/index.js）
+# 复制前端静态文件到 public 目录
+RUN rm -rf public && cp -r ../client/dist public
+
+# 构建后端（使用 build.js 编译 dist/index.js）
 RUN node build.js
 
 # 暴露端口（Koyeb 会通过 PORT 环境变量传入）
