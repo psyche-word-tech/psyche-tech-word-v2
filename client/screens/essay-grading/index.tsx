@@ -153,7 +153,9 @@ export default function EssayGradingScreen() {
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>作文批改</Text>
-          <View style={{ width: 24 }} />
+          <TouchableOpacity onPress={() => router.push('/batch-grading')} style={styles.batchButton}>
+            <Ionicons name="layers-outline" size={24} color="#4CAF50" />
+          </TouchableOpacity>
         </View>
 
         {/* 图片选择区域 */}
@@ -322,6 +324,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E0E0E0',
   },
   backButton: {
+    padding: 8,
+  },
+  batchButton: {
     padding: 8,
   },
   headerTitle: {

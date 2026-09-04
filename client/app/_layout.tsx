@@ -49,6 +49,7 @@ export default function RootLayout() {
           <Stack.Screen name="profile" options={{ title: "" }} />
           <Stack.Screen name="settings" options={{ title: "" }} />
           <Stack.Screen name="essay-grading" options={{ title: "" }} />
+          <Stack.Screen name="batch-grading" options={{ title: "" }} />
           <Stack.Screen name="login" options={{ title: "" }} />
           <Stack.Screen name="register" options={{ title: "" }} />
           <Stack.Screen name="sms-login" options={{ title: "" }} />
