@@ -3,6 +3,8 @@ import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { authMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
+import OcrApi20210707, * as $OcrApi20210707 from '@alicloud/ocr-api20210707';
+import * as $OpenApi from '@alicloud/openapi-client';
 
 const router = Router();
 
@@ -202,39 +204,51 @@ ${referenceAnswer}
 }
 
 /**
- * 使用 OCR 识别图片中每个单词的精确位置
+ * 使用阿里云 OCR 识别图片中每个单词的精确位置
  */
 async function extractWordPositions(imageBase64: string): Promise<Array<{word: string, x: number, y: number, width: number, height: number}>> {
   try {
-    const Tesseract = await import('tesseract.js');
     const base64Data = imageBase64.split(',')[1] || imageBase64;
-    const buffer = Buffer.from(base64Data, 'base64');
     
-    // 使用 Tesseract 进行 OCR 识别
-    const worker = await Tesseract.createWorker('eng');
-    const result = await worker.recognize(buffer);
-    await worker.terminate();
+    // 创建阿里云 OCR 客户端
+    const config = new $OpenApi.Config({
+      accessKeyId: process.env.ALIBABA_CLOUD_ACCESS_KEY_ID || '',
+      accessKeySecret: process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || '',
+      endpoint: 'ocr-api.cn-hangzhou.aliyuncs.com',
+    });
+    
+    const client = new OcrApi20210707.default(config);
+    
+    // 调用手写体 OCR 识别
+    const request = new $OcrApi20210707.RecognizeHandwritingRequest({
+      body: base64Data,
+    });
+    
+    const response = await client.recognizeHandwriting(request);
     
     const wordPositions: Array<{word: string, x: number, y: number, width: number, height: number}> = [];
     
-    // 提取每个单词的位置信息
-    if (result.data.words) {
-      for (const word of result.data.words) {
-        if (word.text && word.text.trim()) {
-          wordPositions.push({
-            word: word.text.trim(),
-            x: word.bbox.x0,
-            y: word.bbox.y0,
-            width: word.bbox.x1 - word.bbox.x0,
-            height: word.bbox.y1 - word.bbox.y0,
-          });
+    // 解析 OCR 结果
+    if (response.body?.data) {
+      const ocrData = JSON.parse(response.body.data);
+      if (ocrData.prism_wordsInfo) {
+        for (const wordInfo of ocrData.prism_wordsInfo) {
+          if (wordInfo.word && wordInfo.word.trim()) {
+            wordPositions.push({
+              word: wordInfo.word.trim(),
+              x: wordInfo.pos[0].x || 0,
+              y: wordInfo.pos[0].y || 0,
+              width: (wordInfo.pos[2].x || 0) - (wordInfo.pos[0].x || 0),
+              height: (wordInfo.pos[2].y || 0) - (wordInfo.pos[0].y || 0),
+            });
+          }
         }
       }
     }
     
     return wordPositions;
   } catch (error) {
-    console.error('OCR 识别失败:', error);
+    console.error('阿里云 OCR 识别失败:', error);
     return [];
   }
 }
