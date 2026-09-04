@@ -42,7 +42,7 @@ interface GradingResult {
 router.post('/grade', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
-    const { image, reference_answer, max_score = 25 } = req.body;
+    const { image, reference_answer, max_score = 15 } = req.body;
 
     if (!image) {
       return res.status(400).json({ success: false, error: '缺少作文图片' });
