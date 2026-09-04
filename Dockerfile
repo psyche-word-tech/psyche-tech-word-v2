@@ -12,7 +12,7 @@ WORKDIR /app
 COPY . .
 
 # 安装所有依赖
-RUN pnpm install --registry=https://registry.npmjs.org --no-frozen-lockfile --ignore-scripts=false
+RUN pnpm install --registry=https://registry.npmjs.org --no-frozen-lockfile
 
 # 构建前端
 WORKDIR /app/client
