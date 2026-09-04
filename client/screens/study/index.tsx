@@ -684,6 +684,17 @@ export default function StudyScreen() {
                 <Text style={styles.menuItemText}>批改作业</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowSubmissionMenu(false);
+                router.push('/essay-grading');
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create-outline" size={24} color="#8B5CF6" />
+              <Text style={styles.menuItemText}>AI 作文批改</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
