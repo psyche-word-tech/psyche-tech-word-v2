@@ -265,13 +265,20 @@ ${referenceAnswer}
       "type": "grammar/spelling/punctuation/word_choice/sentence_structure",
       "original": "错误原文",
       "correction": "正确写法",
-      "explanation": "错误原因说明"
+      "explanation": "错误原因说明",
+      "line": 第几行（从 1 开始）,
+      "wordIndex": 该行第几个单词（从 1 开始）
     }
   ],
   "comments": "总体评语",
   "strengths": ["优点1", "优点2"],
-  "improvements": ["改进建议1", "改进建议2"]
-}`;
+  "improvements": ["改进建议 1", "改进建议 2"]
+}
+
+## 重要
+- line 和 wordIndex 用于定位错误位置，必须准确
+- 仔细数清楚每个错误在第几行、第几个单词
+`;
 
   const response = await fetch(QWEN_API_URL, {
     method: 'POST',
