@@ -16,7 +16,7 @@ COPY client/package.json ./client/
 COPY server/package.json ./server/
 
 # 安装所有依赖
-RUN pnpm install --registry=https://registry.npmjs.org --no-frozen-lockfile
+RUN pnpm install --registry=https://registry.npmjs.org --no-frozen-lockfile --ignore-scripts=false
 
 # 构建前端
 WORKDIR /app/client
