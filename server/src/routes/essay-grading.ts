@@ -8,8 +8,8 @@ const router = Router();
 
 // 千问 API 配置
 const QWEN_API_KEY = process.env.QWEN_API_KEY || '';
-const QWEN_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
-const QWEN_MODEL = 'qwen2.5-vl-72b-instruct';
+const QWEN_API_URL = process.env.QWEN_API_URL || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
+const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen2.5-vl-72b-instruct';
 
 interface ErrorAnnotation {
   type: 'grammar' | 'spelling' | 'punctuation' | 'word_choice' | 'sentence_structure';
