@@ -224,21 +224,49 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
       sentence_structure: '#009900', // 绿色 - 句式问题
     };
 
+    // 估算每行高度（假设图片是作文纸，约 20-25 行）
+    const estimatedLines = 20;
+    const lineHeight = height / estimatedLines;
+    const startX = 50; // 左边距
+
     errors.forEach((error, index) => {
       const color = colors[error.type] || '#FF0000';
-      // 在图片右侧添加标注列表
-      const y = 30 + index * 25;
+      
+      // 如果有行号信息，在对应位置绘制标记
+      if (error.line && error.line > 0) {
+        const y = (error.line - 1) * lineHeight + lineHeight / 2;
+        const x = startX + (error.column || 1) * 8; // 估算列位置
+        
+        // 绘制红色下划线
+        svgAnnotations += `
+          <line x1="${x}" y1="${y + 5}" x2="${x + error.original.length * 8}" y2="${y + 5}" 
+                stroke="${color}" stroke-width="2" stroke-dasharray="4,2"/>
+        `;
+        
+        // 绘制错误序号圆圈
+        svgAnnotations += `
+          <circle cx="${x - 15}" cy="${y}" r="10" fill="${color}" opacity="0.8"/>
+          <text x="${x - 15}" y="${y + 4}" font-size="10" fill="white" text-anchor="middle" font-weight="bold">
+            ${index + 1}
+          </text>
+        `;
+      }
+      
+      // 在图片底部添加标注列表
+      const listY = height + 20 + index * 22;
       svgAnnotations += `
-        <text x="10" y="${y}" font-size="12" fill="${color}" font-family="Arial">
+        <text x="10" y="${listY}" font-size="11" fill="${color}" font-family="Arial">
           ${index + 1}. [${getErrorTypeName(error.type)}] ${error.original} → ${error.correction}
         </text>
       `;
     });
 
-    // 创建标注图片
+    // 创建标注图片（原图 + 底部标注列表）
+    const listHeight = errors.length * 22 + 30;
     const svgOverlay = `
-      <svg width="${width}" height="${height + errors.length * 25 + 40}">
-        <rect width="100%" height="100%" fill="white"/>
+      <svg width="${width}" height="${height + listHeight}">
+        <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="white"/>
+        <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#CCCCCC" stroke-width="1"/>
         ${svgAnnotations}
       </svg>
     `;
@@ -246,13 +274,13 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     // 合并原图和标注
     const annotatedBuffer = await sharp(buffer)
       .extend({
-        bottom: errors.length * 25 + 40,
+        bottom: listHeight,
         background: { r: 255, g: 255, b: 255, alpha: 1 },
       })
       .composite([
         {
           input: Buffer.from(svgOverlay),
-          top: height,
+          top: 0,
           left: 0,
         },
       ])
