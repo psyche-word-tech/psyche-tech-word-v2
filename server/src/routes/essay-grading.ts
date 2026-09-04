@@ -3,6 +3,8 @@ import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { authMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
+import OcrApi20210707, * as $OcrApi20210707 from '@alicloud/ocr-api20210707';
+import * as $OpenApi from '@alicloud/openapi-client';
 
 const router = Router();
 
@@ -11,19 +13,21 @@ const QWEN_API_KEY = process.env.QWEN_API_KEY || '';
 const QWEN_API_URL = process.env.QWEN_API_URL || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
 const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen3.7-plus';
 
+// 阿里云 OCR 配置
+const ALIBABA_CLOUD_ACCESS_KEY_ID = process.env.ALIBABA_CLOUD_ACCESS_KEY_ID || '';
+const ALIBABA_CLOUD_ACCESS_KEY_SECRET = process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || '';
+const OCR_ENDPOINT = 'ocr-api.cn-hangzhou.aliyuncs.com';
+
 interface ErrorAnnotation {
   type: 'grammar' | 'spelling' | 'punctuation' | 'word_choice' | 'sentence_structure';
   original: string;
   correction: string;
   explanation: string;
-  line?: number;
-  wordIndex?: number;
 }
 
 interface GradingResult {
   total_score: number;
   max_score: number;
-  totalLines: number;
   scores: {
     content: number;
     language: number;
@@ -55,8 +59,8 @@ router.post('/grade', authMiddleware, async (req: AuthRequest, res) => {
     // 调用千问 VL 模型批改作文
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
 
-    // 在原图上标注错误
-    const markedImage = await annotateImage(image, gradingResult.errors, gradingResult.totalLines);
+    // 在原图上标注错误（使用 OCR 精确位置）
+    const markedImage = await annotateImage(image, gradingResult.errors);
 
     // 保存到数据库
     const supabase = getSupabaseClient();
@@ -109,12 +113,10 @@ ${referenceAnswer}
    - 结构分（20%）：段落组织、逻辑连贯
    - 书写分（10%）：字迹工整度
 4. 给出具体修改建议和评语
-5. **标注位置**：为每个错误返回在图片中的精确像素坐标（x, y, width, height）
 
 ## 输出格式（JSON）
 请严格按照以下 JSON 格式输出，不要输出其他内容：
 {
-  "totalLines": 正文总行数（必须）,
   "max_score": ${maxScore},
   "scores": {
     "content": 内容分,
@@ -127,9 +129,7 @@ ${referenceAnswer}
       "type": "grammar/spelling/punctuation/word_choice/sentence_structure",
       "original": "错误原文",
       "correction": "正确写法",
-      "explanation": "错误原因说明",
-      "line": 行号（必须，从 1 开始）,
-      "wordIndex": 单词序号（必须，从 1 开始）
+      "explanation": "错误原因说明"
     }
   ],
   "comments": "总体评语",
@@ -204,9 +204,70 @@ ${referenceAnswer}
 }
 
 /**
- * 在原图上标注错误（根据行号和单词序号计算位置）
+ * 使用阿里云 OCR 识别图片中每个文字块的精确位置
  */
-async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], totalLines: number = 10): Promise<string> {
+async function extractWordPositions(imageBase64: string): Promise<Array<{word: string, x: number, y: number, width: number, height: number}>> {
+  try {
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // 创建阿里云 OCR 客户端
+    const config = new $OpenApi.Config({
+      accessKeyId: ALIBABA_CLOUD_ACCESS_KEY_ID,
+      accessKeySecret: ALIBABA_CLOUD_ACCESS_KEY_SECRET,
+      endpoint: OCR_ENDPOINT,
+    });
+    
+    const client = new OcrApi20210707.default(config);
+    
+    // 调用手写体 OCR 识别
+    const request = new $OcrApi20210707.RecognizeHandwritingRequest({
+      body: buffer,
+    });
+    
+    const response = await client.recognizeHandwriting(request);
+    
+    const wordPositions: Array<{word: string, x: number, y: number, width: number, height: number}> = [];
+    
+    // 解析 OCR 结果
+    if (response.body?.data) {
+      const ocrData = typeof response.body.data === 'string' 
+        ? JSON.parse(response.body.data) 
+        : response.body.data;
+      
+      if (ocrData.prism_wordsInfo) {
+        for (const wordInfo of ocrData.prism_wordsInfo) {
+          if (wordInfo.word && wordInfo.word.trim()) {
+            // 使用 pos 字段获取精确坐标（左上角）
+            const pos = wordInfo.pos;
+            const x = pos[0].x || wordInfo.x || 0;
+            const y = pos[0].y || wordInfo.y || 0;
+            const width = wordInfo.width || 0;
+            const height = wordInfo.height || 0;
+            
+            wordPositions.push({
+              word: wordInfo.word.trim(),
+              x,
+              y,
+              width,
+              height,
+            });
+          }
+        }
+      }
+    }
+    
+    return wordPositions;
+  } catch (error) {
+    console.error('阿里云 OCR 识别失败:', error);
+    return [];
+  }
+}
+
+/**
+ * 在原图上标注错误（使用 OCR 精确位置）
+ */
+async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Promise<string> {
   try {
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const buffer = Buffer.from(base64Data, 'base64');
@@ -216,32 +277,28 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], tot
     const width = metadata.width || 800;
     const height = metadata.height || 600;
 
-    // 计算行高和单词宽度
-    const topMargin = 50; // 顶部边距（标题区域）
-    const bottomMargin = 30; // 底部边距
-    const leftMargin = 40; // 左边距
-    const rightMargin = 40; // 右边距
-    
-    const availableHeight = height - topMargin - bottomMargin;
-    const lineHeight = availableHeight / totalLines;
-    const avgWordWidth = 65; // 平均单词宽度（像素）
+    // 使用 OCR 获取每个单词的精确位置
+    console.log('开始 OCR 识别...');
+    const wordPositions = await extractWordPositions(imageBase64);
+    console.log(`OCR 识别到 ${wordPositions.length} 个文字块`);
 
     // 创建 SVG 标注层
     let svgAnnotations = '';
     const color = '#FF0000'; // 红色（像老师用红笔）
 
     errors.forEach((error, index) => {
-      // 根据行号和单词序号计算位置
-      const line = error.line || 1;
-      const wordIndex = error.wordIndex || 1;
+      // 在 OCR 结果中查找匹配的单词
+      const matchedWord = wordPositions.find(w => 
+        w.word.toLowerCase() === error.original.toLowerCase() ||
+        w.word.toLowerCase().includes(error.original.toLowerCase()) ||
+        error.original.toLowerCase().includes(w.word.toLowerCase())
+      );
       
-      // 计算 y 坐标（行位置）
-      const y = topMargin + (line - 1) * lineHeight;
-      
-      // 计算 x 坐标（单词位置）
-      const x = leftMargin + (wordIndex - 1) * avgWordWidth;
-      const wordWidth = avgWordWidth;
-      const wordHeight = lineHeight * 0.7;
+      if (matchedWord) {
+        const x = matchedWord.x;
+        const y = matchedWord.y;
+        const wordWidth = matchedWord.width;
+        const wordHeight = matchedWord.height;
         
         // 1. 在错误单词上画删除线（红色横线）
         svgAnnotations += `
@@ -269,6 +326,10 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], tot
             </text>
           `;
         }
+      } else {
+        // 未找到匹配的单词，跳过标注
+        console.log(`未找到匹配单词: "${error.original}"`);
+      }
     });
 
     // 在图片底部添加标注列表
