@@ -16,15 +16,14 @@ interface ErrorAnnotation {
   original: string;
   correction: string;
   explanation: string;
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
+  line?: number;
+  wordIndex?: number;
 }
 
 interface GradingResult {
   total_score: number;
   max_score: number;
+  totalLines: number;
   scores: {
     content: number;
     language: number;
@@ -57,7 +56,7 @@ router.post('/grade', authMiddleware, async (req: AuthRequest, res) => {
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
 
     // 在原图上标注错误
-    const markedImage = await annotateImage(image, gradingResult.errors);
+    const markedImage = await annotateImage(image, gradingResult.errors, gradingResult.totalLines);
 
     // 保存到数据库
     const supabase = getSupabaseClient();
@@ -115,7 +114,7 @@ ${referenceAnswer}
 ## 输出格式（JSON）
 请严格按照以下 JSON 格式输出，不要输出其他内容：
 {
-  "total_score": 总分,
+  "totalLines": 正文总行数（必须）,
   "max_score": ${maxScore},
   "scores": {
     "content": 内容分,
@@ -129,10 +128,8 @@ ${referenceAnswer}
       "original": "错误原文",
       "correction": "正确写法",
       "explanation": "错误原因说明",
-      "x": x 坐标（必须，像素）,
-      "y": y 坐标（必须，像素）,
-      "width": 宽度（必须，像素）,
-      "height": 高度（必须，像素）
+      "line": 行号（必须，从 1 开始）,
+      "wordIndex": 单词序号（必须，从 1 开始）
     }
   ],
   "comments": "总体评语",
@@ -207,9 +204,9 @@ ${referenceAnswer}
 }
 
 /**
- * 在原图上标注错误（根据行号和单词序号估算位置）
+ * 在原图上标注错误（根据行号和单词序号计算位置）
  */
-async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Promise<string> {
+async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], totalLines: number = 10): Promise<string> {
   try {
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const buffer = Buffer.from(base64Data, 'base64');
@@ -219,16 +216,32 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[]): Pr
     const width = metadata.width || 800;
     const height = metadata.height || 600;
 
+    // 计算行高和单词宽度
+    const topMargin = 50; // 顶部边距（标题区域）
+    const bottomMargin = 30; // 底部边距
+    const leftMargin = 40; // 左边距
+    const rightMargin = 40; // 右边距
+    
+    const availableHeight = height - topMargin - bottomMargin;
+    const lineHeight = availableHeight / totalLines;
+    const avgWordWidth = 65; // 平均单词宽度（像素）
+
     // 创建 SVG 标注层
     let svgAnnotations = '';
     const color = '#FF0000'; // 红色（像老师用红笔）
 
     errors.forEach((error, index) => {
-      // 使用模型返回的精确坐标
-      const x = error.x || 0;
-      const y = error.y || 0;
-      const wordWidth = error.width || 60;
-      const wordHeight = error.height || 20;
+      // 根据行号和单词序号计算位置
+      const line = error.line || 1;
+      const wordIndex = error.wordIndex || 1;
+      
+      // 计算 y 坐标（行位置）
+      const y = topMargin + (line - 1) * lineHeight;
+      
+      // 计算 x 坐标（单词位置）
+      const x = leftMargin + (wordIndex - 1) * avgWordWidth;
+      const wordWidth = avgWordWidth;
+      const wordHeight = lineHeight * 0.7;
         
         // 1. 在错误单词上画删除线（红色横线）
         svgAnnotations += `
