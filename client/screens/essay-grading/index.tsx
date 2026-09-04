@@ -197,14 +197,15 @@ export default function EssayGradingScreen() {
             value={referenceAnswer}
             onChangeText={setReferenceAnswer}
             textAlignVertical="top"
+            editable={!loading}
           />
         </View>
 
         {/* 批改按钮 */}
         <TouchableOpacity
-          style={[styles.gradeButton, (!selectedImage || !referenceAnswer.trim() || loading) && styles.gradeButtonDisabled]}
+          style={[styles.gradeButton, (!selectedImage || loading) && styles.gradeButtonDisabled]}
           onPress={handleGrade}
-          disabled={!selectedImage || !referenceAnswer.trim() || loading}
+          disabled={!selectedImage || loading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
