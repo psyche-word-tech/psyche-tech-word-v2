@@ -188,12 +188,44 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
   // 解析 JSON 响应
   try {
     const result = JSON.parse(content);
+    // 处理 Qwen3.5-OCR 返回的 rotate_rect 格式
+    if (Array.isArray(result)) {
+      return result.map((item: any) => {
+        if (item.rotate_rect) {
+          const [x1, y1, x2, y2] = item.rotate_rect;
+          return {
+            text: item.text,
+            x: Math.min(x1, x2),
+            y: Math.min(y1, y2),
+            width: Math.abs(x2 - x1),
+            height: Math.abs(y2 - y1),
+          };
+        }
+        return item;
+      });
+    }
     return result.words || [];
   } catch {
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[1]);
-      return result.words || [];
+      const parsed = JSON.parse(jsonMatch[1]);
+      // 处理 Qwen3.5-OCR 返回的 rotate_rect 格式
+      if (Array.isArray(parsed)) {
+        return parsed.map((item: any) => {
+          if (item.rotate_rect) {
+            const [x1, y1, x2, y2] = item.rotate_rect;
+            return {
+              text: item.text,
+              x: Math.min(x1, x2),
+              y: Math.min(y1, y2),
+              width: Math.abs(x2 - x1),
+              height: Math.abs(y2 - y1),
+            };
+          }
+          return item;
+        });
+      }
+      return parsed.words || [];
     }
     throw new Error('Qwen OCR API 返回格式错误');
   }
