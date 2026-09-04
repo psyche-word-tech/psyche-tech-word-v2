@@ -77,11 +77,6 @@ export default function EssayGradingScreen() {
       return;
     }
 
-    if (!referenceAnswer.trim()) {
-      Alert.alert('提示', '请输入参考答案');
-      return;
-    }
-
     setLoading(true);
     try {
       // 读取图片 base64
