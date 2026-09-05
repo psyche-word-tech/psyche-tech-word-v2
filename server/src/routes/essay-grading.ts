@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { authMiddleware } from '../middleware/auth';
+import { optionalAuthMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import OcrApi20210707, * as $OcrApi20210707 from '@alicloud/ocr-api20210707';
 import * as $OpenApi from '@alicloud/openapi-client';
@@ -52,7 +52,7 @@ interface GradingResult {
  * POST /api/v1/essay-grading/grade
  * 批改英语作文
  */
-router.post('/grade', authMiddleware, async (req: AuthRequest, res) => {
+router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
     const { image, reference_answer, max_score = 15 } = req.body;
@@ -523,7 +523,7 @@ function getErrorTypeName(type: string): string {
  * GET /api/v1/essay-grading/history
  * 获取批改历史
  */
-router.get('/history', authMiddleware, async (req: AuthRequest, res) => {
+router.get('/history', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
     const supabase = getSupabaseClient();
@@ -550,7 +550,7 @@ router.get('/history', authMiddleware, async (req: AuthRequest, res) => {
  * GET /api/v1/essay-grading/:id
  * 获取单次批改详情
  */
-router.get('/:id', authMiddleware, async (req: AuthRequest, res) => {
+router.get('/:id', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const userId = req.userId;
