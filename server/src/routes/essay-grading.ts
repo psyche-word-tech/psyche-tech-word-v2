@@ -376,18 +376,20 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       
       if (useEstimation) {
         // 位置估算方案：根据行号和单词序号计算位置
-        const totalLines = 12; // 估计行数
-        const padding = 40; // 边距
-        const lineHeight = (height - padding * 2) / totalLines;
-        const avgWordWidth = 60; // 平均单词宽度
+        const totalLines = 10; // 估计行数（根据实际图片调整）
+        const paddingTop = 60; // 顶部边距
+        const paddingBottom = 40; // 底部边距
+        const paddingLeft = 40; // 左边距
+        const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
+        const avgWordWidth = 50; // 平均单词宽度（根据实际图片调整）
         
         const line = (error as any).line || 1;
         const wordIndex = (error as any).wordIndex || 1;
         
-        x = padding + (wordIndex - 1) * avgWordWidth;
-        y = padding + (line - 1) * lineHeight;
+        x = paddingLeft + (wordIndex - 1) * avgWordWidth;
+        y = paddingTop + (line - 1) * lineHeight;
         wordWidth = avgWordWidth;
-        wordHeight = lineHeight * 0.6;
+        wordHeight = lineHeight * 0.5;
       } else {
         // OCR 方案：在 OCR 结果中查找匹配的单词
         const matchedWord = ocrWords.find(w => 
@@ -404,18 +406,20 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         } else {
           // 找不到匹配单词时，使用位置估算方案
           console.log(`未找到匹配单词: "${error.original}"，使用位置估算`);
-          const totalLines = 12;
-          const padding = 40;
-          const lineHeight = (height - padding * 2) / totalLines;
-          const avgWordWidth = 60;
+          const totalLines = 10;
+          const paddingTop = 60;
+          const paddingBottom = 40;
+          const paddingLeft = 40;
+          const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
+          const avgWordWidth = 50;
           
           const line = (error as any).line || 1;
           const wordIndex = (error as any).wordIndex || 1;
           
-          x = padding + (wordIndex - 1) * avgWordWidth;
-          y = padding + (line - 1) * lineHeight;
+          x = paddingLeft + (wordIndex - 1) * avgWordWidth;
+          y = paddingTop + (line - 1) * lineHeight;
           wordWidth = avgWordWidth;
-          wordHeight = lineHeight * 0.6;
+          wordHeight = lineHeight * 0.5;
         }
       }
       
