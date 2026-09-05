@@ -150,7 +150,7 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
       'Authorization': `Bearer ${QWEN_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'qwen3.5-ocr',
+      model: QWEN_MODEL,
       messages: [
         {
           role: 'user',
