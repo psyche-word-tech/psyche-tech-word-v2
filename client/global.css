@@ -2,6 +2,13 @@
 @import 'uniwind';
 @import './heroui/styles';
 
+/* 中文字体支持 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+body {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
 @theme {
   /* Primitive Colors (Do not change between light and dark) */
   --white: oklch(100% 0 0);
