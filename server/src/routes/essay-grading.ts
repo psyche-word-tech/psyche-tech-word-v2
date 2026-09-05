@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Router } from 'express';
 import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
@@ -6,16 +9,29 @@ import type { AuthRequest } from '../middleware/auth';
 import OcrApi20210707, * as $OcrApi20210707 from '@alicloud/ocr-api20210707';
 import * as $OpenApi from '@alicloud/openapi-client';
 
+// 加载环境变量 - 使用 process.cwd() 获取当前工作目录
+dotenv.config({ path: path.join(process.cwd(), '.env') });
+
 const router = Router();
 
-// 千问 API 配置
-const QWEN_API_KEY = process.env.QWEN_API_KEY || '';
-const QWEN_API_URL = process.env.QWEN_API_URL || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
-const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen3.7-plus';
+// 千问 API 配置（使用函数延迟读取环境变量）
+function getQwenApiKey() {
+  return process.env.QWEN_API_KEY || '';
+}
+function getQwenApiUrl() {
+  return process.env.QWEN_API_URL || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
+}
+function getQwenModel() {
+  return process.env.QWEN_MODEL || 'qwen3.7-plus';
+}
 
-// 阿里云 OCR 配置
-const ALIBABA_CLOUD_ACCESS_KEY_ID = process.env.ALIBABA_CLOUD_ACCESS_KEY_ID || '';
-const ALIBABA_CLOUD_ACCESS_KEY_SECRET = process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || '';
+// 阿里云 OCR 配置（使用函数延迟读取环境变量）
+function getAlibabaCloudAccessKeyId() {
+  return process.env.ALIBABA_CLOUD_ACCESS_KEY_ID || '';
+}
+function getAlibabaCloudAccessKeySecret() {
+  return process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || '';
+}
 const OCR_ENDPOINT = 'ocr-api.cn-hangzhou.aliyuncs.com';
 
 interface ErrorAnnotation {
@@ -143,14 +159,14 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 2. 返回每个单词的精确位置坐标
 3. 坐标单位为像素，相对于原图`;
 
-  const response = await fetch(QWEN_API_URL, {
+  const response = await fetch(getQwenApiUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${QWEN_API_KEY}`,
+      'Authorization': `Bearer ${getQwenApiKey()}`,
     },
     body: JSON.stringify({
-      model: QWEN_MODEL,
+      model: getQwenModel(),
       messages: [
         {
           role: 'user',
@@ -285,14 +301,14 @@ ${referenceAnswer}
 - 仔细数清楚每个错误在第几行、第几个单词
 `;
 
-  const response = await fetch(QWEN_API_URL, {
+  const response = await fetch(getQwenApiUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${QWEN_API_KEY}`,
+      'Authorization': `Bearer ${getQwenApiKey()}`,
     },
     body: JSON.stringify({
-      model: QWEN_MODEL,
+      model: getQwenModel(),
       messages: [
         {
           role: 'user',

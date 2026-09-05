@@ -1,9 +1,7 @@
 import dotenv from 'dotenv';
-dotenv.config();
-
+import path from "path";
 import express from "express";
 import cors from "cors";
-import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { checkDatabaseHealth, startKeepAlive, resetSupabaseClient } from "./storage/database/supabase-client";
@@ -27,6 +25,9 @@ import essayGradingRouter from "./routes/essay-grading";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 加载环境变量
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
 const port = process.env.PORT || 5000;
