@@ -441,12 +441,12 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         </text>
       `;
       
-      // 3. 在旁边写正确的单词（红色，斜体，根据分辨率调整字体）
+      // 3. 在旁边写正确的单词（红色，斜体，增大字体使其与原字体比例协调）
       if (error.correction && error.correction !== error.original) {
         const correctionX = x + wordWidth + 8 * scale;
         const correctionY = y - 8 * scale;
         svgAnnotations += `
-          <text x="${correctionX}" y="${correctionY}" font-size="${14 * scale}" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
+          <text x="${correctionX}" y="${correctionY}" font-size="${20 * scale}" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
             ${error.correction}
           </text>
         `;
