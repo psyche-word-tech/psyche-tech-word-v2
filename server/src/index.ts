@@ -190,7 +190,7 @@ process.on('unhandledRejection', (reason, promise) => {
   // 记录错误但不退出进程
 });
 
-const server = app.listen(port, () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Server listening at http://localhost:${port}/`);
   // 启动数据库连接保活（每60秒检查一次）
   startKeepAlive(60000);
