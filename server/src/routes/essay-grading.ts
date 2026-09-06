@@ -424,11 +424,21 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       let x = 0, y = 0, wordWidth = 50 * scale, wordHeight = 30 * scale;
       
       if ((error as any).bbox && Array.isArray((error as any).bbox) && (error as any).bbox.length === 4) {
-        const [x1, y1, x2, y2] = (error as any).bbox;
-        x = x1;
-        y = y1;
-        wordWidth = x2 - x1;
-        wordHeight = y2 - y1;
+        const [bx1, by1, bx2, by2] = (error as any).bbox;
+        // 判断是 [x1, y1, x2, y2] 还是 [x, y, width, height] 格式
+        if (bx2 > bx1 && by2 > by1 && bx2 - bx1 < 1000 && by2 - by1 < 1000) {
+          // [x1, y1, x2, y2] 格式
+          x = bx1;
+          y = by1;
+          wordWidth = bx2 - bx1;
+          wordHeight = by2 - by1;
+        } else {
+          // [x, y, width, height] 格式
+          x = bx1;
+          y = by1;
+          wordWidth = bx2;
+          wordHeight = by2;
+        }
         console.log(`[annotateImage] 使用 bbox 位置：${error.original} at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
       } else {
         // 如果没有 bbox，使用位置估算
