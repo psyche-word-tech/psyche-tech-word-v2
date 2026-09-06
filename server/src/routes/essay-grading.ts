@@ -423,50 +423,50 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       const wordWidth = avgWordWidth;
       const wordHeight = lineHeight * 0.5;
       
-      // 1. 在错误单词上画删除线（红色横线）
+      // 1. 在错误单词上画删除线（红色横线，加粗）
       svgAnnotations += `
         <line x1="${x}" y1="${y + wordHeight / 2}" x2="${x + wordWidth}" y2="${y + wordHeight / 2}" 
-              stroke="${color}" stroke-width="2"/>
+              stroke="${color}" stroke-width="3"/>
       `;
       
-      // 2. 在错误单词上方画圆圈标记
+      // 2. 在错误单词上方画圆圈标记（增大）
       const circleX = x + wordWidth / 2;
-      const circleY = y - 10;
+      const circleY = y - 15;
       svgAnnotations += `
-        <circle cx="${circleX}" cy="${circleY}" r="8" fill="none" stroke="${color}" stroke-width="1.5"/>
-        <text x="${circleX}" y="${circleY + 3}" font-size="9" fill="${color}" text-anchor="middle" font-weight="bold">
+        <circle cx="${circleX}" cy="${circleY}" r="12" fill="none" stroke="${color}" stroke-width="2"/>
+        <text x="${circleX}" y="${circleY + 5}" font-size="14" fill="${color}" text-anchor="middle" font-weight="bold">
           ${index + 1}
         </text>
       `;
       
-      // 3. 在旁边写正确的单词（红色，斜体）
+      // 3. 在旁边写正确的单词（红色，斜体，增大字体）
       if (error.correction && error.correction !== error.original) {
-        const correctionX = x + wordWidth + 5;
-        const correctionY = y - 5;
+        const correctionX = x + wordWidth + 8;
+        const correctionY = y - 8;
         svgAnnotations += `
-          <text x="${correctionX}" y="${correctionY}" font-size="11" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
+          <text x="${correctionX}" y="${correctionY}" font-size="14" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
             ${error.correction}
           </text>
         `;
       }
     });
 
-    // 在图片底部添加标注列表
-    const listStartY = height + 10;
-    const listHeight = errors.length * 20 + 30;
+    // 在图片底部添加标注列表（增大字体和间距）
+    const listStartY = height + 15;
+    const listHeight = errors.length * 35 + 50;
     
     let listSvg = `
       <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="#FFF9E6"/>
-      <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#FFCC00" stroke-width="2"/>
-      <text x="10" y="${listStartY}" font-size="12" fill="#333" font-family="Arial" font-weight="bold">
+      <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#FFCC00" stroke-width="3"/>
+      <text x="15" y="${listStartY}" font-size="18" fill="#333" font-family="Arial" font-weight="bold">
         批改标注：
       </text>
     `;
     
     errors.forEach((error, index) => {
-      const itemY = listStartY + 18 + index * 20;
+      const itemY = listStartY + 30 + index * 35;
       listSvg += `
-        <text x="10" y="${itemY}" font-size="11" fill="${color}" font-family="Arial">
+        <text x="15" y="${itemY}" font-size="16" fill="${color}" font-family="Arial" font-weight="bold">
           ${index + 1}. ${error.original} → ${error.correction}
         </text>
       `;
