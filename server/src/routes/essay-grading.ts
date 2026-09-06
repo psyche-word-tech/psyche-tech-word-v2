@@ -407,12 +407,14 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     const color = '#FF0000'; // 红色（像老师用红笔）
 
     // 使用位置估算方案（简化实现，避免 OCR 查找卡住）
+    // 根据图片分辨率动态调整标注大小
+    const scale = Math.min(width, height) / 1000; // 缩放因子（基于 1000px 基准）
     const totalLines = 10;
-    const paddingTop = 60;
-    const paddingBottom = 40;
-    const paddingLeft = 40;
+    const paddingTop = 60 * scale;
+    const paddingBottom = 40 * scale;
+    const paddingLeft = 40 * scale;
     const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
-    const avgWordWidth = 50;
+    const avgWordWidth = 50 * scale;
 
     errors.forEach((error, index) => {
       const line = (error as any).line || 1;
@@ -426,25 +428,25 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       // 1. 在错误单词上画删除线（红色横线，加粗）
       svgAnnotations += `
         <line x1="${x}" y1="${y + wordHeight / 2}" x2="${x + wordWidth}" y2="${y + wordHeight / 2}" 
-              stroke="${color}" stroke-width="3"/>
+              stroke="${color}" stroke-width="${3 * scale}"/>
       `;
       
-      // 2. 在错误单词上方画圆圈标记（增大）
+      // 2. 在错误单词上方画圆圈标记（根据分辨率调整大小）
       const circleX = x + wordWidth / 2;
-      const circleY = y - 15;
+      const circleY = y - 15 * scale;
       svgAnnotations += `
-        <circle cx="${circleX}" cy="${circleY}" r="12" fill="none" stroke="${color}" stroke-width="2"/>
-        <text x="${circleX}" y="${circleY + 5}" font-size="14" fill="${color}" text-anchor="middle" font-weight="bold">
+        <circle cx="${circleX}" cy="${circleY}" r="${12 * scale}" fill="none" stroke="${color}" stroke-width="${2 * scale}"/>
+        <text x="${circleX}" y="${circleY + 5 * scale}" font-size="${14 * scale}" fill="${color}" text-anchor="middle" font-weight="bold">
           ${index + 1}
         </text>
       `;
       
-      // 3. 在旁边写正确的单词（红色，斜体，增大字体）
+      // 3. 在旁边写正确的单词（红色，斜体，根据分辨率调整字体）
       if (error.correction && error.correction !== error.original) {
-        const correctionX = x + wordWidth + 8;
-        const correctionY = y - 8;
+        const correctionX = x + wordWidth + 8 * scale;
+        const correctionY = y - 8 * scale;
         svgAnnotations += `
-          <text x="${correctionX}" y="${correctionY}" font-size="14" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
+          <text x="${correctionX}" y="${correctionY}" font-size="${14 * scale}" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
             ${error.correction}
           </text>
         `;
