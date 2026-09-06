@@ -3,7 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Router } from 'express';
 import sharp from 'sharp';
-import { Jimp } from 'jimp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
@@ -473,41 +472,35 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       `;
     });
 
-    // 使用 Jimp 处理图片标注
-    console.log('使用 Jimp 生成标注图片...');
-    const image = await Jimp.read(buffer);
+    // 使用 sharp 的 extend + composite 方法
+    console.log('使用 sharp 生成标注图片...');
     
-    // 扩展图片高度（底部添加黄色背景区域）
-    const extendedImage = await image.clone().resize({ w: width, h: height + listHeight });
+    // 1. 扩展原图高度（底部添加黄色背景）
+    const extendedBuffer = await sharp(buffer)
+      .extend({
+        bottom: listHeight,
+        background: { r: 255, g: 249, b: 230, alpha: 1 }
+      })
+      .toBuffer();
     
-    // 填充底部黄色背景
-    for (let y = height; y < height + listHeight; y++) {
-      for (let x = 0; x < width; x++) {
-        extendedImage.setPixelColor(0xFFF9E6FF, x, y);
-      }
-    }
+    // 2. 创建 SVG 标注层（只包含标注，不包含原图）
+    const svgOverlay = `
+      <svg width="${width}" height="${height + listHeight}">
+        ${svgAnnotations}
+        ${listSvg}
+      </svg>
+    `;
     
-    // 绘制标注（简化实现，使用位置估算）
-    const jimpColor = 0xFF0000FF; // 红色
-    errors.forEach((error, index) => {
-      const line = (error as any).line || 1;
-      const wordIndex = (error as any).wordIndex || 1;
-      
-      const x = paddingLeft + (wordIndex - 1) * avgWordWidth;
-      const y = paddingTop + (line - 1) * lineHeight;
-      const wordWidth = avgWordWidth;
-      const wordHeight = lineHeight * 0.5;
-      
-      // 画删除线（红色横线）
-      for (let px = x; px < x + wordWidth; px++) {
-        if (px >= 0 && px < width && y + wordHeight / 2 >= 0 && y + wordHeight / 2 < height) {
-          extendedImage.setPixelColor(jimpColor, px, Math.floor(y + wordHeight / 2));
-        }
-      }
-    });
+    // 3. 将 SVG 标注层叠加到扩展后的原图上
+    const annotatedBuffer = await sharp(extendedBuffer)
+      .composite([{
+        input: Buffer.from(svgOverlay),
+        top: 0,
+        left: 0
+      }])
+      .png()
+      .toBuffer();
     
-    // 转换为 base64
-    const annotatedBuffer = await extendedImage.getBuffer('image/png');
     return `data:image/png;base64,${annotatedBuffer.toString('base64')}`;
   } catch (error) {
     console.error('图片标注失败:', error);
