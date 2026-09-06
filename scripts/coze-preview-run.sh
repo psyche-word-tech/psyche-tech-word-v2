@@ -29,27 +29,30 @@ cp -r client/dist server/public
 # ==================== 启动后端服务 ====================
 echo "[3/4] 启动后端服务 (端口 5000)..."
 
-# 检查是否已运行
-if ss -tlnp | grep -q ":5000.*node"; then
-    echo "后端服务已在运行"
-else
-    # 清理 5000 端口残留进程
-    pkill -f "node dist/index.js" 2>/dev/null || true
+# 清理 5000 端口残留进程
+pkill -9 -f "node dist/index.js" 2>/dev/null || true
+sleep 2
+
+cd server
+# 使用 nohup 确保服务在后台持续运行
+nohup env NODE_ENV=development PORT=5000 node dist/index.js > /tmp/server-dev.log 2>&1 &
+BACKEND_PID=$!
+echo "后端服务已启动 (PID: $BACKEND_PID)"
+
+# 等待后端启动
+for i in {1..15}; do
+    if ss -tlnp | grep -q ":5000"; then
+        echo "后端服务启动成功"
+        break
+    fi
     sleep 1
-    
-    cd server
-    NODE_ENV=development PORT=5000 node dist/index.js > /tmp/server-dev.log 2>&1 &
-    BACKEND_PID=$!
-    echo "后端服务已启动 (PID: $BACKEND_PID)"
-    
-    # 等待后端启动
-    for i in {1..10}; do
-        if ss -tlnp | grep -q ":5000.*node"; then
-            echo "后端服务启动成功"
-            break
-        fi
-        sleep 1
-    done
+done
+
+# 验证服务是否可访问
+if curl -s http://localhost:5000/api/v1/health > /dev/null 2>&1; then
+    echo "后端服务验证成功"
+else
+    echo "警告：后端服务可能未完全启动，请查看日志：tail -f /tmp/server-dev.log"
 fi
 
 echo ""
