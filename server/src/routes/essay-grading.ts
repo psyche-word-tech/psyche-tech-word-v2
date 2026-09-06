@@ -285,8 +285,7 @@ ${referenceAnswer}
       "original": "错误原文",
       "correction": "正确写法",
       "explanation": "错误原因说明",
-      "line": 第几行（从 1 开始）,
-      "wordIndex": 该行第几个单词（从 1 开始）
+      "bbox": [x1, y1, x2, y2]
     }
   ],
   "comments": "总体评语",
@@ -295,8 +294,10 @@ ${referenceAnswer}
 }
 
 ## 重要
-- line 和 wordIndex 用于定位错误位置，必须准确
-- 仔细数清楚每个错误在第几行、第几个单词
+- bbox 是错误单词在图片中的坐标 [左上角 x, 左上角 y, 右下角 x, 右下角 y]
+- 坐标范围：x 从 0 到图片宽度，y 从 0 到图片高度
+- 仔细观察图片，准确定位每个错误单词的位置
+- 如果无法确定精确位置，给出大致位置即可
 `;
 
   console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());
@@ -415,28 +416,18 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
 
     errors.forEach((error, index) => {
-      // 尝试使用 OCR 精确位置
+      // 使用千问 VL 模型返回的 bbox 坐标
       let x = 0, y = 0, wordWidth = 50 * scale, wordHeight = 30 * scale;
-      let useOCR = false;
       
-      if (ocrWords.length > 0) {
-        // 在 OCR 结果中查找匹配的单词
-        const matchedWord = ocrWords.find(w => 
-          w.text.toLowerCase().trim() === error.original.toLowerCase().trim()
-        );
-        
-        if (matchedWord) {
-          x = matchedWord.x;
-          y = matchedWord.y;
-          wordWidth = matchedWord.width;
-          wordHeight = matchedWord.height;
-          useOCR = true;
-          console.log(`[annotateImage] 使用 OCR 位置：${error.original} at (${x}, ${y})`);
-        }
-      }
-      
-      // 如果 OCR 未匹配，使用位置估算
-      if (!useOCR) {
+      if ((error as any).bbox && Array.isArray((error as any).bbox) && (error as any).bbox.length === 4) {
+        const [x1, y1, x2, y2] = (error as any).bbox;
+        x = x1;
+        y = y1;
+        wordWidth = x2 - x1;
+        wordHeight = y2 - y1;
+        console.log(`[annotateImage] 使用 bbox 位置：${error.original} at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
+      } else {
+        // 如果没有 bbox，使用位置估算
         const avgWordWidth = 50 * scale;
         const line = (error as any).line || 1;
         const wordIndex = (error as any).wordIndex || 1;
