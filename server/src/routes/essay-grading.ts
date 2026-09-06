@@ -408,6 +408,11 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
 
     // 根据图片分辨率动态调整标注大小
     const scale = Math.min(width, height) / 1000; // 缩放因子（基于 1000px 基准）
+    const totalLines = 10;
+    const paddingTop = 60 * scale;
+    const paddingBottom = 40 * scale;
+    const paddingLeft = 40 * scale;
+    const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
 
     errors.forEach((error, index) => {
       // 尝试使用 OCR 精确位置
@@ -432,11 +437,6 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       
       // 如果 OCR 未匹配，使用位置估算
       if (!useOCR) {
-        const totalLines = 10;
-        const paddingTop = 60 * scale;
-        const paddingBottom = 40 * scale;
-        const paddingLeft = 40 * scale;
-        const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
         const avgWordWidth = 50 * scale;
         const line = (error as any).line || 1;
         const wordIndex = (error as any).wordIndex || 1;
