@@ -104,6 +104,7 @@ export default function EssayGradingScreen() {
           reference_answer: referenceAnswer,
           max_score: 25,
         }),
+        signal: AbortSignal.timeout(60000), // 60 秒超时
       });
 
       if (!response.ok) {
