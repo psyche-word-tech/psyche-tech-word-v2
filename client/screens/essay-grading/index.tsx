@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ActivityIndicator, TextInput, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -118,11 +118,21 @@ export default function EssayGradingScreen() {
         setGradingResult(data.data.grading);
         setMarkedImage(data.data.marked_image);
       } else {
-        Alert.alert('批改失败', data.error || '未知错误');
+        const errorMsg = data.error || '未知错误';
+        if (Platform.OS === 'web') {
+          alert('批改失败：' + errorMsg);
+        } else {
+          Alert.alert('批改失败', errorMsg);
+        }
       }
     } catch (error: any) {
       console.error('批改失败:', error);
-      Alert.alert('批改失败', error.message || '网络错误');
+      const errorMsg = error.message || '网络错误';
+      if (Platform.OS === 'web') {
+        alert('批改失败：' + errorMsg);
+      } else {
+        Alert.alert('批改失败', errorMsg);
+      }
     } finally {
       setLoading(false);
     }
