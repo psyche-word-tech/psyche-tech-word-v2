@@ -161,7 +161,7 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 2. 返回每个单词的精确位置坐标
 3. 坐标单位为像素，相对于原图`;
 
-  const response = await fetch(getQwenApiUrl(), {
+  const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
