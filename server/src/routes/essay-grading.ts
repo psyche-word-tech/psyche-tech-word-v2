@@ -442,11 +442,12 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         </text>
       `;
       
-      // 3. 在旁边写正确的单词（红色，斜体，字体大小为原字体的 0.7 倍）
+      // 3. 在旁边写正确的单词（红色，斜体，字体大小为原字体的 0.6 倍）
       if (error.correction && error.correction !== error.original) {
         const correctionX = x + wordWidth + 8 * scale;
         const correctionY = y - 8 * scale;
-        const correctionFontSize = lineHeight * 0.6 * 0.7; // 原字体约为 lineHeight * 0.6，批注为 0.7 倍
+        const originalFontSize = lineHeight * 0.6; // 估算原字体大小
+        const correctionFontSize = originalFontSize * 0.6; // 批注字体 = 原字体 × 0.6
         svgAnnotations += `
           <text x="${correctionX}" y="${correctionY}" font-size="${correctionFontSize}" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
             ${error.correction}
