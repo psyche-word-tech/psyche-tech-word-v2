@@ -82,7 +82,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     let ocrWords: OCRWord[] = [];
     try {
       console.log('调用阿里云 OCR 识别文字位置...');
-      ocrWords = await callAlibabaOCR(image);
+      ocrWords = await callQwenOCR(image);
       console.log(`OCR 识别到 ${ocrWords.length} 个文字块`);
     } catch (err) {
       console.error('阿里云 OCR 调用失败:', err);
@@ -144,21 +144,25 @@ async function callAlibabaOCR(imageBase64: string): Promise<OCRWord[]> {
   const accessKeyId = getAlibabaCloudAccessKeyId();
   const accessKeySecret = getAlibabaCloudAccessKeySecret();
 
-  // 准备请求体
-  const requestBody = {
-    body: imageBase64.split(',')[1] || imageBase64,
-  };
-
   console.log('[AlibabaOCR] 发送 HTTP 请求到阿里云 OCR...');
 
+  // 构建签名参数
+  const timestamp = new Date().toISOString();
+  const signatureNonce = Date.now().toString();
+
   // 调用阿里云 OCR API（RecognizeHandwriting - 手写文字识别）
-  const response = await fetch(`https://${OCR_ENDPOINT}/api/v1/RecognizeHandwriting`, {
+  const response = await fetch(`https://${OCR_ENDPOINT}/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `APPCODE ${accessKeyId}:${accessKeySecret}`, // 简化认证（实际需要使用签名）
+      'x-acs-action': 'RecognizeHandwriting',
+      'x-acs-version': '2021-07-07',
+      'x-acs-date': timestamp,
+      'x-acs-signature-nonce': signatureNonce,
     },
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify({
+      body: imageBase64.split(',')[1] || imageBase64,
+    }),
   });
 
   console.log('[AlibabaOCR] 响应状态:', response.status);
@@ -212,11 +216,11 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 2. 返回每个单词的精确位置坐标
 3. 坐标单位为像素，相对于原图`;
 
-  const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+  const response = await fetch(`${QWEN_API_URL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getQwenApiKey()}`,
+      'Authorization': `Bearer ${QWEN_API_KEY}`,
     },
     body: JSON.stringify({
       model: 'qwen3.5-ocr',
@@ -346,9 +350,10 @@ ${referenceAnswer}
 
 ## 重要
 - bbox 是错误单词在图片中的坐标 [左上角 x, 左上角 y, 右下角 x, 右下角 y]
-- 坐标范围：x 从 0 到图片宽度，y 从 0 到图片高度
-- 仔细观察图片，准确定位每个错误单词的位置
-- 如果无法确定精确位置，给出大致位置即可
+- 坐标范围：x 从 0 到图片宽度（2160），y 从 0 到图片高度（3840）
+- **图片结构**：这是一张手机拍摄的照片，上半部分是键盘和桌面，下半部分是作文纸。作文纸大约从 y=1500 开始，到 y=3500 结束。作文纸上的文字大约在 x=200 到 x=1800 之间。
+- **仔细观察图片**，准确定位每个错误单词在作文纸上的位置
+- 如果无法确定精确位置，给出大致位置即可，但必须确保坐标在作文纸区域内（y > 1500）
 `;
 
   console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());
@@ -545,6 +550,14 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           wordWidth = bx2;
           wordHeight = by2;
         }
+        
+        // 如果 bbox 在键盘区域（y < 1500），自动调整到作文纸区域
+        if (y < 1500) {
+          const adjustment = 1500 - y;
+          y = y + adjustment;
+          console.log(`[annotateImage] bbox 在键盘区域，自动调整 y: ${y - adjustment} -> ${y}`);
+        }
+        
         console.log(`[annotateImage] 使用 bbox 位置：${error.original} at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
       }
       
