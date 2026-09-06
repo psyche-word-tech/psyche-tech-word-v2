@@ -500,9 +500,8 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       coordScale = Math.min(1080 / width, 1920 / height);
       width = Math.floor(width * coordScale);
       height = Math.floor(height * coordScale);
-      processedBuffer = await sharp(buffer)
-        .resize(width, height)
-        .toBuffer();
+      console.log('[annotateImage] 开始压缩...');
+      processedBuffer = await sharp(buffer).resize(width, height).toBuffer();
       console.log('[annotateImage] 压缩完成:', width, 'x', height);
     }
 
