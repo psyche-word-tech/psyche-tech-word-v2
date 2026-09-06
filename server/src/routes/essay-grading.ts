@@ -179,10 +179,6 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
                 url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
               },
             },
-            {
-              type: 'text',
-              text: prompt,
-            },
           ],
         },
       ],
