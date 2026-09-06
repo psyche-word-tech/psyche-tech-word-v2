@@ -451,22 +451,22 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       }
     });
 
-    // 在图片底部添加标注列表（增大字体和间距）
-    const listStartY = height + 15;
-    const listHeight = errors.length * 35 + 50;
+    // 在图片底部添加标注列表（进一步增大字体）
+    const listStartY = height + 20;
+    const listHeight = errors.length * 50 + 80;
     
     let listSvg = `
       <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="#FFF9E6"/>
-      <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#FFCC00" stroke-width="3"/>
-      <text x="15" y="${listStartY}" font-size="18" fill="#333" font-family="Arial" font-weight="bold">
+      <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#FFCC00" stroke-width="4"/>
+      <text x="20" y="${listStartY}" font-size="28" fill="#333" font-family="Arial" font-weight="bold">
         批改标注：
       </text>
     `;
     
     errors.forEach((error, index) => {
-      const itemY = listStartY + 30 + index * 35;
+      const itemY = listStartY + 45 + index * 50;
       listSvg += `
-        <text x="15" y="${itemY}" font-size="16" fill="${color}" font-family="Arial" font-weight="bold">
+        <text x="20" y="${itemY}" font-size="24" fill="${color}" font-family="Arial" font-weight="bold">
           ${index + 1}. ${error.original} → ${error.correction}
         </text>
       `;
