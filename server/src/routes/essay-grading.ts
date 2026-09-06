@@ -634,6 +634,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     `;
     
     // 3. 将 SVG 标注层叠加到扩展后的原图上
+    console.log('[annotateImage] 开始叠加 SVG 标注层...');
     const annotatedBuffer = await sharp(extendedBuffer)
       .composite([{
         input: Buffer.from(svgOverlay),
@@ -642,6 +643,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       }])
       .png()
       .toBuffer();
+    console.log('[annotateImage] SVG 标注层叠加完成');
     
     return `data:image/png;base64,${annotatedBuffer.toString('base64')}`;
   } catch (error) {
