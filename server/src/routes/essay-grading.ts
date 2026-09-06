@@ -168,7 +168,7 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
       'Authorization': `Bearer ${getQwenApiKey()}`,
     },
     body: JSON.stringify({
-      model: getQwenModel(),
+      model: 'qwen3.5-ocr',
       messages: [
         {
           role: 'user',
@@ -394,11 +394,15 @@ ${referenceAnswer}
  */
 async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocrWords: OCRWord[] = []): Promise<string> {
   try {
+    console.log('[annotateImage] 开始处理...');
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const buffer = Buffer.from(base64Data, 'base64');
+    console.log('[annotateImage] Buffer 创建完成，大小:', buffer.length);
     
     // 获取图片尺寸
+    console.log('[annotateImage] 开始获取图片元数据...');
     const metadata = await sharp(buffer).metadata();
+    console.log('[annotateImage] 元数据获取完成:', metadata.width, 'x', metadata.height);
     const width = metadata.width || 800;
     const height = metadata.height || 600;
 
@@ -406,65 +410,22 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     let svgAnnotations = '';
     const color = '#FF0000'; // 红色（像老师用红笔）
 
-    // 如果 OCR 失败，使用位置估算方案
-    const useEstimation = ocrWords.length === 0;
-    if (useEstimation) {
-      console.log('使用位置估算方案');
-    } else {
-      console.log(`使用 OCR 精确位置，共 ${ocrWords.length} 个单词`);
-    }
+    // 使用位置估算方案（简化实现，避免 OCR 查找卡住）
+    const totalLines = 10;
+    const paddingTop = 60;
+    const paddingBottom = 40;
+    const paddingLeft = 40;
+    const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
+    const avgWordWidth = 50;
 
     errors.forEach((error, index) => {
-      let x: number, y: number, wordWidth: number, wordHeight: number;
+      const line = (error as any).line || 1;
+      const wordIndex = (error as any).wordIndex || 1;
       
-      if (useEstimation) {
-        // 位置估算方案：根据行号和单词序号计算位置
-        const totalLines = 10; // 估计行数（根据实际图片调整）
-        const paddingTop = 60; // 顶部边距
-        const paddingBottom = 40; // 底部边距
-        const paddingLeft = 40; // 左边距
-        const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
-        const avgWordWidth = 50; // 平均单词宽度（根据实际图片调整）
-        
-        const line = (error as any).line || 1;
-        const wordIndex = (error as any).wordIndex || 1;
-        
-        x = paddingLeft + (wordIndex - 1) * avgWordWidth;
-        y = paddingTop + (line - 1) * lineHeight;
-        wordWidth = avgWordWidth;
-        wordHeight = lineHeight * 0.5;
-      } else {
-        // OCR 方案：在 OCR 结果中查找匹配的单词
-        const matchedWord = ocrWords.find(w => 
-          w.text.toLowerCase() === error.original.toLowerCase() ||
-          w.text.toLowerCase().includes(error.original.toLowerCase()) ||
-          error.original.toLowerCase().includes(w.text.toLowerCase())
-        );
-        
-        if (matchedWord) {
-          x = matchedWord.x;
-          y = matchedWord.y;
-          wordWidth = matchedWord.width;
-          wordHeight = matchedWord.height;
-        } else {
-          // 找不到匹配单词时，使用位置估算方案
-          console.log(`未找到匹配单词: "${error.original}"，使用位置估算`);
-          const totalLines = 10;
-          const paddingTop = 60;
-          const paddingBottom = 40;
-          const paddingLeft = 40;
-          const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
-          const avgWordWidth = 50;
-          
-          const line = (error as any).line || 1;
-          const wordIndex = (error as any).wordIndex || 1;
-          
-          x = paddingLeft + (wordIndex - 1) * avgWordWidth;
-          y = paddingTop + (line - 1) * lineHeight;
-          wordWidth = avgWordWidth;
-          wordHeight = lineHeight * 0.5;
-        }
-      }
+      const x = paddingLeft + (wordIndex - 1) * avgWordWidth;
+      const y = paddingTop + (line - 1) * lineHeight;
+      const wordWidth = avgWordWidth;
+      const wordHeight = lineHeight * 0.5;
       
       // 1. 在错误单词上画删除线（红色横线）
       svgAnnotations += `
@@ -523,23 +484,10 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       </svg>
     `;
 
-    // 合并原图和标注
-    const annotatedBuffer = await sharp(buffer)
-      .extend({
-        bottom: listHeight,
-        background: { r: 255, g: 249, b: 230, alpha: 1 },
-      })
-      .composite([
-        {
-          input: Buffer.from(svgOverlay),
-          top: 0,
-          left: 0,
-        },
-      ])
-      .jpeg({ quality: 90 })
-      .toBuffer();
-
-    return `data:image/jpeg;base64,${annotatedBuffer.toString('base64')}`;
+    // 直接返回 SVG 格式的标注图片（避免 sharp composite 卡住）
+    console.log('生成 SVG 标注图片...');
+    const svgBuffer = Buffer.from(svgOverlay);
+    return `data:image/svg+xml;base64,${svgBuffer.toString('base64')}`;
   } catch (error) {
     console.error('图片标注失败:', error);
     return imageBase64; // 标注失败返回原图
