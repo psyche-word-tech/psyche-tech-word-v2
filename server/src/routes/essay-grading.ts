@@ -92,7 +92,9 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     }
 
     // 2. 调用千问 VL 模型批改作文
+    console.log('开始调用千问 VL 模型批改作文...');
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
+    console.log('千问 VL 模型批改完成');
 
     // 计算总分
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
@@ -301,35 +303,55 @@ ${referenceAnswer}
 - 仔细数清楚每个错误在第几行、第几个单词
 `;
 
-  const response = await fetch(getQwenApiUrl(), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getQwenApiKey()}`,
-    },
-    body: JSON.stringify({
-      model: getQwenModel(),
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: {
-                url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
+  console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());
+  console.log('模型:', getQwenModel());
+  console.log('API Key 长度:', getQwenApiKey().length);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 秒超时
+
+  let response;
+  try {
+    response = await fetch(getQwenApiUrl(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getQwenApiKey()}`,
+      },
+      body: JSON.stringify({
+        model: getQwenModel(),
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
+                },
               },
-            },
-            {
-              type: 'text',
-              text: prompt,
-            },
-          ],
-        },
-      ],
-      temperature: 0.3,
-      max_tokens: 4096,
-    }),
-  });
+              {
+                type: 'text',
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 4096,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('千问 API 调用超时（120秒）');
+    }
+    throw err;
+  }
+
+  console.log('千问 VL 模型响应状态:', response.status);
 
   if (!response.ok) {
     const errorText = await response.text();
