@@ -367,7 +367,10 @@ ${referenceAnswer}
   try {
     // 尝试直接解析
     gradingResult = JSON.parse(content);
-    console.log('千问 VL 模型返回的完整响应:', JSON.stringify(gradingResult, null, 2));
+    // 写入文件日志
+    const fs = await import('fs');
+    fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult, null, 2));
+    console.log('千问 VL 模型响应已写入 /tmp/qwen-response.log');
   } catch {
     // 尝试从 markdown 代码块中提取 JSON
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
