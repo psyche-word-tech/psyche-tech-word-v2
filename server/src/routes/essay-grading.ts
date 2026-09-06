@@ -434,7 +434,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       // 2. 在错误单词上方画圆圈标记（根据分辨率调整大小）
       const circleX = x + wordWidth / 2;
       const circleY = y - 15 * scale;
-      const circleFontSize = lineHeight * 0.6 * 0.7; // 圆圈中数字字体也为原字体的 0.7 倍
+      const circleFontSize = lineHeight * 0.35; // 圆圈中数字字体与批注字体一致
       svgAnnotations += `
         <circle cx="${circleX}" cy="${circleY}" r="${12 * scale}" fill="none" stroke="${color}" stroke-width="${2 * scale}"/>
         <text x="${circleX}" y="${circleY + 5 * scale}" font-size="${circleFontSize}" fill="${color}" text-anchor="middle" font-weight="bold">
@@ -446,8 +446,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       if (error.correction && error.correction !== error.original) {
         const correctionX = x + wordWidth + 8 * scale;
         const correctionY = y - 8 * scale;
-        const originalFontSize = lineHeight * 0.6; // 估算原字体大小
-        const correctionFontSize = originalFontSize * 0.6; // 批注字体 = 原字体 × 0.6
+        const correctionFontSize = lineHeight * 0.35; // 直接设置为行高的 0.35 倍（约为原字体的 0.6 倍）
         svgAnnotations += `
           <text x="${correctionX}" y="${correctionY}" font-size="${correctionFontSize}" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
             ${error.correction}
