@@ -472,18 +472,21 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       `;
     });
 
-    // 创建标注图片（原图 + 底部标注列表）
-    const svgOverlay = `
+    // 创建完整的 SVG（包含原图 + 标注）
+    const fullSvg = `
       <svg width="${width}" height="${height + listHeight}">
+        <image href="data:image/png;base64,${buffer.toString('base64')}" x="0" y="0" width="${width}" height="${height}"/>
         ${svgAnnotations}
         ${listSvg}
       </svg>
     `;
 
-    // 直接返回 SVG 格式的标注图片（避免 sharp composite 卡住）
-    console.log('生成 SVG 标注图片...');
-    const svgBuffer = Buffer.from(svgOverlay);
-    return `data:image/svg+xml;base64,${svgBuffer.toString('base64')}`;
+    console.log('生成标注图片...');
+    const svgBuffer = Buffer.from(fullSvg);
+    
+    // 使用 sharp 将 SVG 转换为 PNG
+    const annotatedBuffer = await sharp(svgBuffer).png().toBuffer();
+    return `data:image/png;base64,${annotatedBuffer.toString('base64')}`;
   } catch (error) {
     console.error('图片标注失败:', error);
     return imageBase64; // 标注失败返回原图
