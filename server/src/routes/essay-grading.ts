@@ -78,18 +78,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 参考答案可选
     const refAnswer = reference_answer || '';
 
-    // 1. 使用阿里云 OCR 识别文字位置
-    let ocrWords: OCRWord[] = [];
-    try {
-      console.log('调用阿里云 OCR 识别文字位置...');
-      ocrWords = await callQwenOCR(image);
-      console.log(`OCR 识别到 ${ocrWords.length} 个文字块`);
-    } catch (err) {
-      console.error('阿里云 OCR 调用失败:', err);
-      console.log('使用位置估算方案');
-    }
-
-    // 2. 调用千问 VL 模型批改作文
+    // 1. 调用千问 VL 模型批改作文（同时返回 bbox）
     console.log('开始调用千问 VL 模型批改作文...');
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
     console.log('千问 VL 模型批改完成');
