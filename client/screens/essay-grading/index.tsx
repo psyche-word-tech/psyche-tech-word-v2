@@ -106,6 +106,11 @@ export default function EssayGradingScreen() {
         }),
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const data = await response.json();
 
       if (data.success) {
