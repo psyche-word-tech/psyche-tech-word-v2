@@ -367,6 +367,7 @@ ${referenceAnswer}
   try {
     // 尝试直接解析
     gradingResult = JSON.parse(content);
+    console.log('千问 VL 模型返回的 errors:', JSON.stringify(gradingResult.errors?.slice(0, 3), null, 2));
   } catch {
     // 尝试从 markdown 代码块中提取 JSON
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
