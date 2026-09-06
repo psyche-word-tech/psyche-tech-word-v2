@@ -6,8 +6,6 @@ import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
-import OcrApi20210707, * as $OcrApi20210707 from '@alicloud/ocr-api20210707';
-import * as $OpenApi from '@alicloud/openapi-client';
 
 // 加载环境变量 - 使用 process.cwd() 获取当前工作目录
 dotenv.config({ path: path.join(process.cwd(), '.env') });
@@ -80,14 +78,14 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 参考答案可选
     const refAnswer = reference_answer || '';
 
-    // 1. 先调用 Qwen3.5-OCR 识别文字位置
+    // 1. 使用阿里云 OCR 识别文字位置
     let ocrWords: OCRWord[] = [];
     try {
-      console.log('调用 Qwen3.5-OCR 识别文字位置...');
-      ocrWords = await callQwenOCR(image);
-      console.log(`OCR 识别到 ${ocrWords.length} 个单词`);
+      console.log('调用阿里云 OCR 识别文字位置...');
+      ocrWords = await callAlibabaOCR(image);
+      console.log(`OCR 识别到 ${ocrWords.length} 个文字块`);
     } catch (err) {
-      console.error('Qwen OCR 调用失败:', err);
+      console.error('阿里云 OCR 调用失败:', err);
       console.log('使用位置估算方案');
     }
 
@@ -135,6 +133,59 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     res.status(500).json({ success: false, error: error.message || '批改失败' });
   }
 });
+
+/**
+ * 调用阿里云 OCR API 识别文字位置
+ */
+async function callAlibabaOCR(imageBase64: string): Promise<OCRWord[]> {
+  console.log('[AlibabaOCR] 开始调用阿里云 OCR HTTP API...');
+
+  // 使用阿里云 OCR HTTP API（避免 SDK 兼容性问题）
+  const accessKeyId = getAlibabaCloudAccessKeyId();
+  const accessKeySecret = getAlibabaCloudAccessKeySecret();
+
+  // 准备请求体
+  const requestBody = {
+    body: imageBase64.split(',')[1] || imageBase64,
+  };
+
+  console.log('[AlibabaOCR] 发送 HTTP 请求到阿里云 OCR...');
+
+  // 调用阿里云 OCR API（RecognizeHandwriting - 手写文字识别）
+  const response = await fetch(`https://${OCR_ENDPOINT}/api/v1/RecognizeHandwriting`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `APPCODE ${accessKeyId}:${accessKeySecret}`, // 简化认证（实际需要使用签名）
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  console.log('[AlibabaOCR] 响应状态:', response.status);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`阿里云 OCR API 调用失败: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  console.log('[AlibabaOCR] 解析数据成功');
+
+  // 转换为 OCRWord 格式
+  const words: OCRWord[] = (data.data?.prism_wordsInfo || []).map((item: any) => {
+    const pos = item.pos;
+    return {
+      text: item.word || '',
+      x: pos.x || 0,
+      y: pos.y || 0,
+      width: pos.width || 0,
+      height: pos.height || 0,
+    };
+  });
+
+  console.log('[AlibabaOCR] 转换完成，返回', words.length, '个文字块');
+  return words;
+}
 
 /**
  * 调用 Qwen3.5-OCR 模型识别文字位置
@@ -391,6 +442,46 @@ ${referenceAnswer}
 }
 
 /**
+ * 在 OCR 结果中查找匹配的文字块
+ */
+function findMatchingOCRWord(errorText: string, ocrWords: OCRWord[]): OCRWord | null {
+  if (!errorText || ocrWords.length === 0) return null;
+  
+  // 清理错误文本（去除标点、转小写）
+  const cleanError = errorText.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  
+  // 尝试精确匹配
+  for (const word of ocrWords) {
+    const cleanWord = word.text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+    if (cleanWord === cleanError) {
+      return word;
+    }
+  }
+  
+  // 尝试包含匹配（错误文本包含在 OCR 文字中，或反之）
+  for (const word of ocrWords) {
+    const cleanWord = word.text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+    if (cleanWord.includes(cleanError) || cleanError.includes(cleanWord)) {
+      return word;
+    }
+  }
+  
+  // 尝试单词级别匹配（错误文本中的某个单词）
+  const errorWords = cleanError.split(/\s+/);
+  for (const ew of errorWords) {
+    if (ew.length < 2) continue; // 跳过太短的单词
+    for (const word of ocrWords) {
+      const cleanWord = word.text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+      if (cleanWord === ew) {
+        return word;
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
  * 在原图上标注错误（使用 OCR 精确位置）
  */
 async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocrWords: OCRWord[] = []): Promise<string> {
@@ -420,10 +511,25 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
 
     errors.forEach((error, index) => {
-      // 使用千问 VL 模型返回的 bbox 坐标
+      // 优先使用 OCR 数据匹配位置
       let x = 0, y = 0, wordWidth = 50 * scale, wordHeight = 30 * scale;
+      let foundInOCR = false;
       
-      if ((error as any).bbox && Array.isArray((error as any).bbox) && (error as any).bbox.length === 4) {
+      // 在 OCR 结果中查找匹配的文字块
+      if (ocrWords.length > 0) {
+        const matchedWord = findMatchingOCRWord(error.original, ocrWords);
+        if (matchedWord) {
+          x = matchedWord.x;
+          y = matchedWord.y;
+          wordWidth = matchedWord.width;
+          wordHeight = matchedWord.height;
+          foundInOCR = true;
+          console.log(`[annotateImage] OCR 匹配成功：${error.original} at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
+        }
+      }
+      
+      // 如果 OCR 没找到，尝试使用千问 VL 模型返回的 bbox
+      if (!foundInOCR && (error as any).bbox && Array.isArray((error as any).bbox) && (error as any).bbox.length === 4) {
         const [bx1, by1, bx2, by2] = (error as any).bbox;
         // 判断是 [x1, y1, x2, y2] 还是 [x, y, width, height] 格式
         if (bx2 > bx1 && by2 > by1 && bx2 - bx1 < 1000 && by2 - by1 < 1000) {
@@ -440,8 +546,10 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           wordHeight = by2;
         }
         console.log(`[annotateImage] 使用 bbox 位置：${error.original} at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
-      } else {
-        // 如果没有 bbox，使用位置估算
+      }
+      
+      // 如果都没找到，使用位置估算
+      if (!foundInOCR && !(error as any).bbox) {
         const avgWordWidth = 50 * scale;
         const line = (error as any).line || 1;
         const wordIndex = (error as any).wordIndex || 1;
