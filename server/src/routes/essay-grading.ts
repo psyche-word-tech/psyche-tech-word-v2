@@ -406,24 +406,47 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     let svgAnnotations = '';
     const color = '#FF0000'; // 红色（像老师用红笔）
 
-    // 使用位置估算方案（简化实现，避免 OCR 查找卡住）
     // 根据图片分辨率动态调整标注大小
     const scale = Math.min(width, height) / 1000; // 缩放因子（基于 1000px 基准）
-    const totalLines = 10;
-    const paddingTop = 60 * scale;
-    const paddingBottom = 40 * scale;
-    const paddingLeft = 40 * scale;
-    const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
-    const avgWordWidth = 50 * scale;
 
     errors.forEach((error, index) => {
-      const line = (error as any).line || 1;
-      const wordIndex = (error as any).wordIndex || 1;
+      // 尝试使用 OCR 精确位置
+      let x = 0, y = 0, wordWidth = 50 * scale, wordHeight = 30 * scale;
+      let useOCR = false;
       
-      const x = paddingLeft + (wordIndex - 1) * avgWordWidth;
-      const y = paddingTop + (line - 1) * lineHeight;
-      const wordWidth = avgWordWidth;
-      const wordHeight = lineHeight * 0.5;
+      if (ocrWords.length > 0) {
+        // 在 OCR 结果中查找匹配的单词
+        const matchedWord = ocrWords.find(w => 
+          w.text.toLowerCase().trim() === error.original.toLowerCase().trim()
+        );
+        
+        if (matchedWord) {
+          x = matchedWord.x;
+          y = matchedWord.y;
+          wordWidth = matchedWord.width;
+          wordHeight = matchedWord.height;
+          useOCR = true;
+          console.log(`[annotateImage] 使用 OCR 位置：${error.original} at (${x}, ${y})`);
+        }
+      }
+      
+      // 如果 OCR 未匹配，使用位置估算
+      if (!useOCR) {
+        const totalLines = 10;
+        const paddingTop = 60 * scale;
+        const paddingBottom = 40 * scale;
+        const paddingLeft = 40 * scale;
+        const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
+        const avgWordWidth = 50 * scale;
+        const line = (error as any).line || 1;
+        const wordIndex = (error as any).wordIndex || 1;
+        
+        x = paddingLeft + (wordIndex - 1) * avgWordWidth;
+        y = paddingTop + (line - 1) * lineHeight;
+        wordWidth = avgWordWidth;
+        wordHeight = lineHeight * 0.5;
+        console.log(`[annotateImage] 使用估算位置：${error.original} at line ${line}, word ${wordIndex}`);
+      }
       
       // 1. 在错误单词上画删除线（红色横线，加粗）
       svgAnnotations += `
