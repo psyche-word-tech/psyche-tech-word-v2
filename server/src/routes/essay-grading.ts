@@ -489,8 +489,22 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     console.log('[annotateImage] 开始获取图片元数据...');
     const metadata = await sharp(buffer).metadata();
     console.log('[annotateImage] 元数据获取完成:', metadata.width, 'x', metadata.height);
-    const width = metadata.width || 800;
-    const height = metadata.height || 600;
+    let width = metadata.width || 800;
+    let height = metadata.height || 600;
+
+    // 先压缩图片（如果太大）
+    let processedBuffer = buffer;
+    let coordScale = 1;
+    if (width > 1080 || height > 1920) {
+      console.log('[annotateImage] 图片较大，先压缩...');
+      coordScale = Math.min(1080 / width, 1920 / height);
+      width = Math.floor(width * coordScale);
+      height = Math.floor(height * coordScale);
+      processedBuffer = await sharp(buffer)
+        .resize(width, height)
+        .toBuffer();
+      console.log('[annotateImage] 压缩完成:', width, 'x', height);
+    }
 
     // 创建 SVG 标注层
     let svgAnnotations = '';
@@ -509,20 +523,20 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       let x = 0, y = 0, wordWidth = 50 * scale, wordHeight = 30 * scale;
       let foundInOCR = false;
       
-      // 在 OCR 结果中查找匹配的文字块
+      // 在 OCR 结果中查找匹配的文字块（需要缩放坐标）
       if (ocrWords.length > 0) {
         const matchedWord = findMatchingOCRWord(error.original, ocrWords);
         if (matchedWord) {
-          x = matchedWord.x;
-          y = matchedWord.y;
-          wordWidth = matchedWord.width;
-          wordHeight = matchedWord.height;
+          x = matchedWord.x * coordScale;
+          y = matchedWord.y * coordScale;
+          wordWidth = matchedWord.width * coordScale;
+          wordHeight = matchedWord.height * coordScale;
           foundInOCR = true;
           console.log(`[annotateImage] OCR 匹配成功：${error.original} at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
         }
       }
       
-      // 如果 OCR 没找到，尝试使用千问 VL 模型返回的 bbox
+      // 如果 OCR 没找到，尝试使用千问 VL 模型返回的 bbox（需要缩放坐标）
       if (!foundInOCR && (error as any).bbox && Array.isArray((error as any).bbox) && (error as any).bbox.length === 4) {
         const [bx1, by1, bx2, by2] = (error as any).bbox;
         // 判断是 [x1, y1, x2, y2] 还是 [x, y, width, height] 格式
@@ -618,7 +632,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     console.log('使用 sharp 生成标注图片...');
     
     // 1. 扩展原图高度（底部添加黄色背景）
-    const extendedBuffer = await sharp(buffer)
+    const extendedBuffer = await sharp(processedBuffer)
       .extend({
         bottom: listHeight,
         background: { r: 255, g: 249, b: 230, alpha: 1 }
