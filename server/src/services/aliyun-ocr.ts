@@ -25,9 +25,9 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
     throw new Error('阿里云 AccessKey 未配置');
   }
 
-  // 阿里云 OpenAPI 签名参数（使用 RecognizeBasic - 通用文字识别）
+  // 阿里云 OpenAPI 签名参数（使用 RecognizeGeneral - 通用文字识别）
   const params: Record<string, string> = {
-    Action: 'RecognizeBasic',
+    Action: 'RecognizeGeneral',
     Format: 'JSON',
     Version: '2021-07-07',
     AccessKeyId: accessKeyId,
