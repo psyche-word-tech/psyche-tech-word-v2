@@ -350,7 +350,7 @@ ${referenceAnswer}
   console.log('API Key 长度:', getQwenApiKey().length);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 秒超时
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 秒超时
 
   let response;
   try {
