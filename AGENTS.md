@@ -296,7 +296,9 @@ rm -rf ../server/public && cp -r dist ../server/public
 ```
 
 ### 注意事项
-- **服务重启问题**：沙箱重启后，后端服务不会自动启动，必须手动运行 `bash scripts/coze-preview-run.sh`
+- **自动重启机制**：后端使用 nodemon 监听 `dist` 目录，当 `dist` 目录变化时会自动重启服务
+- **修改后端代码后**：运行 `bash scripts/coze-preview-run.sh`，脚本会重新构建前端和后端，nodemon 会自动检测 dist 变化并重启服务
+- **沙箱重启后**：运行 `bash scripts/coze-preview-run.sh` 启动服务
 - 后端服务运行在 `5000` 端口，同时提供前端页面和 API
 - 前端静态文件存放在 `server/public/` 目录
 - 扣子 App 扫码预览时，所有请求（页面 + API）都通过 5000 端口处理
