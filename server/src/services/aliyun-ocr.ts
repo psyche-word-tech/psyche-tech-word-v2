@@ -46,6 +46,11 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
     params.body = imageBase64;
   }
 
+  // 添加时间戳（必须在签名计算之前）
+  const now = new Date();
+  params['Timestamp'] = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  params['SignatureNonce'] = crypto.randomUUID();
+  
   // 计算签名
   const sortedParams = Object.keys(params)
     .sort()
@@ -59,11 +64,6 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
     .digest('base64');
 
   params.Signature = signature;
-  
-  // 添加时间戳（阿里云 API 要求）
-  const now = new Date();
-  params['x-acs-date'] = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
-  params['x-acs-signature-nonce'] = Math.random().toString(36).substring(2);
 
   console.log('[AliyunOCR] 调用 API (RecognizeGeneral)...');
 
