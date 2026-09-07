@@ -17,7 +17,8 @@ function getQwenApiKey() {
   return process.env.QWEN_API_KEY || '';
 }
 function getQwenApiUrl() {
-  return process.env.QWEN_API_URL || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
+  const baseUrl = process.env.QWEN_API_URL || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1';
+  return baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`;
 }
 function getQwenModel() {
   return process.env.QWEN_MODEL || 'qwen3.7-plus';
