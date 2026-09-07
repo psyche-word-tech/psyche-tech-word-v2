@@ -133,7 +133,9 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     console.log('阿里云 OCR 完成，返回', ocrWords.length, '个单词');
     
     // 3. 不标注图片，直接返回原文和批改结果
-    const markedImage = null;
+    // 3. 绘制标注
+    const markedImage = await annotateImage(compressedImage, ocrWords, gradingResult.errors);
+    console.log('标注完成');
 
     // 保存到数据库
     const supabase = getSupabaseClient();
