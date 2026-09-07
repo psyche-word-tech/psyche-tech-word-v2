@@ -38,8 +38,10 @@ const OCR_ENDPOINT = 'ocr-api.cn-hangzhou.aliyuncs.com';
  */
 async function compressImage(imageBase64: string): Promise<string> {
   try {
+    console.log('[CompressImage] 开始压缩图片...');
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const buffer = Buffer.from(base64Data, 'base64');
+    console.log('[CompressImage] 原始图片大小:', Math.round(buffer.length / 1024), 'KB');
     
     // 使用 sharp 压缩图片
     const compressedBuffer = await sharp(buffer)
@@ -47,11 +49,15 @@ async function compressImage(imageBase64: string): Promise<string> {
       .jpeg({ quality: 70 }) // JPEG 质量 70%
       .toBuffer();
     
+    console.log('[CompressImage] 压缩后图片大小:', Math.round(compressedBuffer.length / 1024), 'KB');
+    
     // 转换回 base64
     const compressedBase64 = compressedBuffer.toString('base64');
-    return `data:image/jpeg;base64,${compressedBase64}`;
+    const result = `data:image/jpeg;base64,${compressedBase64}`;
+    console.log('[CompressImage] 压缩完成，返回压缩后的图片');
+    return result;
   } catch (error) {
-    console.error('图片压缩失败，使用原图:', error);
+    console.error('[CompressImage] 图片压缩失败，使用原图:', error);
     return imageBase64; // 压缩失败返回原图
   }
 }
