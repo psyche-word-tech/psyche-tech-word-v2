@@ -127,7 +127,12 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
     gradingResult.max_score = max_score;
 
-    // 2. 不标注图片，直接返回原文和批改结果
+    // 2. 调用阿里云 OCR 获取文字位置
+    console.log('开始调用阿里云 OCR...');
+    const ocrWords = await callAlibabaOCR(compressedImage);
+    console.log('阿里云 OCR 完成，返回', ocrWords.length, '个单词');
+    
+    // 3. 不标注图片，直接返回原文和批改结果
     const markedImage = null;
 
     // 保存到数据库
@@ -184,7 +189,7 @@ async function callAlibabaOCR(imageBase64: string): Promise<OCRWord[]> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-acs-action': 'RecognizeHandwriting',
+      'x-acs-action': 'RecognizeGeneral',
       'x-acs-version': '2021-07-07',
       'x-acs-date': timestamp,
       'x-acs-signature-nonce': signatureNonce,
@@ -205,16 +210,37 @@ async function callAlibabaOCR(imageBase64: string): Promise<OCRWord[]> {
   console.log('[AlibabaOCR] 解析数据成功');
 
   // 转换为 OCRWord 格式
-  const words: OCRWord[] = (data.data?.prism_wordsInfo || []).map((item: any) => {
-    const pos = item.pos;
-    return {
-      text: item.word || '',
-      x: pos.x || 0,
-      y: pos.y || 0,
-      width: pos.width || 0,
-      height: pos.height || 0,
-    };
-  });
+  // 解析行级文本，分割成单词
+  const words: OCRWord[] = [];
+  const lines = data.data?.prism_wordsInfo || [];
+  
+  for (const line of lines) {
+    const lineText = line.word || '';
+    const pos = line.pos;
+    
+    // 计算行边界
+    const x0 = Math.min(pos.x || 0, (pos.x2 || pos.x) || 0);
+    const y0 = Math.min(pos.y || 0, (pos.y2 || pos.y) || 0);
+    const x1 = Math.max(pos.x || 0, (pos.x2 || pos.x) || 0);
+    const y1 = Math.max(pos.y || 0, (pos.y2 || pos.y) || 0);
+    
+    const lineWidth = x1 - x0;
+    const lineHeight = y1 - y0;
+    
+    // 分割成单词
+    const lineWords = lineText.split(/\s+/).filter(w => w.length > 0);
+    const wordWidth = lineWidth / lineWords.length;
+    
+    lineWords.forEach((word, idx) => {
+      words.push({
+        text: word,
+        x: x0 + idx * wordWidth,
+        y: y0,
+        width: wordWidth,
+        height: lineHeight,
+      });
+    });
+  }
 
   console.log('[AlibabaOCR] 转换完成，返回', words.length, '个文字块');
   return words;
