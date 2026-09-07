@@ -86,6 +86,8 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
     console.log('千问 VL 模型批改完成');
     console.log('识别的原文:', gradingResult.transcription);
+    console.log('错误数量:', gradingResult.errors.length);
+    console.log('错误详情:', JSON.stringify(gradingResult.errors, null, 2));
 
     // 计算总分
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;

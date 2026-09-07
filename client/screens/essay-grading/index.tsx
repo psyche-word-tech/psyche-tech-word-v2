@@ -170,52 +170,52 @@ export default function EssayGradingScreen() {
     const paragraphs = transcription.split('\n').filter(p => p.trim());
     
     return paragraphs.map((paragraph, pIdx) => {
-      let processedText = paragraph;
+      // 查找该段落中的错误
+      const paragraphErrors = errors.filter(error => {
+        if (!error.original) return false;
+        return paragraph.includes(error.original);
+      });
+      
+      if (paragraphErrors.length === 0) {
+        // 没有错误，直接显示段落
+        return (
+          <View key={pIdx} style={styles.paragraphContainer}>
+            <Text style={styles.paragraphText}>{paragraph}</Text>
+          </View>
+        );
+      }
+      
+      // 有错误，需要分段显示
+      let remainingText = paragraph;
       const segments: Array<{ text: string; isError: boolean; error?: typeof errors[0] }> = [];
       
-      // 查找并标记错误
-      let remainingText = processedText;
-      let currentPos = 0;
+      // 按在段落中的位置排序错误
+      const sortedErrors = [...paragraphErrors].sort((a, b) => {
+        const idxA = remainingText.indexOf(a.original);
+        const idxB = remainingText.indexOf(b.original);
+        return idxA - idxB;
+      });
       
-      // 复制错误列表，避免修改原数组
-      const remainingErrors = [...errors];
-      
-      while (remainingText.length > 0 && remainingErrors.length > 0) {
-        let found = false;
+      for (const error of sortedErrors) {
+        const errorText = error.original;
+        const idx = remainingText.indexOf(errorText);
         
-        for (let i = 0; i < remainingErrors.length; i++) {
-          const error = remainingErrors[i];
-          const errorText = error.original;
-          
-          if (!errorText) continue; // 跳过缺失错误（没有原文）
-          
-          const idx = remainingText.indexOf(errorText);
-          if (idx !== -1) {
-            // 添加错误前的文本
-            if (idx > 0) {
-              segments.push({ text: remainingText.substring(0, idx), isError: false });
-            }
-            
-            // 添加错误文本
-            segments.push({ text: errorText, isError: true, error });
-            
-            // 更新剩余文本
-            remainingText = remainingText.substring(idx + errorText.length);
-            remainingErrors.splice(i, 1);
-            found = true;
-            break;
+        if (idx !== -1) {
+          // 添加错误前的文本
+          if (idx > 0) {
+            segments.push({ text: remainingText.substring(0, idx), isError: false });
           }
-        }
-        
-        if (!found) {
-          // 没有找到更多错误，添加剩余文本
-          segments.push({ text: remainingText, isError: false });
-          break;
+          
+          // 添加错误文本
+          segments.push({ text: errorText, isError: true, error });
+          
+          // 更新剩余文本
+          remainingText = remainingText.substring(idx + errorText.length);
         }
       }
       
-      // 如果没有错误，添加整个段落
-      if (segments.length === 0) {
+      // 添加剩余文本
+      if (remainingText.length > 0) {
         segments.push({ text: remainingText, isError: false });
       }
       
@@ -253,6 +253,13 @@ export default function EssayGradingScreen() {
                   return (
                     <Text key={sIdx} style={styles.errorIncompleteText}>
                       [{error.explanation}]
+                    </Text>
+                  );
+                } else {
+                  // 默认显示为红色下划线
+                  return (
+                    <Text key={sIdx} style={styles.errorWrongText}>
+                      {error.original}
                     </Text>
                   );
                 }
