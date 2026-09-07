@@ -303,62 +303,28 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
  * 调用千问 VL 模型
  */
 async function callQwenVL(imageBase64: string, referenceAnswer: string, maxScore: number): Promise<GradingResult> {
-  const prompt = `你是一位经验丰富的英语教师，请仔细批改这篇英语作文。
+  const prompt = `你是英语教师，请批改这篇作文。
 
 ## 参考答案
-${referenceAnswer}
+${referenceAnswer || '无'}
 
-## 批改要求
-1. **首先，完整识别并输出作文的原文内容**（transcription 字段）
-2. 对照参考答案，仔细检查作文内容
-3. **找出所有错误**，不要遗漏任何错误！包括：
-   - 语法错误（时态、主谓一致、冠词等）
-   - 拼写错误
-   - 标点错误
-   - 用词不当
-   - 句式问题
-4. 给出详细分数（满分${maxScore}分）：
-   - 内容分（40%）：是否涵盖要点
-   - 语言分（30%）：语法、拼写、词汇
-   - 结构分（20%）：段落组织、逻辑连贯
-   - 书写分（10%）：字迹工整度
-5. 给出具体修改建议和评语
+## 要求
+1. 识别作文原文（transcription）
+2. 找出所有错误（语法、拼写、标点、用词、句式）
+3. 打分（满分${maxScore}分）：内容 40%、语言 30%、结构 20%、书写 10%
+4. 给出评语和建议
 
 ## 输出格式（JSON）
-请严格按照以下 JSON 格式输出，不要输出其他内容：
-{
-  "transcription": "作文的完整原文内容（逐字识别）",
-  "max_score": ${maxScore},
-  "scores": {
-    "content": 内容分，
-    "language": 语言分，
-    "structure": 结构分，
-    "handwriting": 书写分
-  },
-  "errors": [
-    {
-      "type": "grammar/spelling/punctuation/word_choice/sentence_structure",
-      "errorType": "missing/wrong/extra/incomplete",
-      "original": "错误原文（如果是缺失错误，用空字符串）",
-      "correction": "正确写法（如果是缺失错误，填写缺失的内容）",
-      "explanation": "错误原因说明"
-    }
-  ],
-  "comments": "总体评语",
-  "strengths": ["优点 1", "优点 2"],
-  "improvements": ["改进建议 1", "改进建议 2"]
-}
+{"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"errors":[{"type":"grammar/spelling/punctuation/word_choice/sentence_structure","errorType":"missing/wrong/extra/incomplete","original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
 
-## errorType 说明
-- missing: 缺失错误（缺少单词、标点等），original 为空字符串，correction 填写缺失的内容
-- wrong: 错误用词/语法，original 是错误内容，correction 是正确内容
-- extra: 多余内容，original 是多余内容，correction 为空字符串
-- incomplete: 句子不完整，original 是不完整的部分，correction 是补充内容
+## errorType
+- missing: 缺失（original 为空，correction 填缺失内容）
+- wrong: 错误（original 是错误内容，correction 是正确内容）
+- extra: 多余（original 是多余内容，correction 为空）
+- incomplete: 不完整
 
-## 重要
-- transcription 字段必须包含作文的完整原文，逐字识别，保持原有段落结构
-- 不要输出 bbox 坐标，只需要文字批改结果
-- errors 数组中的 original 字段必须与 transcription 中的文本完全一致（包括大小写和标点）
+## 注意
+- original 必须与 transcription 中的文本完全一致
 `;
 
   console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());
@@ -396,7 +362,7 @@ ${referenceAnswer}
           },
         ],
         temperature: 0.3,
-        max_tokens: 4096,
+        max_tokens: 2048,
       }),
       signal: controller.signal,
     });
