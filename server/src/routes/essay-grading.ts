@@ -238,11 +238,15 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.log('OCR API 错误响应:', errorText.substring(0, 500));
     throw new Error(`Qwen OCR API 调用失败: ${response.status} - ${errorText}`);
   }
 
+  console.log('OCR API 响应状态:', response.status);
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
+
+  console.log('OCR API 响应:', JSON.stringify(data).substring(0, 500));
 
   if (!content) {
     throw new Error('Qwen OCR API 返回内容为空');
