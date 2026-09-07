@@ -87,8 +87,8 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
     gradingResult.max_score = max_score;
 
-    // 3. 在原图上标注错误（使用 OCR 精确位置）
-    const markedImage = await annotateImage(image, gradingResult.errors, ocrWords);
+    // 3. 在原图上标注错误（使用千问 VL 模型返回的 bbox）
+    const markedImage = await annotateImage(image, gradingResult.errors);
 
     // 保存到数据库
     const supabase = getSupabaseClient();
