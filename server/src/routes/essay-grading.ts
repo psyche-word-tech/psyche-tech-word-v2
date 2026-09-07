@@ -388,7 +388,7 @@ ${referenceAnswer}
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      throw new Error('千问 API 调用超时（120秒）');
+      throw new Error('千问 API 调用超时（60秒）');
     }
     throw err;
   }
