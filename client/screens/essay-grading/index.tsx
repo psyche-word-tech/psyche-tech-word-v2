@@ -106,7 +106,7 @@ export default function EssayGradingScreen() {
           reference_answer: referenceAnswer,
           max_score: 15,
         }),
-        signal: AbortSignal.timeout(60000), // 60 秒超时
+        signal: AbortSignal.timeout(180000), // 180 秒超时（千问 API 需要 50-60 秒）
       });
 
       if (!response.ok) {
