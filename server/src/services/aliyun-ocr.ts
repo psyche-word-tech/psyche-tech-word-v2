@@ -28,9 +28,9 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
   // 判断是 URL 还是 base64
   const isUrl = imageBase64.startsWith('http://') || imageBase64.startsWith('https://');
 
-  // 阿里云 OpenAPI 签名参数（使用 RecognizeGeneral - 通用文字识别）
+  // 阿里云 OpenAPI 签名参数（使用 RecognizeGeneralStructure - 通用文字识别）
   const params: Record<string, string> = {
-    Action: 'RecognizeGeneral',
+    Action: 'RecognizeGeneralStructure',
     Format: 'JSON',
     Version: '2021-07-07',
     AccessKeyId: accessKeyId,
@@ -60,7 +60,7 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
 
   params.Signature = signature;
 
-  console.log('[AliyunOCR] 调用 API (RecognizeGeneral)...');
+  console.log('[AliyunOCR] 调用 API (RecognizeGeneralStructure)...');
 
   const response = await fetch('https://ocr-api.cn-hangzhou.aliyuncs.com/', {
     method: 'POST',
