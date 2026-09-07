@@ -78,7 +78,12 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 参考答案可选
     const refAnswer = reference_answer || '';
 
-    // 1. 调用千问 VL 模型批改作文（同时返回 bbox）
+    // 1. 先调用 OCR 识别文字位置
+    console.log('开始调用 OCR 识别文字位置...');
+    const ocrWords = await callQwenOCR(image);
+    console.log(`OCR 识别完成，共识别 ${ocrWords.length} 个文字块`);
+
+    // 2. 调用千问 VL 模型批改作文（同时返回 bbox）
     console.log('开始调用千问 VL 模型批改作文...');
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
     console.log('千问 VL 模型批改完成');
