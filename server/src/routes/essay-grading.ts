@@ -210,11 +210,11 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 2. 返回每个单词的精确位置坐标
 3. 坐标单位为像素，相对于原图`;
 
-  const response = await fetch(`${QWEN_API_URL}/chat/completions`, {
+  const response = await fetch(`${getQwenApiUrl()}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${QWEN_API_KEY}`,
+      'Authorization': `Bearer ${getQwenApiKey()}`,
     },
     body: JSON.stringify({
       model: 'qwen3.5-ocr',
