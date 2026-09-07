@@ -33,6 +33,29 @@ function getAlibabaCloudAccessKeySecret() {
 }
 const OCR_ENDPOINT = 'ocr-api.cn-hangzhou.aliyuncs.com';
 
+/**
+ * 压缩图片（减少传输时间）
+ */
+async function compressImage(imageBase64: string): Promise<string> {
+  try {
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // 使用 sharp 压缩图片
+    const compressedBuffer = await sharp(buffer)
+      .resize(1000, 1000, { fit: 'inside', withoutEnlargement: true }) // 最大宽度 1000px
+      .jpeg({ quality: 70 }) // JPEG 质量 70%
+      .toBuffer();
+    
+    // 转换回 base64
+    const compressedBase64 = compressedBuffer.toString('base64');
+    return `data:image/jpeg;base64,${compressedBase64}`;
+  } catch (error) {
+    console.error('图片压缩失败，使用原图:', error);
+    return imageBase64; // 压缩失败返回原图
+  }
+}
+
 interface ErrorAnnotation {
   type: 'grammar' | 'spelling' | 'punctuation' | 'word_choice' | 'sentence_structure';
   errorType: 'missing' | 'wrong' | 'extra' | 'incomplete';
@@ -81,9 +104,14 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 参考答案可选
     const refAnswer = reference_answer || '';
 
+    // 压缩图片（减少传输时间）
+    console.log('开始压缩图片...');
+    const compressedImage = await compressImage(image);
+    console.log('图片压缩完成，原始大小:', Math.round(image.length / 1024), 'KB, 压缩后:', Math.round(compressedImage.length / 1024), 'KB');
+
     // 1. 调用千问 VL 模型批改作文（返回原文 + 批改结果）
     console.log('开始调用千问 VL 模型批改作文...');
-    const gradingResult = await callQwenVL(image, refAnswer, max_score);
+    const gradingResult = await callQwenVL(compressedImage, refAnswer, max_score);
     console.log('千问 VL 模型批改完成');
     console.log('识别的原文:', gradingResult.transcription);
     console.log('错误数量:', gradingResult.errors.length);
