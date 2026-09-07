@@ -19,6 +19,7 @@ interface GradingResult {
   };
   errors: Array<{
     type: string;
+    errorType: 'missing' | 'wrong' | 'extra' | 'incomplete';
     original: string;
     correction: string;
     explanation: string;
@@ -103,7 +104,7 @@ export default function EssayGradingScreen() {
         body: JSON.stringify({
           image: base64,
           reference_answer: referenceAnswer,
-          max_score: 25,
+          max_score: 15,
         }),
         signal: AbortSignal.timeout(60000), // 60 秒超时
       });
@@ -159,6 +160,109 @@ export default function EssayGradingScreen() {
       sentence_structure: '句式',
     };
     return names[type] || type;
+  };
+
+  // 渲染带错误标注的原文
+  const renderTranscriptionWithErrors = (transcription: string, errors: typeof gradingResult.errors) => {
+    if (!transcription) return null;
+
+    // 按段落分割
+    const paragraphs = transcription.split('\n').filter(p => p.trim());
+    
+    return paragraphs.map((paragraph, pIdx) => {
+      let processedText = paragraph;
+      const segments: Array<{ text: string; isError: boolean; error?: typeof errors[0] }> = [];
+      
+      // 查找并标记错误
+      let remainingText = processedText;
+      let currentPos = 0;
+      
+      // 复制错误列表，避免修改原数组
+      const remainingErrors = [...errors];
+      
+      while (remainingText.length > 0 && remainingErrors.length > 0) {
+        let found = false;
+        
+        for (let i = 0; i < remainingErrors.length; i++) {
+          const error = remainingErrors[i];
+          const errorText = error.original;
+          
+          if (!errorText) continue; // 跳过缺失错误（没有原文）
+          
+          const idx = remainingText.indexOf(errorText);
+          if (idx !== -1) {
+            // 添加错误前的文本
+            if (idx > 0) {
+              segments.push({ text: remainingText.substring(0, idx), isError: false });
+            }
+            
+            // 添加错误文本
+            segments.push({ text: errorText, isError: true, error });
+            
+            // 更新剩余文本
+            remainingText = remainingText.substring(idx + errorText.length);
+            remainingErrors.splice(i, 1);
+            found = true;
+            break;
+          }
+        }
+        
+        if (!found) {
+          // 没有找到更多错误，添加剩余文本
+          segments.push({ text: remainingText, isError: false });
+          break;
+        }
+      }
+      
+      // 如果没有错误，添加整个段落
+      if (segments.length === 0) {
+        segments.push({ text: remainingText, isError: false });
+      }
+      
+      return (
+        <View key={pIdx} style={styles.paragraphContainer}>
+          <Text style={styles.paragraphText}>
+            {segments.map((segment, sIdx) => {
+              if (segment.isError && segment.error) {
+                const error = segment.error;
+                if (error.errorType === 'missing') {
+                  // 缺失错误：显示 [缺 xxx]
+                  return (
+                    <Text key={sIdx} style={styles.errorMissingText}>
+                      [缺 {error.correction}]
+                    </Text>
+                  );
+                } else if (error.errorType === 'wrong') {
+                  // 错误用词：显示原文 → 修正
+                  return (
+                    <Text key={sIdx}>
+                      <Text style={styles.errorWrongText}>{error.original}</Text>
+                      <Text style={styles.correctionArrow}> → </Text>
+                      <Text style={styles.correctionText}>{error.correction}</Text>
+                    </Text>
+                  );
+                } else if (error.errorType === 'extra') {
+                  // 多余内容：显示删除线
+                  return (
+                    <Text key={sIdx} style={styles.errorExtraText}>
+                      {error.original}
+                    </Text>
+                  );
+                } else if (error.errorType === 'incomplete') {
+                  // 句子不完整
+                  return (
+                    <Text key={sIdx} style={styles.errorIncompleteText}>
+                      [{error.explanation}]
+                    </Text>
+                  );
+                }
+              }
+              return <Text key={sIdx}>{segment.text}</Text>;
+            })}
+          </Text>
+        </View>
+      );
+    });
   };
 
   return (
@@ -233,11 +337,13 @@ export default function EssayGradingScreen() {
           <View style={styles.resultSection}>
             <Text style={styles.sectionTitle}>3. 批改结果</Text>
 
-            {/* 作文原文 */}
+            {/* 作文原文（富文本显示，红色标注错误） */}
             {gradingResult.transcription && (
               <View style={styles.transcriptionContainer}>
-                <Text style={styles.subSectionTitle}>作文原文</Text>
-                <Text style={styles.transcriptionText}>{gradingResult.transcription}</Text>
+                <Text style={styles.subSectionTitle}>原文转录（红色 = 错误处）</Text>
+                <View style={styles.transcriptionTextContainer}>
+                  {renderTranscriptionWithErrors(gradingResult.transcription, gradingResult.errors)}
+                </View>
               </View>
             )}
 
@@ -449,10 +555,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FDE68A',
   },
-  transcriptionText: {
-    fontSize: 15,
-    lineHeight: 24,
+  transcriptionTextContainer: {
+    marginTop: 8,
+  },
+  paragraphContainer: {
+    marginBottom: 12,
+  },
+  paragraphText: {
+    fontSize: 16,
+    lineHeight: 28,
     color: '#333',
+    fontStyle: 'italic',
+  },
+  errorWrongText: {
+    color: '#DC2626',
+    textDecorationLine: 'underline',
+    textDecorationStyle: 'wavy',
+    textDecorationColor: '#DC2626',
+    fontWeight: '600',
+  },
+  errorMissingText: {
+    color: '#DC2626',
+    fontWeight: '600',
+    fontStyle: 'italic',
+  },
+  errorExtraText: {
+    color: '#DC2626',
+    textDecorationLine: 'line-through',
+    textDecorationColor: '#DC2626',
+  },
+  errorIncompleteText: {
+    color: '#DC2626',
+    fontWeight: '600',
+    fontStyle: 'italic',
+  },
+  correctionArrow: {
+    color: '#16A34A',
+    fontWeight: '600',
+  },
+  correctionText: {
+    color: '#16A34A',
+    fontWeight: '600',
   },
   scoreCard: {
     backgroundColor: '#F0F9FF',

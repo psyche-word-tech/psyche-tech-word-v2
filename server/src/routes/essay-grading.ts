@@ -35,6 +35,7 @@ const OCR_ENDPOINT = 'ocr-api.cn-hangzhou.aliyuncs.com';
 
 interface ErrorAnnotation {
   type: 'grammar' | 'spelling' | 'punctuation' | 'word_choice' | 'sentence_structure';
+  errorType: 'missing' | 'wrong' | 'extra' | 'incomplete';
   original: string;
   correction: string;
   explanation: string;
@@ -335,8 +336,9 @@ ${referenceAnswer}
   "errors": [
     {
       "type": "grammar/spelling/punctuation/word_choice/sentence_structure",
-      "original": "错误原文",
-      "correction": "正确写法",
+      "errorType": "missing/wrong/extra/incomplete",
+      "original": "错误原文（如果是缺失错误，用空字符串）",
+      "correction": "正确写法（如果是缺失错误，填写缺失的内容）",
       "explanation": "错误原因说明"
     }
   ],
@@ -345,9 +347,16 @@ ${referenceAnswer}
   "improvements": ["改进建议 1", "改进建议 2"]
 }
 
+## errorType 说明
+- missing: 缺失错误（缺少单词、标点等），original 为空字符串，correction 填写缺失的内容
+- wrong: 错误用词/语法，original 是错误内容，correction 是正确内容
+- extra: 多余内容，original 是多余内容，correction 为空字符串
+- incomplete: 句子不完整，original 是不完整的部分，correction 是补充内容
+
 ## 重要
 - transcription 字段必须包含作文的完整原文，逐字识别，保持原有段落结构
 - 不要输出 bbox 坐标，只需要文字批改结果
+- errors 数组中的 original 字段必须与 transcription 中的文本完全一致（包括大小写和标点）
 `;
 
   console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());
