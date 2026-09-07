@@ -32,7 +32,7 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
   const params: Record<string, string> = {
     Action: 'RecognizeGeneral',
     Format: 'JSON',
-    Version: '2021-07-07',
+    Version: '2019-12-30',
     AccessKeyId: accessKeyId,
     SignatureMethod: 'HMAC-SHA1',
     Timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
