@@ -48,6 +48,7 @@ interface OCRWord {
 }
 
 interface GradingResult {
+  transcription?: string;
   total_score: number;
   max_score: number;
   scores: {
@@ -78,22 +79,18 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 参考答案可选
     const refAnswer = reference_answer || '';
 
-    // 1. 先调用 OCR 识别文字位置
-    console.log('开始调用 OCR 识别文字位置...');
-    const ocrWords = await callQwenOCR(image);
-    console.log(`OCR 识别完成，共识别 ${ocrWords.length} 个文字块`);
-
-    // 2. 调用千问 VL 模型批改作文（同时返回 bbox）
+    // 1. 调用千问 VL 模型批改作文（返回原文 + 批改结果）
     console.log('开始调用千问 VL 模型批改作文...');
     const gradingResult = await callQwenVL(image, refAnswer, max_score);
     console.log('千问 VL 模型批改完成');
+    console.log('识别的原文:', gradingResult.transcription);
 
     // 计算总分
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
     gradingResult.max_score = max_score;
 
-    // 3. 在原图上标注错误（使用千问 VL 模型返回的 bbox）
-    const markedImage = await annotateImage(image, gradingResult.errors);
+    // 2. 不标注图片，直接返回原文和批改结果
+    const markedImage = null;
 
     // 保存到数据库
     const supabase = getSupabaseClient();
@@ -308,28 +305,30 @@ async function callQwenVL(imageBase64: string, referenceAnswer: string, maxScore
 ${referenceAnswer}
 
 ## 批改要求
-1. 对照参考答案，仔细检查作文内容
-2. **找出所有错误**，不要遗漏任何错误！包括：
+1. **首先，完整识别并输出作文的原文内容**（transcription 字段）
+2. 对照参考答案，仔细检查作文内容
+3. **找出所有错误**，不要遗漏任何错误！包括：
    - 语法错误（时态、主谓一致、冠词等）
    - 拼写错误
    - 标点错误
    - 用词不当
    - 句式问题
-3. 给出详细分数（满分${maxScore}分）：
+4. 给出详细分数（满分${maxScore}分）：
    - 内容分（40%）：是否涵盖要点
    - 语言分（30%）：语法、拼写、词汇
    - 结构分（20%）：段落组织、逻辑连贯
    - 书写分（10%）：字迹工整度
-4. 给出具体修改建议和评语
+5. 给出具体修改建议和评语
 
 ## 输出格式（JSON）
 请严格按照以下 JSON 格式输出，不要输出其他内容：
 {
+  "transcription": "作文的完整原文内容（逐字识别）",
   "max_score": ${maxScore},
   "scores": {
-    "content": 内容分,
-    "language": 语言分,
-    "structure": 结构分,
+    "content": 内容分，
+    "language": 语言分，
+    "structure": 结构分，
     "handwriting": 书写分
   },
   "errors": [
@@ -337,21 +336,17 @@ ${referenceAnswer}
       "type": "grammar/spelling/punctuation/word_choice/sentence_structure",
       "original": "错误原文",
       "correction": "正确写法",
-      "explanation": "错误原因说明",
-      "bbox": [x1, y1, x2, y2]
+      "explanation": "错误原因说明"
     }
   ],
   "comments": "总体评语",
-  "strengths": ["优点1", "优点2"],
+  "strengths": ["优点 1", "优点 2"],
   "improvements": ["改进建议 1", "改进建议 2"]
 }
 
 ## 重要
-- bbox 是错误单词在图片中的坐标 [左上角 x, 左上角 y, 右下角 x, 右下角 y]
-- 坐标范围：x 从 0 到图片宽度（2160），y 从 0 到图片高度（3840）
-- **图片结构**：这是一张手机拍摄的照片，上半部分是键盘和桌面，下半部分是作文纸。作文纸大约从 y=1500 开始，到 y=3500 结束。作文纸上的文字大约在 x=200 到 x=1800 之间。
-- **仔细观察图片**，准确定位每个错误单词在作文纸上的位置
-- 如果无法确定精确位置，给出大致位置即可，但必须确保坐标在作文纸区域内（y > 1500）
+- transcription 字段必须包含作文的完整原文，逐字识别，保持原有段落结构
+- 不要输出 bbox 坐标，只需要文字批改结果
 `;
 
   console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());

@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 
 interface GradingResult {
+  transcription?: string;
   total_score: number;
   max_score: number;
   scores: {
@@ -232,6 +233,14 @@ export default function EssayGradingScreen() {
           <View style={styles.resultSection}>
             <Text style={styles.sectionTitle}>3. 批改结果</Text>
 
+            {/* 作文原文 */}
+            {gradingResult.transcription && (
+              <View style={styles.transcriptionContainer}>
+                <Text style={styles.subSectionTitle}>作文原文</Text>
+                <Text style={styles.transcriptionText}>{gradingResult.transcription}</Text>
+              </View>
+            )}
+
             {/* 分数卡片 */}
             <View style={styles.scoreCard}>
               <View style={styles.totalScoreContainer}>
@@ -431,6 +440,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 16,
     marginTop: 12,
+  },
+  transcriptionContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  transcriptionText: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#333',
   },
   scoreCard: {
     backgroundColor: '#F0F9FF',
