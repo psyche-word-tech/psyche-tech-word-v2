@@ -14,7 +14,7 @@ interface OCRResult {
 }
 
 /**
- * 调用阿里云 OCR 获取文字坐标（使用 OpenAPI HTTP 方式）
+ * 调用阿里云 OCR 获取文字坐标（使用通用文字识别）
  * @param imageBase64 图片 base64（不含 data:image/jpeg;base64, 前缀）
  */
 export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
@@ -25,9 +25,9 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
     throw new Error('阿里云 AccessKey 未配置');
   }
 
-  // 阿里云 OpenAPI 签名参数
+  // 阿里云 OpenAPI 签名参数（使用 RecognizeBasic - 通用文字识别）
   const params: Record<string, string> = {
-    Action: 'RecognizeHandwriting',
+    Action: 'RecognizeBasic',
     Format: 'JSON',
     Version: '2021-07-07',
     AccessKeyId: accessKeyId,
@@ -52,7 +52,7 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
 
   params.Signature = signature;
 
-  console.log('[AliyunOCR] 调用 API...');
+  console.log('[AliyunOCR] 调用 API (RecognizeBasic)...');
 
   const response = await fetch('https://ocr-api.cn-hangzhou.aliyuncs.com/', {
     method: 'POST',
@@ -74,6 +74,35 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
   if (data.Data && data.Data.Content) {
     const content = JSON.parse(data.Data.Content);
     console.log('[AliyunOCR] Content:', content);
+
+    // 解析普片文字识别结果
+    if (content.prism_wordsInfo) {
+      for (const item of content.prism_wordsInfo) {
+        if (item.word && item.pos) {
+          words.push({
+            text: item.word,
+            x0: item.pos.x || 0,
+            y0: item.pos.y || 0,
+            x1: (item.pos.x || 0) + (item.pos.width || 0),
+            y1: (item.pos.y || 0) + (item.pos.height || 0),
+          });
+        }
+      }
+    }
+
+    if (content.prism_linesInfo) {
+      for (const item of content.prism_linesInfo) {
+        if (item.line && item.pos) {
+          lines.push({
+            text: item.line,
+            x0: item.pos.x || 0,
+            y0: item.pos.y || 0,
+            x1: (item.pos.x || 0) + (item.pos.width || 0),
+            y1: (item.pos.y || 0) + (item.pos.height || 0),
+          });
+        }
+      }
+    }
   }
 
   return { words, lines };
