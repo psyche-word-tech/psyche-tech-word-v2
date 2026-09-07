@@ -43,7 +43,7 @@ export async function callAliyunOCR(imageBase64: string): Promise<OCRResult> {
   if (isUrl) {
     params.Url = imageBase64;
   } else {
-    params.body = imageBase64;
+    params.Body = imageBase64;
   }
 
   // 计算签名
