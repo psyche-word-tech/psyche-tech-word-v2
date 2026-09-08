@@ -444,3 +444,6 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - 图片底部用 `sharp.extend` + SVG `composite` 拼接黄底批注列表
 
 
+- **判题必须拆细到单词级**：每个错误尽量用 errorType=missing/wrong/extra 指向**单个单词**（original=原词，correction=修正词），实现[加]/[改]/[删]精确标注；只有当整句确需重构时才用 incomplete（整句框+下方写正确句）。不要在长句里混入多个词错却整段报成 incomplete。
+- **标注四类映射**（annotateImage 按 error.errorType 分支）：extra→删除线穿过词；missing→插入符∧画在 original(前一个词)右侧、缺词写上方；wrong→词下方下划线、correctioon 写线下方；incomplete→locatePhrase 取句子各词包围盒并集框整句、正确句写下方。isSentence=`errorType==='incomplete' || type==='sentence_structure'`。
+- **SVG 字体**：订正/批注文字一律 `font-family="DejaVu Sans, WenQuanYi Micro Hei"`（沙箱无 Arial；文泉驿支持中文）。

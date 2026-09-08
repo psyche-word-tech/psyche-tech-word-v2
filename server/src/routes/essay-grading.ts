@@ -318,10 +318,15 @@ ${referenceAnswer || '无'}
 - wrong: 改一个词。original=错误单词，correction=正确单词
 - incomplete: 句子错误/不完整/整体表达不佳（需改写整句或整段）。original=出错的完整句子片段或短语，correction=正确的完整句子
 
-## original 定位要求
-- original 必须是一个能在原文中按单词精确匹配的连续片段（单词之间用空格）
-- wrong/extra 尽量给出单个单词；句子级（incomplete）可给多词短语或完整句子
-- 若某处多词连续都错，合并成一句 incomplete，不要拆成多个单次错误
+## 【重要】拆细到单词，严禁合并
+同一个句子里即使有多个错误，也必须**把每个单词错误分别列成独立的 error**（每条 error 只对应一个最小错误单元），不要把它们合并成一条大的 incomplete。规则：
+1. **优先单词级**：只要某个错误可以通过加/删/换一个单词修正，就用 extra/missing/wrong，**不要**用 incomplete。
+   - 例：`Socialization can enables` 是 "enables" 冗余 → 单独一条 wrong，original="enables"，correction="enable"
+   - 例：`meaningless` 应改为 `meaningful` → 单独一条 wrong，original="meaningless"，correction="meaningful"
+   - 例：缺了连接词 `as` → 单独一条 missing，original=前一个词，correction="as"
+   - 例：多了个词 → 单独一条 extra，original=该词
+2. **incomplete 仅消**：只有当一个句子**整体结构无法通过局部加/删/换词修复**（语序混乱、整句逻辑错误、需整句重写）时才用 incomplete，此时 original 才给整句、correction 给整句。**能局部修正的绝不用 incomplete**。
+3. 一条 error 的 original 必须是**最小连续片段**（优先精确到 1 个单词），不要贪渲染宽。incomplete 也尽量给出确切范围，不要拖到一整个长段。
 - 同一处错误只报一次，不要重复列出相同单词
 
 ## 注意
