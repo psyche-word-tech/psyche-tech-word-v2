@@ -686,8 +686,16 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         }
       } else {
         // 3. 改一个单词 → 单词下面画下划线，正确单词写在线下方
-        // 下划线画在被改词的纵向最低点（紧贴词底部，老师划线习惯在字正下方）
-        const ulY = y + wordHeight;
+        // 下划线自适应定位：默认贴本词框底部；若紧邻下方有水平交叠的文字（下一行词），
+// 则收线到该下方词的上沿之上留 6px，避免线穿到下一行。随每个词的布局自动调整。
+        const bottomPix = y + wordHeight;
+        let collideTop = bottomPix;
+        for (const w of ocrWords) {
+          if (w.y > y && w.y < y + wordHeight + 24 && w.x < x + wordWidth && w.x + w.width > x) {
+            if (w.y < collideTop) collideTop = w.y;
+          }
+        }
+        const ulY = collideTop < bottomPix ? Math.max(y + wordHeight * 0.4, collideTop - 6) : bottomPix;
         svgAnnotations += `
           <line x1="${x}" y1="${ulY}" x2="${x + wordWidth}" y2="${ulY}" stroke="${color}" stroke-width="${3 * scale}"/>
         `;
