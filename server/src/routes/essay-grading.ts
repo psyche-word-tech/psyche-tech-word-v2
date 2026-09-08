@@ -497,7 +497,18 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     const paddingLeft = 40 * scale;
     const lineHeight = (height - paddingTop - paddingBottom) / totalLines;
 
+    const seenOriginals = new Set<string>();
+    let seqNo = 0;
     errors.forEach((error, index) => {
+      // 同一单词只标注一次（模型可能把同一词在多个位置判错，避免重复标注）
+      const normKey = String(error && error.original ? error.original : '').toLowerCase().replace(/\s+/g, '');
+      if (normKey && seenOriginals.has(normKey)) {
+        console.log(`[annotateImage] 跳过重复错误词：${error.original}`);
+        return;
+      }
+      if (normKey) seenOriginals.add(normKey);
+      seqNo += 1;
+
       // 优先使用 OCR 数据匹配位置
       let x = 0, y = 0, wordWidth = 50 * scale, wordHeight = 30 * scale;
       let foundInOCR = false;
@@ -573,7 +584,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       svgAnnotations += `
         <circle cx="${circleCX}" cy="${circleCY}" r="${circleR}" fill="none" stroke="${color}" stroke-width="${2 * scale}"/>
         <text x="${circleCX}" y="${circleCY + 5 * scale}" font-size="${circleFontSize}" fill="${color}" text-anchor="middle" font-weight="bold">
-          ${index + 1}
+          ${seqNo}
         </text>
       `;
       
