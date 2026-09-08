@@ -312,11 +312,17 @@ ${referenceAnswer || '无'}
 ## 输出格式（JSON）
 {"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"errors":[{"type":"grammar/spelling/punctuation/word_choice/sentence_structure","errorType":"missing/wrong/extra/incomplete","original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
 
-## errorType
-- missing: 缺失（original 为空，correction 填缺失内容）
-- wrong: 错误（original 是错误内容，correction 是正确内容）
-- extra: 多余（original 是多余内容，correction 为空）
-- incomplete: 不完整
+## errorType（决定批改标记类型，务必准确）
+- extra: 多了一个词（可直接删掉）。original=多余的那个词，correction 填空字符串 ""
+- missing: 少了一个词（需插入）。**original=缺失位置之前紧邻的那个单词**（用于标记插入点），correction=缺失的内容
+- wrong: 改一个词。original=错误单词，correction=正确单词
+- incomplete: 句子错误/不完整/整体表达不佳（需改写整句或整段）。original=出错的完整句子片段或短语，correction=正确的完整句子
+
+## original 定位要求
+- original 必须是一个能在原文中按单词精确匹配的连续片段（单词之间用空格）
+- wrong/extra 尽量给出单个单词；句子级（incomplete）可给多词短语或完整句子
+- 若某处多词连续都错，合并成一句 incomplete，不要拆成多个单次错误
+- 同一处错误只报一次，不要重复列出相同单词
 
 ## 注意
 - original 必须与 transcription 中的文本完全一致
@@ -567,49 +573,89 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         console.log(`[annotateImage] 使用估算位置：${error.original} at line ${line}, word ${wordIndex}`);
       }
       
-      // 1. 在错误单词上画删除线（红色横线，加粗）
-      svgAnnotations += `
-        <line x1="${x}" y1="${y + wordHeight / 2}" x2="${x + wordWidth}" y2="${y + wordHeight / 2}" 
-              stroke="${color}" stroke-width="${3 * scale}"/>
-      `;
-      
-      // 2. 在错误单词左上方画圆圈标记（防顶部/左侧溢出）
+      // —— 圆圈数字（所有类型统一，放词左上方，防溢出）——
       const margin = 8 * scale;
+      const et = String((error as any).errorType || 'wrong');
+      // 句子级：errorType 为 incomplete，或 type 为 sentence_structure，或 original 为多词短语
+      const isSentence = et === 'incomplete' || error.type === 'sentence_structure' || String(error.original || '').split(/\s+/).length > 3;
+      const circleFontSize = Math.max(12, lineHeight * 0.2);
+
       let circleCX = x;
       let circleCY = y - 18 * scale;
       const circleR = Math.max(9, 12 * scale);
       if (circleCY < circleR) circleCY = y + wordHeight + 18 * scale; // 顶部越界 → 移到词下方
       if (circleCX < circleR) circleCX = x + wordWidth + 20 * scale;  // 左侧越界 → 移到词右侧
-      const circleFontSize = Math.max(12, lineHeight * 0.2); // 圆圈中数字字体
       svgAnnotations += `
         <circle cx="${circleCX}" cy="${circleCY}" r="${circleR}" fill="none" stroke="${color}" stroke-width="${2 * scale}"/>
         <text x="${circleCX}" y="${circleCY + 5 * scale}" font-size="${circleFontSize}" fill="${color}" text-anchor="middle" font-weight="bold">
           ${seqNo}
         </text>
       `;
-      
-      // 3. 在旁边写正确的单词（红色，斜体，字体大小为原字体的 0.6 倍）
-      if (error.correction && error.correction !== error.original) {
-        const correctionFontSize = Math.max(12, lineHeight * 0.2); // 进一步减小字体
-        const textW = estimateTextWidth(error.correction, correctionFontSize);
-        // 默认放在错误词右侧；右侧溢出 → 放左上方；仍溢出 → 放词正上方居中
-        let correctionX = x + wordWidth + margin;
-        let correctionY = y - 6 * scale;
-        let anchor: string = 'start';
-        if (correctionX + textW > width - margin) {
-          correctionX = x - textW - margin;
-          if (correctionX < margin) {
-            correctionX = x + wordWidth / 2;
-            correctionY = y - Math.max(10, circleFontSize + 4) * scale;
-            if (correctionY < 10) correctionY = y + wordHeight + correctionFontSize + 6 * scale;
-            anchor = 'middle';
+
+      if (et === 'extra') {
+        // 1. 多一个单词 → 红色横线直接穿过该单词（删除线）
+        const strikeY = y + wordHeight / 2;
+        svgAnnotations += `
+          <line x1="${x}" y1="${strikeY}" x2="${x + wordWidth}" y2="${strikeY}" stroke="${color}" stroke-width="${3 * scale}"/>
+        `;
+      } else if (et === 'missing') {
+        // 2. 少一个单词 → 在 original（前一个词）右侧画插入符 ∧，把缺少的词写在插入符上方
+        const ax = x + wordWidth + margin;
+        const ayBase = y + wordHeight;
+        const ins = Math.max(8, 7 * scale);
+        svgAnnotations += `
+          <path d="M ${ax} ${ayBase + 3 * scale} L ${ax - ins} ${ayBase - 10 * scale} M ${ax} ${ayBase + 3 * scale} L ${ax + ins} ${ayBase - 10 * scale}" stroke="${color}" stroke-width="${2.5 * scale}" fill="none"/>
+        `;
+        if (error.correction) {
+          const cfon = Math.max(12, lineHeight * 0.2);
+          const iw = estimateTextWidth(error.correction, cfon);
+          let ix = ax;
+          let iy = y - 10 * scale;
+          if (ix + iw > width - margin) ix = width - margin - iw;
+          if (ix < margin) ix = margin;
+          if (iy < 12) iy = y + wordHeight + cfon + 6 * scale;
+          svgAnnotations += `
+            <text x="${ix}" y="${iy}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${error.correction}</text>
+          `;
+        }
+      } else if (isSentence) {
+        // 4. 句子错误 → 框出整个句子，正确句子写在框下方
+        const phrase = locatePhrase(String(error.original || ''), ocrWords);
+        if (phrase && phrase.x !== undefined) {
+          const px = phrase.x * coordScale, py = phrase.y * coordScale;
+          const pw = phrase.width * coordScale, ph = phrase.height * coordScale;
+          svgAnnotations += `
+            <rect x="${px - 3 * scale}" y="${py - 3 * scale}" width="${pw + 6 * scale}" height="${ph + 6 * scale}" fill="none" stroke="${color}" stroke-width="${2.5 * scale}"/>
+          `;
+          if (error.correction) {
+            const cfon = Math.max(12, lineHeight * 0.2);
+            const cw = estimateTextWidth(error.correction, cfon);
+            let cxp = px;
+            if (cxp + cw > width - margin) cxp = width - margin - cw;
+            if (cxp < margin) cxp = margin;
+            const cyp = py + ph + 18 * scale;
+            svgAnnotations += `
+              <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${error.correction}</text>
+            `;
           }
         }
+      } else {
+        // 3. 改一个单词 → 单词下面画下划线，正确单词写在线下方
+        const ulY = y + wordHeight + 3 * scale;
         svgAnnotations += `
-          <text x="${correctionX}" y="${correctionY}" font-size="${correctionFontSize}" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold" text-anchor="${anchor}">
-            ${error.correction}
-          </text>
+          <line x1="${x}" y1="${ulY}" x2="${x + wordWidth}" y2="${ulY}" stroke="${color}" stroke-width="${3 * scale}"/>
         `;
+        if (error.correction && error.correction !== error.original) {
+          const cfon = Math.max(12, lineHeight * 0.2);
+          const cw = estimateTextWidth(error.correction, cfon);
+          let cxp = x;
+          if (cxp + cw > width - margin) cxp = width - margin - cw;
+          if (cxp < margin) cxp = margin;
+          const cyp = ulY + cfon + 2 * scale;
+          svgAnnotations += `
+            <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${error.correction}</text>
+          `;
+        }
       }
     });
 
@@ -620,16 +666,22 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     let listSvg = `
       <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="#FFF9E6"/>
       <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#FFCC00" stroke-width="4"/>
-      <text x="20" y="${listStartY}" font-size="28" fill="#333" font-family="Arial" font-weight="bold">
+      <text x="20" y="${listStartY}" font-size="28" fill="#333" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">
         批改标注：
       </text>
     `;
     
     errors.forEach((error, index) => {
       const itemY = listStartY + 45 + index * 50;
+      const et = String((error as any).errorType || 'wrong');
+      let label: string;
+      if (et === 'extra') label = `[删] ${error.original || ''}`;
+      else if (et === 'missing') label = error.correction ? `[加] 在「${error.original || ''}」后加: ${error.correction}` : `[加] ${error.original || ''}`;
+      else if (et === 'incomplete' || error.type === 'sentence_structure') label = `[句] ${error.original || ''} → ${error.correction || ''}`;
+      else label = `[改] ${error.original || ''} → ${error.correction || ''}`;
       listSvg += `
-        <text x="20" y="${itemY}" font-size="24" fill="${color}" font-family="Arial" font-weight="bold">
-          ${index + 1}. ${error.original} → ${error.correction}
+        <text x="20" y="${itemY}" font-size="24" fill="${color}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">
+          ${index + 1}. ${label}
         </text>
       `;
     });
@@ -670,6 +722,25 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     console.error('图片标注失败:', error);
     return imageBase64; // 标注失败返回原图
   }
+}
+
+// 按短语定位 OCR 中的近似区域（用于句子级标注）
+function locatePhrase(text: string, ocrWords: OCRWord[]): OCRWord | null {
+  if (!text) return null;
+  const whole = findMatchingOCRWord(text, ocrWords);
+  if (whole) return whole;
+  const words = text.split(/\s+/).filter((w: string) => w.length >= 2);
+  const hits: OCRWord[] = [];
+  for (const w of words) {
+    const m = findMatchingOCRWord(w, ocrWords);
+    if (m && m.x !== undefined) hits.push(m);
+  }
+  if (!hits.length) return null;
+  const minX = Math.min(...hits.map(h => h.x));
+  const minY = Math.min(...hits.map(h => h.y));
+  const maxX = Math.max(...hits.map(h => h.x + h.width));
+  const maxY = Math.max(...hits.map(h => h.y + h.height));
+  return { text, x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
 function estimateTextWidth(text: string, fontSize: number): number {

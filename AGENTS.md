@@ -429,4 +429,18 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - `server/src/services/paddleocr.ts` - PaddleOCR 官方 API 封装 + 行→词分割
 - `client/screens/essay-grading/index.tsx` - 批改前端页
 
+### 四类批改标记（annotateImage，按 `error.errorType` 分支绘制）
+千问 prompt 让每个 error 返回 `errorType`: `missing`/`wrong`/`extra`/`incomplete`，标注层按类型画不同红笔符号：
+1. `extra`（多一个单词）→ 红色横线**穿过**该单词（删除线）
+2. `missing`（少一个单词）→ 在原词（`original`=前一个词）右侧画插入符 `∧`，缺少的词写在插入符**上方**
+3. `wrong`（改一个单词，else 分支）→ 单词**下方**画下划线，正确词写在线**下方**
+4. `incomplete`（整句错误，`isSentence` 判定）→ `locatePhrase()` 框出整句，正确句子写在框**下方**
+
+要点：
+- `isSentence` = `errorType==='incomplete' || type==='sentence_structure'`
+- **字体**：SVG 订正文字用 `font-family="DejaVu Sans, WenQuanYi Micro Hei"`（沙箱无 Arial；文泉驿微米黑支持中文批注列表）。没有 Noto CJK。
+- 每个错误左上角画带圈序号 `seqNo` 与底部"批改标注"黄底列表对应（`[删]/[加]/[改]/[句]`）
+- `locatePhrase` 在 OCR 词里按连续词序列匹配整句 bbox（找不到则退化为估算/词匹配）
+- 图片底部用 `sharp.extend` + SVG `composite` 拼接黄底批注列表
+
 
