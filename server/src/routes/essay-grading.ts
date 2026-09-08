@@ -13,6 +13,41 @@ dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 const router = Router();
 
+// 容错修复：千问长文本偶发被截断导致 JSON 尾部不完整（未闭合字符串/数组/对象）
+function repairJsonTrailing(raw: string): string {
+  let out = raw;
+  // 若以未闭合的字符串结尾，先补闭合引号
+  let inStr = false, escaped = false;
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i];
+    if (escaped) { escaped = false; continue; }
+    if (c === '\\') { escaped = true; continue; }
+    if (c === '"') inStr = !inStr;
+  }
+  if (inStr) out += '"';
+  // 再按栈补齐未闭合的数组/对象
+  const stack: string[] = [];
+  inStr = false; escaped = false;
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i];
+    if (inStr) {
+      if (escaped) { escaped = false; continue; }
+      if (c === '\\') { escaped = true; continue; }
+      if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '[' || c === '{') { stack.push(c); continue; }
+    if (c === ']') { stack.pop(); continue; }
+    if (c === '}') { stack.pop(); continue; }
+  }
+  while (stack.length) {
+    const open = stack.pop();
+    out += open === '[' ? ']' : '}';
+  }
+  return out;
+}
+
 // 千问 API 配置（使用函数延迟读取环境变量）
 function getQwenApiKey() {
   return process.env.QWEN_API_KEY || '';
@@ -423,19 +458,28 @@ ${ocrBoard}
     fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult, null, 2));
     console.log('千问 VL 模型响应已写入 /tmp/qwen-response.log');
   } catch {
-    // 尝试从 markdown 代码块中提取 JSON
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      gradingResult = JSON.parse(jsonMatch[1]);
-    } else {
-      // 尝试找到 JSON 对象
-      const objMatch = content.match(/\{[\s\S]*\}/);
-      if (objMatch) {
-        gradingResult = JSON.parse(objMatch[0]);
-      } else {
-        throw new Error('无法解析千问 API 返回的 JSON');
-      }
+    // 依次尝试：markdown 代码块提取 → 花括号对象 → 截断补全修复
+    const candidates = (() => {
+      const arr: string[] = [];
+      const fenced = content.match(/```json\s*([\s\S]*?)\s*```/);
+      if (fenced) arr.push(fenced[1]);
+      const obj = content.match(/\{[\s\S]*\}/);
+      if (obj) arr.push(obj[0]);
+      arr.push(repairJsonTrailing(content));
+      return arr;
+    })();
+    let parsed = false;
+    for (const cand of candidates) {
+      try {
+        gradingResult = JSON.parse(cand);
+        parsed = true;
+        break;
+      } catch {}
     }
+    if (!parsed) {
+      throw new Error('无法解析千问 API 返回的 JSON');
+    }
+    console.log('千问 JSON 通过容错修复后解析成功');
     try {
       fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult, null, 2));
     } catch {}
