@@ -321,12 +321,12 @@ ${referenceAnswer || '无'}
 ## 【重要】拆细到单词，严禁合并
 同一个句子里即使有多个错误，也必须**把每个单词错误分别列成独立的 error**（每条 error 只对应一个最小错误单元），不要把它们合并成一条大的 incomplete。规则：
 1. **优先单词级**：只要某个错误可以通过加/删/换一个单词修正，就用 extra/missing/wrong，**不要**用 incomplete。
-   - 例：`Socialization can enables` 是 "enables" 冗余 → 单独一条 wrong，original="enables"，correction="enable"
-   - 例：`meaningless` 应改为 `meaningful` → 单独一条 wrong，original="meaningless"，correction="meaningful"
-   - 例：缺了连接词 `as` → 单独一条 missing，original=前一个词，correction="as"
+   - 例：'Socialization can enables' 是 'enables' 冗余 → 单独一条 wrong，original='enables'，correction='enable'
+   - 例：'meaningless' 应改为 'meaningful' → 单独一条 wrong，original='meaningless'，correction='meaningful'
+   - 例：缺了连接词 'as' → 单独一条 missing，original=前一个词，correction='as'
    - 例：多了个词 → 单独一条 extra，original=该词
-2. **incomplete 仅消**：只有当一个句子**整体结构无法通过局部加/删/换词修复**（语序混乱、整句逻辑错误、需整句重写）时才用 incomplete，此时 original 才给整句、correction 给整句。**能局部修正的绝不用 incomplete**。
-3. 一条 error 的 original 必须是**最小连续片段**（优先精确到 1 个单词），不要贪渲染宽。incomplete 也尽量给出确切范围，不要拖到一整个长段。
+2. **incomplete 仅限**：只有当一个句子**整体结构无法通过局部加/删/换词修复**（语序混乱、整句逻辑错误、需整句重写）时才用 incomplete，此时 original 才给整句、correction 给整句。**能局部修正的绝不用 incomplete**。
+3. 一条 error 的 original 必须是**最小连续片段**（优先精确到 1 个单词），不要贪大。incomplete 也尽量给出确切范围，不要拖到一整个长段。
 - 同一处错误只报一次，不要重复列出相同单词
 
 ## 注意
@@ -338,7 +338,7 @@ ${referenceAnswer || '无'}
   console.log('API Key 长度:', getQwenApiKey().length);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 秒超时
+  const timeoutId = setTimeout(() => controller.abort(), 150000); // 150 秒超时
 
   let response;
   try {
@@ -376,7 +376,7 @@ ${referenceAnswer || '无'}
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      throw new Error('千问 API 调用超时（60秒）');
+      throw new Error('千问 API 调用超时（150秒）');
     }
     throw err;
   }
@@ -518,6 +518,14 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         return;
       }
       if (normKey) seenOriginals.add(normKey);
+
+      // 跳过纯标点/无实质词的"错误"（如逗号→句号），避免噪音标注
+      const origTrim = String(error.original || '').trim();
+      if (origTrim && !/[A-Za-z\u4e00-\u9fa5]/.test(origTrim)) {
+        console.log(`[annotateImage] 跳过标点错误：${error.original}`);
+        return;
+      }
+
       seqNo += 1;
 
       // 优先使用 OCR 数据匹配位置
@@ -664,10 +672,29 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       }
     });
 
-    // 在图片底部添加标注列表（进一步增大字体）
-    const listStartY = height + 20;
-    const listHeight = errors.length * 50 + 80;
-    
+    // 在图片底部添加标注列表（进一步增大字体），长文本自动换行
+    const margin2 = 40;
+    const listLineH = 38;
+    const listItemFont = 24;
+    const listMaxW = width - margin2;
+    const wrappedRows: string[][] = [];
+    let totalListH = 64; // 标题区占位
+    let itemCounter = 0;
+    errors.forEach((error) => {
+      const et = String((error as any).errorType || 'wrong');
+      let label: string;
+      if (et === 'extra') label = `[删] ${error.original || ''}`;
+      else if (et === 'missing') label = error.correction ? `[加] 在「${error.original || ''}」后加: ${error.correction}` : `[加] ${error.original || ''}`;
+      else if (et === 'incomplete' || error.type === 'sentence_structure') label = `[句] ${error.original || ''} → ${error.correction || ''}`;
+      else label = `[改] ${error.original || ''} → ${error.correction || ''}`;
+      const rows = wrapText(`${itemCounter + 1}. ${label}`, listItemFont, listMaxW);
+      wrappedRows.push(rows);
+      totalListH += rows.length * listLineH + 6;
+      itemCounter++;
+    });
+    const listHeight = totalListH;
+    const listStartY = height + 30;
+
     let listSvg = `
       <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="#FFF9E6"/>
       <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#FFCC00" stroke-width="4"/>
@@ -675,20 +702,15 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         批改标注：
       </text>
     `;
-    
-    errors.forEach((error, index) => {
-      const itemY = listStartY + 45 + index * 50;
-      const et = String((error as any).errorType || 'wrong');
-      let label: string;
-      if (et === 'extra') label = `[删] ${error.original || ''}`;
-      else if (et === 'missing') label = error.correction ? `[加] 在「${error.original || ''}」后加: ${error.correction}` : `[加] ${error.original || ''}`;
-      else if (et === 'incomplete' || error.type === 'sentence_structure') label = `[句] ${error.original || ''} → ${error.correction || ''}`;
-      else label = `[改] ${error.original || ''} → ${error.correction || ''}`;
-      listSvg += `
-        <text x="20" y="${itemY}" font-size="24" fill="${color}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">
-          ${index + 1}. ${label}
-        </text>
-      `;
+    let listCursorY = listStartY + 44;
+    wrappedRows.forEach((rows) => {
+      for (const ln of rows) {
+        listSvg += `
+          <text x="20" y="${listCursorY}" font-size="${listItemFont}" fill="${color}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${ln}</text>
+        `;
+        listCursorY += listLineH;
+      }
+      listCursorY += 6;
     });
 
     // 使用 sharp 的 extend + composite 方法
@@ -759,6 +781,29 @@ function estimateTextWidth(text: string, fontSize: number): number {
     else w += fontSize * 0.45;                                    // 标点
   }
   return w;
+}
+
+function wrapText(text: string, fontSize: number, maxWidth: number): string[] {
+  if (!text) return [];
+  const lines: string[] = [];
+  let current = '';
+  for (const ch of text) {
+    const test = current + ch;
+    if (estimateTextWidth(test, fontSize) <= maxWidth) {
+      current = test;
+    } else {
+      if (current.trim()) {
+        const trimmed = current.trim();
+        lines.push(trimmed.slice(0, 1).toUpperCase() + trimmed.slice(1));
+      }
+      current = ch;
+    }
+  }
+  if (current.trim()) {
+    const trimmed = current.trim();
+    lines.push(trimmed.slice(0, 1).toUpperCase() + trimmed.slice(1));
+  }
+  return lines.length ? lines : [text];
 }
 
 function getErrorTypeName(type: string): string {

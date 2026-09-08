@@ -447,3 +447,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **判题必须拆细到单词级**：每个错误尽量用 errorType=missing/wrong/extra 指向**单个单词**（original=原词，correction=修正词），实现[加]/[改]/[删]精确标注；只有当整句确需重构时才用 incomplete（整句框+下方写正确句）。不要在长句里混入多个词错却整段报成 incomplete。
 - **标注四类映射**（annotateImage 按 error.errorType 分支）：extra→删除线穿过词；missing→插入符∧画在 original(前一个词)右侧、缺词写上方；wrong→词下方下划线、correctioon 写线下方；incomplete→locatePhrase 取句子各词包围盒并集框整句、正确句写下方。isSentence=`errorType==='incomplete' || type==='sentence_structure'`。
 - **SVG 字体**：订正/批注文字一律 `font-family="DejaVu Sans, WenQuanYi Micro Hei"`（沙箱无 Arial；文泉驿支持中文）。
+
+## 服务稳定性踩坑（多进程堆积导致 5000 端口无法连接）
+- **症状**：反复 build/重启后，`ps aux | grep "node dist/index.js"` 会累积出多个 node 进程同时抢 5000 端口，导致连不上后端/预览一直"启动中"。esbuild build 后 nodemon 每次重启都可能叠加新进程。
+- **修复**：启动前先 `pkill -f nodemon` 并逐个 kill 残留的 `node dist/index.js`，确认 `ss -tlnp | grep 5000` 只剩唯一进程，再 `setsid nohup node dist/index.js > /tmp/server-dev.log 2>&1 &` 单实例启动。
+- **检查命令**：`ss -tlnp | grep 5000`（应只有 1 个 pid）；`ps aux | grep "node dist/index.js" | grep -v grep | wc -l`（应为 1）。
