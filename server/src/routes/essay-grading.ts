@@ -686,8 +686,9 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         }
       } else {
         // 3. 改一个单词 → 单词下面画下划线，正确单词写在线下方
-        // 下划线画在词框内中下部，避免因 OCR 词框行高偏大而压到下一行正文
-        const ulY = y + wordHeight * 0.82;
+        // 下划线贴在被改词的文字主体（词框竖直中线附近，OCR 词框上部才是字、框高有余量），
+        // 避免沉到词框下部而视觉上贴到下一行词
+        const ulY = y + wordHeight * 0.45;
         svgAnnotations += `
           <line x1="${x}" y1="${ulY}" x2="${x + wordWidth}" y2="${ulY}" stroke="${color}" stroke-width="${3 * scale}"/>
         `;
@@ -695,7 +696,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           const cfon = Math.max(12, lineHeight * 0.2);
           const cw = estimateTextWidth(error.correction, cfon);
           let cxp = x;
-          let cyp = ulY + cfon + 4 * scale;
+          let cyp = ulY + cfon * 0.9;
           if (cxp + cw > width - margin) cxp = width - margin - cw;
           if (cxp < margin) cxp = margin;
           // 订正文字如果被下一行正文覆盖，用实心白底盖住，保证红字清晰
