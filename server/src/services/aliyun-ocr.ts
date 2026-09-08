@@ -15,24 +15,20 @@ export async function callAlibabaOCR(
   console.log('[OCR] 调用本地 OCR 服务...');
   
   try {
-    // 将 base64 转换为 buffer
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
-    
-    // 创建 FormData
-    const formData = new FormData();
-    formData.append('file', imageBuffer, {
-      filename: 'image.jpg',
-      contentType: 'image/jpeg',
-    });
-    
-    // 调用本地 OCR 服务
+    // 直接传递 base64
     const response = await fetch('http://localhost:8000/api/ocr', {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image: imageBase64,
+      }),
     });
     
     if (!response.ok) {
-      throw new Error('OCR 服务调用失败');
+      const errorText = await response.text();
+      throw new Error('OCR 服务调用失败：' + errorText);
     }
     
     const result = await response.json();

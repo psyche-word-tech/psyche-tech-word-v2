@@ -1,21 +1,26 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from PIL import Image
 import pytesseract
+import base64
 import io
 import uvicorn
 
 app = FastAPI(title="OCR Service")
 
+class OCRRequest(BaseModel):
+    image: str  # base64 encoded image
+
 @app.post("/api/ocr")
-async def recognize_image(file: UploadFile = File(...)):
+async def recognize_image(request: OCRRequest):
     """
     识别图片中的文字，返回词级坐标
     """
     try:
-        # 读取图片
-        content = await file.read()
-        image = Image.open(io.BytesIO(content))
+        # 解码 base64 图片
+        image_data = base64.b64decode(request.image)
+        image = Image.open(io.BytesIO(image_data))
         
         # 转换为 RGB
         if image.mode != 'RGB':
