@@ -767,9 +767,18 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       })
       .toBuffer();
     
+    // 调试：叠加所有 OCR 词框（黄框 + 序号），用于核对词框与字迹的对齐
+    const debugBoxes = ocrWords.map((w, i) => `
+      <rect x="${w.x}" y="${w.y}" width="${w.width}" height="${w.height}"
+        fill="none" stroke="#FACC15" stroke-width="2" />
+      <text x="${w.x + 2}" y="${w.y - 4}" font-family="DejaVu Sans" font-size="13"
+        fill="#FACC15">${i}</text>
+    `).join('');
+
     // 2. 创建 SVG 标注层（只包含标注，不包含原图）
     const svgOverlay = `
       <svg width="${width}" height="${height + listHeight}">
+        ${debugBoxes}
         ${svgAnnotations}
         ${listSvg}
       </svg>
