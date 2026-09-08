@@ -1,5 +1,5 @@
-import { createClient } from '@alicloud/ocr-api20210707';
-import * as OpenApi from '@alicloud/openapi-client';
+const AlibabaOCR = require('@alicloud/ocr-api20210707');
+const OpenApi = require('@alicloud/openapi-client');
 
 export interface WordBox {
   text: string;
@@ -29,10 +29,10 @@ export async function callAlibabaOCR(
     endpoint: 'ocr-api.cn-hangzhou.aliyuncs.com',
   });
 
-  const client = new createClient(config);
+  const client = new AlibabaOCR.default(config);
 
   // 创建请求
-  const request = new createClient.RecognizeGeneralRequest({
+  const request = new AlibabaOCR.RecognizeGeneralRequest({
     body: isUrl ? undefined : imageBase64,
     url: isUrl ? imageBase64 : undefined,
   });
@@ -44,7 +44,6 @@ export async function callAlibabaOCR(
 
   // 解析响应
   const words: WordBox[] = [];
-  const lines: { text: string; x0: number; y0: number; x1: number; y1: number }[] = [];
 
   if (response.body?.data?.prism_wordsInfo) {
     for (const item of response.body.data.prism_wordsInfo) {
@@ -56,8 +55,6 @@ export async function callAlibabaOCR(
         const y0 = pos.y;
         const x1 = pos.x2 || pos.x;
         const y1 = pos.y2 || pos.y;
-
-        lines.push({ text, x0, y0, x1, y1 });
 
         // 分割成单词
         const lineWords = text.split(/\s+/).filter(w => w.length > 0);
