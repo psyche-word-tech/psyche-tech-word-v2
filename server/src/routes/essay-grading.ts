@@ -640,22 +640,27 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         `;
       } else if (et === 'missing') {
         // 2. 少一个单词 → 在 original（前一个词）右侧画插入符 ∧，把缺少的词写在插入符上方
+        // 插入符画在词的垂直中线高度（而非词底部），避免落到下一行视觉位置
         const ax = x + wordWidth + margin;
-        const ayBase = y + wordHeight;
+        const ayBase = y + wordHeight * 0.55;
         const ins = Math.max(8, 7 * scale);
         svgAnnotations += `
           <path d="M ${ax} ${ayBase + 3 * scale} L ${ax - ins} ${ayBase - 10 * scale} M ${ax} ${ayBase + 3 * scale} L ${ax + ins} ${ayBase - 10 * scale}" stroke="${color}" stroke-width="${2.5 * scale}" fill="none"/>
         `;
-        if (error.correction) {
+        // 缺失词只取 correction 中真正需要插入的那个词（千问可能返回 "studying as" 这类含原文词的双词）
+        const _parts = String(error.correction || '').trim().split(/\s+/).filter(Boolean);
+        const insText = _parts.length > 1 ? _parts[_parts.length - 1] : (error.correction || '');
+        if (insText) {
           const cfon = Math.max(12, lineHeight * 0.2);
-          const iw = estimateTextWidth(error.correction, cfon);
+          const iw = estimateTextWidth(insText, cfon);
           let ix = ax;
-          let iy = y - 10 * scale;
+          let iy = y - 12 * scale;
           if (ix + iw > width - margin) ix = width - margin - iw;
           if (ix < margin) ix = margin;
           if (iy < 12) iy = y + wordHeight + cfon + 6 * scale;
           svgAnnotations += `
-            <text x="${ix}" y="${iy}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${error.correction}</text>
+            <rect x="${ix - 3 * scale}" y="${iy - cfon + 3 * scale}" width="${iw + 6 * scale}" height="${cfon + 5 * scale}" fill="#ffffff" opacity="0.85"/>
+            <text x="${ix}" y="${iy}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${insText}</text>
           `;
         }
       } else if (isSentence) {
@@ -693,6 +698,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           if (cxp < margin) cxp = margin;
           const cyp = ulY + cfon + 2 * scale;
           svgAnnotations += `
+            <rect x="${cxp - 3 * scale}" y="${cyp - cfon + 3 * scale}" width="${cw + 6 * scale}" height="${cfon + 5 * scale}" fill="#ffffff" opacity="0.85"/>
             <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${error.correction}</text>
           `;
         }
