@@ -66,6 +66,7 @@ async function compressImage(imageBase64: string): Promise<string> {
 interface ErrorAnnotation {
   type: 'grammar' | 'spelling' | 'punctuation' | 'word_choice' | 'sentence_structure';
   errorType: 'missing' | 'wrong' | 'extra' | 'incomplete';
+  wordIdx?: number; // OCR 词表中的全局序号（用于精确定位）
   original: string;
   correction: string;
   explanation: string;
@@ -116,9 +117,23 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const compressedImage = await compressImage(image);
     console.log('图片压缩完成，原始大小:', Math.round(image.length / 1024), 'KB, 压缩后:', Math.round(compressedImage.length / 1024), 'KB');
 
-    // 1. 调用千问 VL 模型批改作文（返回原文 + 批改结果）
+    // 1. 先调用 OCR 获取文字位置（词表，按出现顺序编号，供千问精确定位）
+    console.log('开始调用 PaddleOCR...');
+    const ocrResult = await callPaddleOCR(compressedImage);
+    if (!ocrResult.success) {
+      throw new Error(`PaddleOCR 调用失败：${ocrResult.error}`);
+    }
+    const ocrWords = ocrResult.words;
+    console.log('PaddleOCR 完成，返回', ocrWords.length, '个单词');
+    try {
+      const fs = await import('fs');
+      fs.writeFileSync('/tmp/ocr-words.log', JSON.stringify(ocrWords, null, 2));
+    } catch {}
+
+    // 2. 调用千问 VL 模型批改作文（看图 + 引用 OCR 词表序号精确定位）
     console.log('开始调用千问 VL 模型批改作文...');
-    const gradingResult = await callQwenVL(compressedImage, refAnswer, max_score);
+    const ocrBoard = ocrWords.map((w, i) => ({ index: i, text: w.text }));
+    const gradingResult = await callQwenVL(compressedImage, refAnswer, max_score, ocrBoard);
     console.log('千问 VL 模型批改完成');
     console.log('识别的原文:', gradingResult.transcription);
     console.log('错误数量:', gradingResult.errors.length);
@@ -127,20 +142,6 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 计算总分
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
     gradingResult.max_score = max_score;
-
-    // 2. 调用阿里云 OCR 获取文字位置
-    console.log('开始调用阿里云 OCR...');
-    const ocrResult = await callPaddleOCR(compressedImage);
-    if (!ocrResult.success) {
-      throw new Error(`PaddleOCR 调用失败：${ocrResult.error}`);
-    }
-    const ocrWords = ocrResult.words;
-    console.log('阿里云 OCR 完成，返回', ocrWords.length, '个单词');
-    // 记录 OCR 词汇用于诊断
-    try {
-      const fs = await import('fs');
-      fs.writeFileSync('/tmp/ocr-words.log', JSON.stringify(ocrWords, null, 2));
-    } catch {}
     
     // 3. 绘制标注：参数顺序为 (image, errors, ocrWords)
     const markedImage = await annotateImage(compressedImage, gradingResult.errors, ocrWords);
@@ -297,7 +298,17 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 /**
  * 调用千问 VL 模型
  */
-async function callQwenVL(imageBase64: string, referenceAnswer: string, maxScore: number): Promise<GradingResult> {
+async function callQwenVL(imageBase64: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = []): Promise<GradingResult> {
+  const ocrBoard = ocrWords.length > 0
+    ? `\n\n## OCR 词表（机器识别的手写词，按出现顺序编号，用于定位）
+${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
+
+【定位规则——至关重要】
+- 图片上每个单词已由 OCR 词表按顺序编号（序号=词表里的数字）。
+- 你判断出某个词错了时，要在该 error 里填上 **wordIdx = 该词在 OCR 词表中的序号**（精确数字）。
+- 如果你认为 OCR 某处识别错了，仍以"图上真正该修正的那个位置"为准，选一个**最贴近的 OCR 序号**填入 wordIdx。
+- 数组 errors 里每个元素必须带 wordIdx（incomplete 整句时填句中第一个字的 OCR 序号）。` : '';
+
   const prompt = `你是英语教师，请批改这篇作文。
 
 ## 参考答案
@@ -310,13 +321,14 @@ ${referenceAnswer || '无'}
 4. 给出评语和建议
 
 ## 输出格式（JSON）
-{"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"errors":[{"type":"grammar/spelling/punctuation/word_choice/sentence_structure","errorType":"missing/wrong/extra/incomplete","original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
+{"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"errors":[{"type":"grammar/spelling/punctuation/word_choice/sentence_structure","errorType":"missing/wrong/extra/incomplete","wordIdx":0,"original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
 
 ## errorType（决定批改标记类型，务必准确）
 - extra: 多了一个词（可直接删掉）。original=多余的那个词，correction 填空字符串 ""
 - missing: 少了一个词（需插入）。**original=缺失位置之前紧邻的那个单词**（用于标记插入点），correction=缺失的内容
 - wrong: 改一个词。original=错误单词，correction=正确单词
 - incomplete: 句子错误/不完整/整体表达不佳（需改写整句或整段）。original=出错的完整句子片段或短语，correction=正确的完整句子
+${ocrBoard}
 
 ## 【重要】拆细到单词，严禁合并
 同一个句子里即使有多个错误，也必须**把每个单词错误分别列成独立的 error**（每条 error 只对应一个最小错误单元），不要把它们合并成一条大的 incomplete。规则：
@@ -534,14 +546,26 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
       
       // 在 OCR 结果中查找匹配的文字块（需要缩放坐标）
       if (ocrWords.length > 0) {
-        const matchedWord = findMatchingOCRWord(error.original, ocrWords);
-        if (matchedWord) {
-          x = matchedWord.x * coordScale;
-          y = matchedWord.y * coordScale;
-          wordWidth = matchedWord.width * coordScale;
-          wordHeight = matchedWord.height * coordScale;
+        // wordIdx 优先：千问引用 OCR 词表序号精确定位（文本不再匹配，位置必然对上）
+        const widx = (error as any).wordIdx;
+        if (typeof widx === 'number' && widx >= 0 && widx < ocrWords.length) {
+          const w = ocrWords[widx];
+          x = w.x * coordScale;
+          y = w.y * coordScale;
+          wordWidth = w.width * coordScale;
+          wordHeight = w.height * coordScale;
           foundInOCR = true;
-          console.log(`[annotateImage] OCR 匹配成功：${error.original} at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
+          console.log(`[annotateImage] 使用 wordIdx=${widx} 定位：${error.original} -> "${w.text}" at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
+        } else {
+          const matchedWord = findMatchingOCRWord(error.original, ocrWords);
+          if (matchedWord) {
+            x = matchedWord.x * coordScale;
+            y = matchedWord.y * coordScale;
+            wordWidth = matchedWord.width * coordScale;
+            wordHeight = matchedWord.height * coordScale;
+            foundInOCR = true;
+            console.log(`[annotateImage] OCR 匹配成功：${error.original} at (${x}, ${y}, ${wordWidth}, ${wordHeight})`);
+          }
         }
       }
       
