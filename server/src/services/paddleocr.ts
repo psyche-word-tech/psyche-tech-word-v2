@@ -30,6 +30,10 @@ export interface WordBox {
   confidence: number;
 }
 
+// 词框(行框)纵向 padding 收缩比例：PP-OCRv5 行框上下常带多余空白，
+// 以顶边为锚把高度收窄到字迹区，使"词框最低点"贴近真实字迹底。
+const BOX_VERTICAL_SHRINK = 0.72;
+
 /**
  * 调用 PaddleOCR 获取词级坐标
  */
@@ -101,13 +105,15 @@ export async function callPaddleOCR(imageBase64: string): Promise<{
 
       const tokens = line.text.split(/\s+/).filter(Boolean);
       if (tokens.length <= 1) {
+        const h = Math.round((y2 - y1) * BOX_VERTICAL_SHRINK);
+        const bottom = Math.round(y1) + h;
         words.push({
           text: line.text,
-          bbox: [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)],
+          bbox: [Math.round(x1), Math.round(y1), Math.round(x2), bottom],
           x: Math.round(x1),
           y: Math.round(y1),
           width: Math.round(x2 - x1),
-          height: Math.round(y2 - y1),
+          height: h,
           confidence: line.score,
         });
         continue;
@@ -115,17 +121,19 @@ export async function callPaddleOCR(imageBase64: string): Promise<{
 
       // 按词字符数比例分配行宽（忽略空格差异）
       const totalChars = tokens.reduce((s, w) => s + w.length, 0);
+      const h = Math.round((y2 - y1) * BOX_VERTICAL_SHRINK);
+      const bottom = Math.round(y1) + h;
       let cursor = x1;
       for (const token of tokens) {
         const ratio = token.length / totalChars;
         const wordRight = cursor + width * ratio;
         words.push({
           text: token,
-          bbox: [Math.round(cursor), Math.round(y1), Math.round(wordRight), Math.round(y2)],
+          bbox: [Math.round(cursor), Math.round(y1), Math.round(wordRight), bottom],
           x: Math.round(cursor),
           y: Math.round(y1),
           width: Math.round(wordRight - cursor),
-          height: Math.round(y2 - y1),
+          height: h,
           confidence: line.score,
         });
         cursor = wordRight;
