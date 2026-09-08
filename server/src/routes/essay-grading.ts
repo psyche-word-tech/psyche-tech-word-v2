@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
+import { callAlibabaOCR, OCRWord } from '../services/aliyun-ocr';
 
 // 加载环境变量 - 使用 process.cwd() 获取当前工作目录
 dotenv.config({ path: path.join(process.cwd(), '.env') });
@@ -170,83 +171,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-/**
- * 调用阿里云 OCR API 识别文字位置
- */
-async function callAlibabaOCR(imageBase64: string): Promise<OCRWord[]> {
-  console.log('[AlibabaOCR] 开始调用阿里云 OCR HTTP API...');
-
-  // 使用阿里云 OCR HTTP API（避免 SDK 兼容性问题）
-  const accessKeyId = getAlibabaCloudAccessKeyId();
-  const accessKeySecret = getAlibabaCloudAccessKeySecret();
-
-  console.log('[AlibabaOCR] 发送 HTTP 请求到阿里云 OCR...');
-
-  // 构建签名参数
-  const timestamp = new Date().toISOString();
-  const signatureNonce = Date.now().toString();
-
-  // 调用阿里云 OCR API（RecognizeHandwriting - 手写文字识别）
-  const response = await fetch(`https://${OCR_ENDPOINT}/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-acs-action': 'RecognizeGeneral',
-      'x-acs-version': '2021-07-07',
-      'x-acs-date': timestamp,
-      'x-acs-signature-nonce': signatureNonce,
-    },
-    body: JSON.stringify({
-      body: imageBase64.split(',')[1] || imageBase64,
-    }),
-  });
-
-  console.log('[AlibabaOCR] 响应状态:', response.status);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`阿里云 OCR API 调用失败: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  console.log('[AlibabaOCR] 解析数据成功');
-
-  // 转换为 OCRWord 格式
-  // 解析行级文本，分割成单词
-  const words: OCRWord[] = [];
-  const lines = data.data?.prism_wordsInfo || [];
-  
-  for (const line of lines) {
-    const lineText = line.word || '';
-    const pos = line.pos;
-    
-    // 计算行边界
-    const x0 = Math.min(pos.x || 0, (pos.x2 || pos.x) || 0);
-    const y0 = Math.min(pos.y || 0, (pos.y2 || pos.y) || 0);
-    const x1 = Math.max(pos.x || 0, (pos.x2 || pos.x) || 0);
-    const y1 = Math.max(pos.y || 0, (pos.y2 || pos.y) || 0);
-    
-    const lineWidth = x1 - x0;
-    const lineHeight = y1 - y0;
-    
-    // 分割成单词
-    const lineWords = lineText.split(/\s+/).filter(w => w.length > 0);
-    const wordWidth = lineWidth / lineWords.length;
-    
-    lineWords.forEach((word, idx) => {
-      words.push({
-        text: word,
-        x: x0 + idx * wordWidth,
-        y: y0,
-        width: wordWidth,
-        height: lineHeight,
-      });
-    });
-  }
-
-  console.log('[AlibabaOCR] 转换完成，返回', words.length, '个文字块');
-  return words;
-}
+// callAlibabaOCR 已导入自 ../services/aliyun-ocr
 
 /**
  * 调用 Qwen3.5-OCR 模型识别文字位置
