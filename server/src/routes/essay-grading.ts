@@ -562,24 +562,40 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
               stroke="${color}" stroke-width="${3 * scale}"/>
       `;
       
-      // 2. 在错误单词上方画圆圈标记（根据分辨率调整大小）
-      const circleX = x + wordWidth / 2;
-      const circleY = y - 15 * scale;
-      const circleFontSize = lineHeight * 0.2; // 圆圈中数字字体与批注字体一致
+      // 2. 在错误单词左上方画圆圈标记（防顶部/左侧溢出）
+      const margin = 8 * scale;
+      let circleCX = x;
+      let circleCY = y - 18 * scale;
+      const circleR = Math.max(9, 12 * scale);
+      if (circleCY < circleR) circleCY = y + wordHeight + 18 * scale; // 顶部越界 → 移到词下方
+      if (circleCX < circleR) circleCX = x + wordWidth + 20 * scale;  // 左侧越界 → 移到词右侧
+      const circleFontSize = Math.max(12, lineHeight * 0.2); // 圆圈中数字字体
       svgAnnotations += `
-        <circle cx="${circleX}" cy="${circleY}" r="${12 * scale}" fill="none" stroke="${color}" stroke-width="${2 * scale}"/>
-        <text x="${circleX}" y="${circleY + 5 * scale}" font-size="${circleFontSize}" fill="${color}" text-anchor="middle" font-weight="bold">
+        <circle cx="${circleCX}" cy="${circleCY}" r="${circleR}" fill="none" stroke="${color}" stroke-width="${2 * scale}"/>
+        <text x="${circleCX}" y="${circleCY + 5 * scale}" font-size="${circleFontSize}" fill="${color}" text-anchor="middle" font-weight="bold">
           ${index + 1}
         </text>
       `;
       
       // 3. 在旁边写正确的单词（红色，斜体，字体大小为原字体的 0.6 倍）
       if (error.correction && error.correction !== error.original) {
-        const correctionX = x + wordWidth + 8 * scale;
-        const correctionY = y - 8 * scale;
-        const correctionFontSize = lineHeight * 0.2; // 进一步减小字体
+        const correctionFontSize = Math.max(12, lineHeight * 0.2); // 进一步减小字体
+        const textW = estimateTextWidth(error.correction, correctionFontSize);
+        // 默认放在错误词右侧；右侧溢出 → 放左上方；仍溢出 → 放词正上方居中
+        let correctionX = x + wordWidth + margin;
+        let correctionY = y - 6 * scale;
+        let anchor: string = 'start';
+        if (correctionX + textW > width - margin) {
+          correctionX = x - textW - margin;
+          if (correctionX < margin) {
+            correctionX = x + wordWidth / 2;
+            correctionY = y - Math.max(10, circleFontSize + 4) * scale;
+            if (correctionY < 10) correctionY = y + wordHeight + correctionFontSize + 6 * scale;
+            anchor = 'middle';
+          }
+        }
         svgAnnotations += `
-          <text x="${correctionX}" y="${correctionY}" font-size="${correctionFontSize}" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold">
+          <text x="${correctionX}" y="${correctionY}" font-size="${correctionFontSize}" fill="${color}" font-style="italic" font-family="Arial" font-weight="bold" text-anchor="${anchor}">
             ${error.correction}
           </text>
         `;
@@ -643,6 +659,19 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     console.error('图片标注失败:', error);
     return imageBase64; // 标注失败返回原图
   }
+}
+
+function estimateTextWidth(text: string, fontSize: number): number {
+  let w = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0) || 0;
+    if (code >= 0x4e00 && code <= 0x9fff) w += fontSize;        // 中文全角
+    else if (/[A-Za-z]/.test(ch)) w += fontSize * 0.62;          // 英文字母
+    else if (/[0-9]/.test(ch)) w += fontSize * 0.52;             // 数字
+    else if (ch === ' ') w += fontSize * 0.35;
+    else w += fontSize * 0.45;                                    // 标点
+  }
+  return w;
 }
 
 function getErrorTypeName(type: string): string {

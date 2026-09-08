@@ -1,0 +1,3 @@
+const sharp=require('sharp');
+const svg=`<svg width="900" height="500" xmlns="http://www.w3.org/2000/svg"><rect width="900" height="500" fill="#f7f7f0"/><g font-family="'Comic Sans MS',cursive,sans-serif" fill="#2a2a2a"><text x="40" y="90" font-size="38">I think socialisation is very importing</text><text x="40" y="210" font-size="38">for the whole student community to</text><text x="40" y="330" font-size="38">growing up in the future of society</text></g></svg>`;
+sharp(Buffer.from(svg)).jpeg({quality:85}).ignoring/_/.toBuffer().then(b=>fs.writeFileSync('v-essay.txt','data:image/jpeg;base64,'+b.toString('base64'))).catch(e=>{console.error(e);process.exit(1)});

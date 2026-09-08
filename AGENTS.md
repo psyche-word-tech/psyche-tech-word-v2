@@ -421,6 +421,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **OCR 匹配防单字母误命中**：`findMatchingOCRWord` 先整段精确→再词级精确（长词优先）→最后包含匹配且仅限长度≥3 的词，避免 `"tell about".includes("a")` 误标
 - **返回字段**：PP-OCRv5 的结果在 `prunedResult`，**不是** `detectionResults`（旧字段不存在，会导致解析 0 词）
 - 千问返回的 `original` 可能是短语（如 `tell about`），按词级匹配到 OCR 单词即可
+- **订正文字防溢出**：`annotateImage` 里订正词默认写错误词右侧，靠近右缘会画出画布被裁切。已加 `estimateTextWidth()` 估算文字像素宽度，右侧溢出自动转到左上方、再溢出转正上方居中；圆圈数字也从词上方改为左上方，并加顶部/左侧越界保护
 - 完整链路自测脚本见 `server/test-grade.cjs`、`server/test-paddle*.mjs`（可删）
 
 ### 关键文件
