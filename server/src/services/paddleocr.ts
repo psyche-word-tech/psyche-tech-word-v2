@@ -3,18 +3,22 @@ import { writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-const PADDLEOCR_ACCESS_TOKEN = process.env.PADDLEOCR_ACCESS_TOKEN || '';
+let client: PaddleOCRClient | null = null;
 
-if (!PADDLEOCR_ACCESS_TOKEN) {
-  console.warn('⚠️ PADDLEOCR_ACCESS_TOKEN 未配置');
+function getClient(): PaddleOCRClient {
+  if (!client) {
+    const token = process.env.PADDLEOCR_ACCESS_TOKEN || '';
+    if (!token) {
+      throw new Error('PADDLEOCR_ACCESS_TOKEN 未配置');
+    }
+    client = new PaddleOCRClient({
+      token,
+      requestTimeout: 60_000,
+      pollTimeout: 120_000,
+    });
+  }
+  return client;
 }
-
-// 创建客户端（全局单例）
-const client = new PaddleOCRClient({
-  token: PADDLEOCR_ACCESS_TOKEN,
-  requestTimeout: 60_000,  // 60 秒
-  pollTimeout: 120_000,    // 120 秒
-});
 
 export interface WordBox {
   text: string;
@@ -40,7 +44,7 @@ export async function callPaddleOCR(imageBase64: string): Promise<{
     const startTime = Date.now();
 
     // 调用 OCR API
-    const result = await client.ocr({
+    const result = await getClient().ocr({
       filePath: tmpFile,
       model: Model.PPOCRv5,  // 使用 PP-OCRv5
     });
