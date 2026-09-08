@@ -659,7 +659,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           if (ix < margin) ix = margin;
           if (iy < 12) iy = y + wordHeight + cfon + 6 * scale;
           svgAnnotations += `
-            <rect x="${ix - 3 * scale}" y="${iy - cfon + 3 * scale}" width="${iw + 6 * scale}" height="${cfon + 5 * scale}" fill="#ffffff" opacity="0.85"/>
+            <rect x="${ix - 3 * scale}" y="${iy - cfon + 3 * scale}" width="${iw + 6 * scale}" height="${cfon + 5 * scale}" fill="#ffffff"/>
             <text x="${ix}" y="${iy}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${insText}</text>
           `;
         }
@@ -686,7 +686,8 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         }
       } else {
         // 3. 改一个单词 → 单词下面画下划线，正确单词写在线下方
-        const ulY = y + wordHeight + 3 * scale;
+        // 下划线画在词框内中下部，避免因 OCR 词框行高偏大而压到下一行正文
+        const ulY = y + wordHeight * 0.82;
         svgAnnotations += `
           <line x1="${x}" y1="${ulY}" x2="${x + wordWidth}" y2="${ulY}" stroke="${color}" stroke-width="${3 * scale}"/>
         `;
@@ -694,11 +695,12 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           const cfon = Math.max(12, lineHeight * 0.2);
           const cw = estimateTextWidth(error.correction, cfon);
           let cxp = x;
+          let cyp = ulY + cfon + 4 * scale;
           if (cxp + cw > width - margin) cxp = width - margin - cw;
           if (cxp < margin) cxp = margin;
-          const cyp = ulY + cfon + 2 * scale;
+          // 订正文字如果被下一行正文覆盖，用实心白底盖住，保证红字清晰
           svgAnnotations += `
-            <rect x="${cxp - 3 * scale}" y="${cyp - cfon + 3 * scale}" width="${cw + 6 * scale}" height="${cfon + 5 * scale}" fill="#ffffff" opacity="0.85"/>
+            <rect x="${cxp - 3 * scale}" y="${cyp - cfon + 3 * scale}" width="${cw + 6 * scale}" height="${cfon + 5 * scale}" fill="#ffffff"/>
             <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${error.correction}</text>
           `;
         }
