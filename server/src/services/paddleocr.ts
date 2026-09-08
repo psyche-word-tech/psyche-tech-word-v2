@@ -35,12 +35,22 @@ export async function callPaddleOCR(imageBase64: string): Promise<{
   error?: string;
 }> {
   try {
-    // 将 base64 写入临时文件
-    const buffer = Buffer.from(imageBase64, 'base64');
-    const tmpFile = join(tmpdir(), `paddleocr_${Date.now()}.jpg`);
+    // 处理 base64 前缀
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // 检测图片格式
+    let ext = 'jpg';
+    if (imageBase64.includes('data:image/png')) {
+      ext = 'png';
+    } else if (imageBase64.includes('data:image/webp')) {
+      ext = 'webp';
+    }
+    
+    const tmpFile = join(tmpdir(), `paddleocr_${Date.now()}.${ext}`);
     await writeFile(tmpFile, buffer);
-
-    console.log('📝 调用 PaddleOCR API...');
+    
+    console.log('📝 调用 PaddleOCR API...', tmpFile);
     const startTime = Date.now();
 
     // 调用 OCR API
