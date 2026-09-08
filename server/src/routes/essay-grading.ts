@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
-import { callAlibabaOCR, OCRWord } from '../services/aliyun-ocr';
+import { callPaddleOCR, WordBox } from '../services/paddleocr';
 
 // 加载环境变量 - 使用 process.cwd() 获取当前工作目录
 dotenv.config({ path: path.join(process.cwd(), '.env') });
@@ -130,7 +130,11 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
 
     // 2. 调用阿里云 OCR 获取文字位置
     console.log('开始调用阿里云 OCR...');
-    const ocrWords = await callAlibabaOCR(compressedImage);
+    const ocrResult = await callPaddleOCR(compressedImage);
+    if (!ocrResult.success) {
+      throw new Error(`PaddleOCR 调用失败：${ocrResult.error}`);
+    }
+    const ocrWords = ocrResult.words;
     console.log('阿里云 OCR 完成，返回', ocrWords.length, '个单词');
     
     // 3. 不标注图片，直接返回原文和批改结果
