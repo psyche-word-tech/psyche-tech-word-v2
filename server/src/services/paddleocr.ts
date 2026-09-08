@@ -23,6 +23,10 @@ function getClient(): PaddleOCRClient {
 export interface WordBox {
   text: string;
   bbox: [number, number, number, number]; // [x1, y1, x2, y2]
+  x: number;
+  y: number;
+  width: number;
+  height: number;
   confidence: number;
 }
 
@@ -62,33 +66,73 @@ export async function callPaddleOCR(imageBase64: string): Promise<{
     const elapsed = Date.now() - startTime;
     console.log(`✅ PaddleOCR 完成 (${elapsed}ms)`);
 
-    // 解析结果
+    // 解析结果（PP-OCRv5 返回行级：prunedResult.dt_polys + rec_texts + rec_scores）
     const words: WordBox[] = [];
-    
+    let allLines: { text: string; poly: number[][]; score: number }[] = [];
+
     if (result.pages && result.pages.length > 0) {
       for (const page of result.pages) {
-        if (page.detectionResults) {
-          for (const det of page.detectionResults) {
-            const text = det.text || '';
-            const confidence = det.confidence || 0;
-            
-            // bbox 格式：[[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-            if (det.bbox && Array.isArray(det.bbox) && det.bbox.length >= 4) {
-              const x1 = Math.round(det.bbox[0][0]);
-              const y1 = Math.round(det.bbox[0][1]);
-              const x2 = Math.round(det.bbox[2][0]);
-              const y2 = Math.round(det.bbox[2][1]);
-              
-              words.push({
-                text,
-                bbox: [x1, y1, x2, y2],
-                confidence,
-              });
-            }
-          }
+        const pruned = (page as any).prunedResult || (page as any).raw?.prunedResult;
+        if (!pruned) continue;
+
+        const polys: number[][][] = pruned.dt_polys || [];
+        const texts: string[] = pruned.rec_texts || [];
+        const scores: number[] = pruned.rec_scores || [];
+
+        for (let i = 0; i < texts.length; i++) {
+          const poly = polys[i];
+          const text = texts[i];
+          const score = scores[i] || 0;
+          if (!poly || !text) continue;
+          allLines.push({ text, poly, score });
         }
       }
     }
+
+    // 行内词级分割：按每个词字符数比例分配行宽
+    for (const line of allLines) {
+      const poly = line.poly;
+      // 四点多边形 [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]：左上、右上、右下、左下
+      const x1 = Math.min(poly[0][0], poly[3][0]);
+      const x2 = Math.max(poly[1][0], poly[2][0]);
+      const y1 = Math.min(poly[0][1], poly[1][1]);
+      const y2 = Math.max(poly[3][1], poly[2][1]);
+      const width = x2 - x1;
+
+      const tokens = line.text.split(/\s+/).filter(Boolean);
+      if (tokens.length <= 1) {
+        words.push({
+          text: line.text,
+          bbox: [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)],
+          x: Math.round(x1),
+          y: Math.round(y1),
+          width: Math.round(x2 - x1),
+          height: Math.round(y2 - y1),
+          confidence: line.score,
+        });
+        continue;
+      }
+
+      // 按词字符数比例分配行宽（忽略空格差异）
+      const totalChars = tokens.reduce((s, w) => s + w.length, 0);
+      let cursor = x1;
+      for (const token of tokens) {
+        const ratio = token.length / totalChars;
+        const wordRight = cursor + width * ratio;
+        words.push({
+          text: token,
+          bbox: [Math.round(cursor), Math.round(y1), Math.round(wordRight), Math.round(y2)],
+          x: Math.round(cursor),
+          y: Math.round(y1),
+          width: Math.round(wordRight - cursor),
+          height: Math.round(y2 - y1),
+          confidence: line.score,
+        });
+        cursor = wordRight;
+      }
+    }
+
+    console.log(`✅ PaddleOCR 解析完成，共 ${words.length} 个词（${allLines.length} 行）`);
 
     return {
       success: true,

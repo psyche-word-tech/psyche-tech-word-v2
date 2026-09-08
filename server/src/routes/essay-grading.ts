@@ -136,10 +136,14 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     }
     const ocrWords = ocrResult.words;
     console.log('阿里云 OCR 完成，返回', ocrWords.length, '个单词');
+    // 记录 OCR 词汇用于诊断
+    try {
+      const fs = await import('fs');
+      fs.writeFileSync('/tmp/ocr-words.log', JSON.stringify(ocrWords, null, 2));
+    } catch {}
     
-    // 3. 不标注图片，直接返回原文和批改结果
-    // 3. 绘制标注
-    const markedImage = await annotateImage(compressedImage, ocrWords, gradingResult.errors);
+    // 3. 绘制标注：参数顺序为 (image, errors, ocrWords)
+    const markedImage = await annotateImage(compressedImage, gradingResult.errors, ocrWords);
     console.log('标注完成');
 
     // 保存到数据库
@@ -382,11 +386,14 @@ ${referenceAnswer || '无'}
 
   // 解析 JSON 响应
   let gradingResult: GradingResult;
+  // 写入文件日志（无论如何解析都记录）
+  const fs = await import('fs');
+  try {
+    fs.writeFileSync('/tmp/qwen-raw.log', content);
+  } catch {}
   try {
     // 尝试直接解析
     gradingResult = JSON.parse(content);
-    // 写入文件日志
-    const fs = await import('fs');
     fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult, null, 2));
     console.log('千问 VL 模型响应已写入 /tmp/qwen-response.log');
   } catch {
@@ -403,6 +410,9 @@ ${referenceAnswer || '无'}
         throw new Error('无法解析千问 API 返回的 JSON');
       }
     }
+    try {
+      fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult, null, 2));
+    } catch {}
   }
 
   return gradingResult;
@@ -414,35 +424,32 @@ ${referenceAnswer || '无'}
 function findMatchingOCRWord(errorText: string, ocrWords: OCRWord[]): OCRWord | null {
   if (!errorText || ocrWords.length === 0) return null;
   
-  // 清理错误文本（去除标点、转小写）
-  const cleanError = errorText.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  // 清理错误文本（去除标点、转小写、压缩空格）
+  const clean = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').trim().replace(/\s+/g, ' ');
+  const cleanError = clean(errorText);
   
-  // 尝试精确匹配
+  // 1. 精确匹配（整段）
   for (const word of ocrWords) {
-    const cleanWord = word.text.toLowerCase().replace(/[^\w\s]/g, '').trim();
-    if (cleanWord === cleanError) {
-      return word;
-    }
+    if (clean(word.text) === cleanError) return word;
   }
   
-  // 尝试包含匹配（错误文本包含在 OCR 文字中，或反之）
-  for (const word of ocrWords) {
-    const cleanWord = word.text.toLowerCase().replace(/[^\w\s]/g, '').trim();
-    if (cleanWord.includes(cleanError) || cleanError.includes(cleanWord)) {
-      return word;
-    }
-  }
-  
-  // 尝试单词级别匹配（错误文本中的某个单词）
-  const errorWords = cleanError.split(/\s+/);
-  for (const ew of errorWords) {
-    if (ew.length < 2) continue; // 跳过太短的单词
-    for (const word of ocrWords) {
-      const cleanWord = word.text.toLowerCase().replace(/[^\w\s]/g, '').trim();
-      if (cleanWord === ew) {
-        return word;
+  // 2. 词级精确匹配（错误文本拆成单词，与 OCR 单词逐一匹配，取最长优先）
+  const errorWords = cleanError.split(/\s+/).filter(w => w.length >= 2);
+  if (errorWords.length > 0) {
+    // 优先匹配词表中的长词，避免单字母误命中
+    const sortedErrorWords = [...errorWords].sort((a, b) => b.length - a.length);
+    for (const ew of sortedErrorWords) {
+      for (const word of ocrWords) {
+        if (clean(word.text) === ew) return word;
       }
     }
+  }
+  
+  // 3. 模糊包含匹配（仅较长单词，避免 "a" 误命中）
+  for (const word of ocrWords) {
+    const cw = clean(word.text);
+    if (cw.length < 3) continue;
+    if (cleanError.includes(cw) || cw.includes(cleanError)) return word;
   }
   
   return null;

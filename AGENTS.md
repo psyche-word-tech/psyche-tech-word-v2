@@ -402,4 +402,30 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - 用户表：`user_profiles`（role 字段：student/teacher）
 - 登录后根据角色显示不同功能入口
 
+## 新增功能：英语作文 AI 批改（essay-grading）
+
+### 批改流水线（三层协作）
+1. **千问 VL（qwen 多模态）识别手写内容 + 判错**：`server/src/routes/essay-grading.ts` 中 `callQwenVL`
+   - 返回 `transcription`（作文原文）+ `errors[]`，每个 error 含 `original`（原文错误词）、`correction`（订正）、`type`、`explanation`、`wordIndex`/`line`
+   - 满分 `max_score`（当前 15 分）
+   - 响应可能被 markdown 包裹，必须容错提取 JSON
+2. **PaddleOCR 官方 API 获取行级坐标并分割成词**：`server/src/services/paddleocr.ts`
+   - 用 `@paddleocr/api-sdk`（Access Token 在 `server/.env` 的 `PADDLEOCR_ACCESS_TOKEN`）
+   - 模型 `Model.PPOCRv5`，返回结构是 `page.prunedResult.{dt_polys(行级框)/rec_texts/rec_scores}`，**默认 `return_word_box:false` 只给行级**
+   - 服务端自行把行文本按字符数比例分割成词级 bbox，返回 `WordBox[]`（字段 `text`/`bbox[x1,y1,x2,y2]`/`x`/`y`/`width`/`height`/`confidence`）
+3. **图片标注**：`server/src/routes/essay-grading.ts` 中 `annotateImage`（sharp 拼接绘制）
+
+### 关键踩坑（务必遵守）
+- **base64 前缀**：前端会传 `data:image/jpeg;base64,...`，传给 PaddleOCR 前必须 `split(',')[1]` 去前缀，否则文件头损坏报"文件格式不支持"
+- **annotateImage 参数顺序**：签名 `(imageBase64, errors, ocrWords)`，调用处必须传 `(compressedImage, gradingResult.errors, ocrWords)`，**不能**把 `ocrWords` 当第二参数（否则会把 OCR 词当错误遍历，original 全 undefined）
+- **OCR 匹配防单字母误命中**：`findMatchingOCRWord` 先整段精确→再词级精确（长词优先）→最后包含匹配且仅限长度≥3 的词，避免 `"tell about".includes("a")` 误标
+- **返回字段**：PP-OCRv5 的结果在 `prunedResult`，**不是** `detectionResults`（旧字段不存在，会导致解析 0 词）
+- 千问返回的 `original` 可能是短语（如 `tell about`），按词级匹配到 OCR 单词即可
+- 完整链路自测脚本见 `server/test-grade.cjs`、`server/test-paddle*.mjs`（可删）
+
+### 关键文件
+- `server/src/routes/essay-grading.ts` - 批改主路由 + 千问VL + 标注
+- `server/src/services/paddleocr.ts` - PaddleOCR 官方 API 封装 + 行→词分割
+- `client/screens/essay-grading/index.tsx` - 批改前端页
+
 
