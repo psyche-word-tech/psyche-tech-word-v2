@@ -651,7 +651,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
         const _parts = String(error.correction || '').trim().split(/\s+/).filter(Boolean);
         const insText = _parts.length > 1 ? _parts[_parts.length - 1] : (error.correction || '');
         if (insText) {
-          const cfon = Math.max(12, lineHeight * 0.2);
+          const cfon = Math.max(10, lineHeight * 0.15);
           const iw = estimateTextWidth(insText, cfon);
           let ix = ax;
           let iy = y - 12 * scale;
@@ -659,8 +659,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           if (ix < margin) ix = margin;
           if (iy < 12) iy = y + wordHeight + cfon + 6 * scale;
           svgAnnotations += `
-            <rect x="${ix - 3 * scale}" y="${iy - cfon + 3 * scale}" width="${iw + 6 * scale}" height="${cfon + 5 * scale}" fill="#ffffff"/>
-            <text x="${ix}" y="${iy}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${insText}</text>
+            <text x="${ix}" y="${iy}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei">${insText}</text>
           `;
         }
       } else if (isSentence) {
@@ -673,14 +672,14 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
             <rect x="${px - 3 * scale}" y="${py - 3 * scale}" width="${pw + 6 * scale}" height="${ph + 6 * scale}" fill="none" stroke="${color}" stroke-width="${2.5 * scale}"/>
           `;
           if (error.correction) {
-            const cfon = Math.max(12, lineHeight * 0.2);
+            const cfon = Math.max(10, lineHeight * 0.15);
             const cw = estimateTextWidth(error.correction, cfon);
             let cxp = px;
             if (cxp + cw > width - margin) cxp = width - margin - cw;
             if (cxp < margin) cxp = margin;
             const cyp = py + ph + 18 * scale;
             svgAnnotations += `
-              <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${error.correction}</text>
+              <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei">${error.correction}</text>
             `;
           }
         }
@@ -700,16 +699,15 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           <line x1="${x}" y1="${ulY}" x2="${x + wordWidth}" y2="${ulY}" stroke="${color}" stroke-width="${3 * scale}"/>
         `;
         if (error.correction && error.correction !== error.original) {
-          const cfon = Math.max(12, lineHeight * 0.2);
+          const cfon = Math.max(10, lineHeight * 0.15);
           const cw = estimateTextWidth(error.correction, cfon);
           let cxp = x;
           let cyp = ulY + cfon * 0.6;
           if (cxp + cw > width - margin) cxp = width - margin - cw;
           if (cxp < margin) cxp = margin;
-          // 订正文字如果被下一行正文覆盖，用实心白底盖住，保证红字清晰
+          // 订正文字
           svgAnnotations += `
-            <rect x="${cxp - 3 * scale}" y="${cyp - cfon + 3 * scale}" width="${cw + 6 * scale}" height="${cfon + 5 * scale}" fill="#ffffff"/>
-            <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${error.correction}</text>
+            <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei">${error.correction}</text>
           `;
         }
       }
