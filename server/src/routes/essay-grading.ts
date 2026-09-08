@@ -138,6 +138,9 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     console.log('识别的原文:', gradingResult.transcription);
     console.log('错误数量:', gradingResult.errors.length);
     console.log('错误详情:', JSON.stringify(gradingResult.errors, null, 2));
+    try {
+      fs.appendFileSync('/tmp/grade-debug.log', '\n[' + new Date().toISOString() + ']\nERRORS:' + JSON.stringify(gradingResult.errors) + '\nOCR:' + JSON.stringify(ocrWords.map(w => ({ t: w.text, x: Math.round(w.x), y: Math.round(w.y) }))) + '\n');
+    } catch {}
 
     // 计算总分
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
