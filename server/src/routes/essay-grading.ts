@@ -424,6 +424,9 @@ ${ocrBoard}
 ${decompose}
 
 ${noteLine}
+
+## 严格输出要求（必须遵守）
+你只能输出一个合法的 JSON 对象，禁止输出任何解释、前言、思考过程、批注说明或 markdown 代码块，禁止在 JSON 外附加任何文字。所有批改结论都必须放进上方 JSON 结构的对应字段里。
 `;
 
   console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());
@@ -461,8 +464,9 @@ ${noteLine}
           },
         ],
         temperature: 0.3,
-        max_tokens: 2048,
+        max_tokens: 2560,
         enable_thinking: false,
+        response_format: { type: 'json_object' },
       }),
       signal: controller.signal,
     });
