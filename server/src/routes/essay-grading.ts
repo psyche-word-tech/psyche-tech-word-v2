@@ -467,6 +467,11 @@ ${ocrBoard}
       const obj = content.match(/\{[\s\S]*\}/);
       if (obj) arr.push(obj[0]);
       arr.push(repairJsonTrailing(content));
+      arr.push((() => {
+        const i = content.lastIndexOf(']');
+        if (i < 0) return content;
+        return content.slice(0, i + 1) + '}';
+      })());
       return arr;
     })();
     let parsed = false;
