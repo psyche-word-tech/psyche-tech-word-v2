@@ -3,7 +3,8 @@ import { execFile } from 'child_process';
 import { existsSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
-import { basename, join } from 'path';
+import { basename, dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 let client: PaddleOCRClient | null = null;
 
@@ -38,9 +39,10 @@ const BOX_VERTICAL_SHRINK = 0.72;
 
 // 本地 PaddleOCR 环境（server/ocr-service 下的虚拟环境 + 脚本）
 function localOcrPaths(): { py: string; script: string } | null {
-  // esbuild 打包后 __dirname = server/dist
-  const serverRoot = join(__dirname, '..');
-  const ocrDir = join(serverRoot, 'ocr-service');
+  // esbuild 产物为 ESM（format: esm），__dirname 不可用，改用 import.meta.url
+  // 运行时代码在 server/dist 下，其上一级即 server/ocr-service
+  const serverRoot = dirname(fileURLToPath(import.meta.url)); // .../server/dist
+  const ocrDir = join(serverRoot, '..', 'ocr-service');
   const py = join(ocrDir, '.venv', 'bin', 'python');
   const script = join(ocrDir, 'ocr_local.py');
   if (!existsSync(py) || !existsSync(script)) return null;
