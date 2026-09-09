@@ -79,6 +79,26 @@ app.post('/api/v1/health/reset', (req, res) => {
 });
 
 /**
+ * 环境体检接口 - 仅报告关键环境变量是否存在（不打印值）
+ * 用于定位 Railway 上 PADDLEOCR_ACCESS_TOKEN 等变量是否被注入
+ */
+app.get('/api/v1/env-check', (req, res) => {
+  const keys = [
+    'PADDLEOCR_ACCESS_TOKEN',
+    'QWEN_API_KEY',
+    'QWEN_API_URL',
+    'QWEN_MODEL',
+    'COZE_SUPABASE_URL',
+    'COZE_SUPABASE_SERVICE_ROLE_KEY',
+  ];
+  const result = {};
+  for (const k of keys) {
+    result[k] = !!(process.env[k] && String(process.env[k]).trim());
+  }
+  res.json({ env: result });
+});
+
+/**
  * 临时接口：创建 abcd 表并复制 words_a 数据
  */
 app.post('/api/v1/admin/create-abcd', async (req, res) => {
