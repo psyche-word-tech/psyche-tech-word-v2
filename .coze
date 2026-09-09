@@ -3,28 +3,29 @@ sub_id = "969f40bd"
 name = "word-voyage"
 project_type = "app"
 entrypoint = "server.js"
-requires = ["nodejs-24"]
+requires = [ "nodejs-24" ]
 template = "expo"
 version = "0.0.35"
-appliedPatches = []
+appliedPatches = [ "expo/validate@0.0.20" ]
 
 [preview]
 preview_enable = "enabled"
 
 [dev]
-build = ["bash", "scripts/coze-preview-build.sh"]
-run = ["bash", "scripts/coze-preview-run.sh"]
+build = [ "bash", "scripts/coze-preview-build.sh" ]
+run = [ "bash", "scripts/coze-preview-run.sh" ]
+validate = [ "bash", ".cozeproj/scripts/validate.sh" ]
 
 [deploy]
-build = ["bash", ".cozeproj/scripts/prod_build.sh"]
-run = ["bash", ".cozeproj/scripts/prod_run.sh"]
+build = [ "bash", ".cozeproj/scripts/prod_build.sh" ]
+run = [ "bash", ".cozeproj/scripts/prod_run.sh" ]
 build_app_dir = "./client"
 
-[deploy.profile]
-kind = "android"
+  [deploy.profile]
+  kind = "android"
 
-[deploy.backend]
-enabled = true
+  [deploy.backend]
+  enabled = true
 
 [subprojects]
-path = ["."]
+path = [ "." ]
