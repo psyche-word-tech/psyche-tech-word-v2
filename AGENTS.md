@@ -468,6 +468,19 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **中文 OCR**（`server/src/services/paddleocr.ts`）：`lang === 'ch'` 时**跳过本地**、直接走云端 PP-OCRv5（其模型原生支持中英混排；本地 `.venv` 的 lang='en' 模型不认中文，且本地中文模型在沙箱下载不稳定）。英语保持"本地词级框优先 → 云端回退"。语文作文标注因此是**行级框**（云端返回整行，按字符比例切分多词场景有限），错字/病词定位到整行区域，具体哪个字由批注列表说明。
 - **中文标注**：`estimateTextWidth` 对汉字按全角计宽；SVG 字体 `DejaVu Sans, WenQuanYi Micro Hei` 支持中文；annotateImage 的标点跳过判断 `/[A-Za-z\u4e00-\u9fa5]/` 已兼容汉字。无需额外改动。
 
+## 新增功能：多页批改（语文作文可多张图，最多 3 页）
+
+- **前端** `client/screens/essay-grading/index.tsx`：图片选择由单张改多图。state 用 `selectedImages: string[]`（替代 `selectedImage`）、结果用 `markedImages: string[]`（替代单张 `markedImage`）。语文最多 3 张（`MAX_PAGES`），英语 1 张。已选图缩略图行 + "添加页面/继续添加"按钮 + 每张可移除（`removeImage`）。请求体把每张 uri 读成 base64 后提交 `images[]`。
+- **结果展示**：`data.data.marked_images` 为每页一张批改图数组；前端用横向 `ScrollView` 分页（`pagingEnabled`）+ 页码圆点（`pageDots`/`pageDot`）左右滑翻页查看；页码指示"第 X / N 页"。
+- **后端** `server/src/routes/essay-grading.ts` `/grade`：
+  - 请求体改为 `images[]`（兼容旧 `image` 单字段自动兜底为数组），`imageList = imageList.slice(0, MAX_PAGES)` 限 3 张。
+  - **逐页 OCR**：每页独立 `compressImage` + `callPaddleOCR(compressed, ocrLang)`，得到各页 `ocrWords`；同时把每页词**追加进全局词表 `allWords`**，记录每页起始序号（`pages[].start`），`wordIdx` 用**全局跨页序号**。
+  - **整体评分**：`joinedTranscription = reconstructText(每页words)`（按行聚合计权拼成整篇文本）传入 `callQwenVL(imageList, joinedTranscription, ...)`，让千问基于**拼接后的完整作文**统一评分判错（不再逐张单独评），transcription 以后端拼接文本为准。
+  - **分页标注**：`assignErrorsByPage(errors, pages, allWords)` 把每个 error 的全局 `wordIdx` 映射到所属页并把索引改成页内；若 wordIdx 缺失则用 `findMatchingOCRWord` 逐页文本匹配定位（仍未命中放第 0 页）。再对**每页分别** `annotateImage(页图, 页errors, 页words)`，返回 `marked_images: string[]`。
+  - 响应 `data.data = { grading, marked_images, id }`。存储时 original/marked 以 JSON 数组存多张。
+- **重建文本** `reconstructText`：按 y 坐标分行为行、行内按 x 排序聚合词文本，行间换行，形成该页可读文本；用于喂千问整篇评分。
+- **注意**：wordIdx 约定为**跨页全局连续编号**（第 2 页词在全局序号续接第 1 页），千问返回时按全局 index；`assignErrorsByPage` 依据 `pages[].start` 区间换算页内索引，勿把全局 index 直接当单页词表下标。
+
 ## 服务稳定性踩坑（多进程堆积导致 5000 端口无法连接）
 - **症状**：反复 build/重启后，`ps aux | grep "node dist/index.js"` 会累积出多个 node 进程同时抢 5000 端口，导致连不上后端/预览一直"启动中"。esbuild build 后 nodemon 每次重启都可能叠加新进程。
 - **修复**：启动前先 `pkill -f nodemon` 并逐个 kill 残留的 `node dist/index.js`，确认 `ss -tlnp | grep 5000` 只剩唯一进程，再 `setsid nohup node dist/index.js > /tmp/server-dev.log 2>&1 &` 单实例启动。

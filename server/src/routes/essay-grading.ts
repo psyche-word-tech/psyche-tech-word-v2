@@ -68,6 +68,7 @@ function getAlibabaCloudAccessKeySecret() {
   return process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || '';
 }
 const OCR_ENDPOINT = 'ocr-api.cn-hangzhou.aliyuncs.com';
+const MAX_PAGES = 3; // 语文作文最多支持 3 页合并成一篇完整作文
 
 /**
  * 压缩图片（减少传输时间）
@@ -138,48 +139,58 @@ interface GradingResult {
 router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
-    const { image, reference_answer, max_score = 15, subject = 'english' } = req.body;
+    const { images, image, reference_answer, max_score = 15, subject = 'english' } = req.body;
 
-    if (!image) {
+    // 兼容单图（image）与多张（images[]）入参
+    let imageList: string[] = [];
+    if (Array.isArray(images) && images.length) imageList = images;
+    else if (image) imageList = [image];
+    if (!imageList.length) {
       return res.status(400).json({ success: false, error: '缺少作文图片' });
     }
+    imageList = imageList.slice(0, MAX_PAGES);
 
     // 参考答案可选
     const refAnswer = reference_answer || '';
-
-    // 压缩图片（减少传输时间）
-    console.log('开始压缩图片...');
-    const compressedImage = await compressImage(image);
-    console.log('图片压缩完成，原始大小:', Math.round(image.length / 1024), 'KB, 压缩后:', Math.round(compressedImage.length / 1024), 'KB');
-
-    // 1. 先调用 OCR 获取文字位置（词表，按出现顺序编号，供千问精确定位）
-    console.log('开始调用 PaddleOCR，subject=', subject);
     const ocrLang = subject === 'chinese' ? 'ch' : 'en';
-    const ocrResult = await callPaddleOCR(compressedImage, ocrLang);
-    if (!ocrResult.success) {
-      throw new Error(`PaddleOCR 调用失败：${ocrResult.error}`);
+
+    // 1. 逐页压缩 + OCR，保留每页词表与全局词表（wordIdx 为跨页全局编号，供千问精确定位）
+    console.log('开始逐页 OCR，页数=', imageList.length, 'subject=', subject);
+    const pages: { compressed: string; words: OCRWord[]; start: number }[] = [];
+    const allWords: OCRWord[] = [];
+    let globalStart = 0;
+    for (let p = 0; p < imageList.length; p++) {
+      console.log(`开始压缩第 ${p + 1} 页图片...`);
+      const compressedImage = await compressImage(imageList[p]);
+      console.log(`第 ${p + 1} 页压缩完成，压缩后:`, Math.round(compressedImage.length / 1024), 'KB');
+      const ocrResult = await callPaddleOCR(compressedImage, ocrLang);
+      if (!ocrResult.success) {
+        throw new Error(`PaddleOCR 调用失败：第${p + 1}页 ${ocrResult.error}`);
+      }
+      const words = ocrResult.words || [];
+      pages.push({ compressed: compressedImage, words, start: globalStart });
+      allWords.push(...words);
+      globalStart += words.length;
+      console.log(`第 ${p + 1} 页 OCR 完成，返回`, words.length, '个词');
     }
-    const ocrWords = ocrResult.words;
-    console.log('PaddleOCR 完成，返回', ocrWords.length, '个单词');
+
+    // 2. 拼接各页 OCR 文本为完整作文
+    const joinedTranscription = pages
+      .map((pg, index) => `【第${index + 1}页】\n${reconstructText(pg.words)}`)
+      .join('\n\n');
+    const ocrBoard = allWords.map((w, i) => ({ index: i, text: w.text }));
+
+    // 3. 调用千问 VL 模型整体批改（基于拼接文本 + 各页图片）
+    console.log('开始调用千问 VL 模型批改作文...');
+    const gradingResult = await callQwenVL(imageList, joinedTranscription, refAnswer, max_score, ocrBoard, subject);
+    gradingResult.transcription = joinedTranscription; // 以拼接文本为准，前端展示整篇
+    console.log('千问 VL 模型批改完成，错误数量:', gradingResult.errors.length);
     try {
       const fs = await import('fs');
-      fs.writeFileSync('/tmp/ocr-words.log', JSON.stringify(ocrWords, null, 2));
+      fs.appendFileSync('/tmp/grade-debug.log', '\n[' + new Date().toISOString() + ']\nPAGES:' + imageList.length + '\nERRORS:' + JSON.stringify(gradingResult.errors) + '\n');
     } catch {}
 
-    // 2. 调用千问 VL 模型批改作文（看图 + 引用 OCR 词表序号精确定位）
-    console.log('开始调用千问 VL 模型批改作文...');
-    const ocrBoard = ocrWords.map((w, i) => ({ index: i, text: w.text }));
-    const gradingResult = await callQwenVL(compressedImage, refAnswer, max_score, ocrBoard, subject);
-    console.log('千问 VL 模型批改完成');
-    console.log('识别的原文:', gradingResult.transcription);
-    console.log('错误数量:', gradingResult.errors.length);
-    console.log('错误详情:', JSON.stringify(gradingResult.errors, null, 2));
-    try {
-      fs.appendFileSync('/tmp/grade-debug.log', '\n[' + new Date().toISOString() + ']\nERRORS:' + JSON.stringify(gradingResult.errors) + '\nOCR:' + JSON.stringify(ocrWords.map(w => ({ t: w.text, x: Math.round(w.x), y: Math.round(w.y) }))) + '\n');
-    } catch {}
-
-    // 计算总分：按配权对每个分项硬性封顶（弥补模型不严格执行配权、各维度按 0~满分 估分的偏差），
-    // 且不再强行凑满到 max_score —— 尊重模型的真实总评，允许低于满分。
+    // 计算总分：按配权对每个分项硬性封顶，且不再强行凑满到 max_score（尊重模型真实总评）
     const scoreKeys = ['content', 'language', 'structure', 'handwriting'] as const;
     const weights = { content: 0.4, language: 0.3, structure: 0.2, handwriting: 0.1 } as const;
     const caps: Record<(typeof scoreKeys)[number], number> = { content: 0, language: 0, structure: 0, handwriting: 0 };
@@ -189,19 +200,23 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     for (const k of scoreKeys) gradingResult.scores[k] = Math.max(0, Math.min(caps[k], Math.round(gradingResult.scores[k])));
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
     gradingResult.max_score = max_score;
-    
-    // 3. 绘制标注：参数顺序为 (image, errors, ocrWords)
-    const markedImage = await annotateImage(compressedImage, gradingResult.errors, ocrWords);
-    console.log('标注完成');
 
-    // 保存到数据库
+    // 4. 多页标注：把全局 wordIdx 分发到对应页，页内各自标注，每页返回一张标记图
+    const pageErrors = assignErrorsByPage(gradingResult.errors, pages, allWords);
+    const markedImages: string[] = [];
+    for (let p = 0; p < pages.length; p++) {
+      markedImages.push(await annotateImage(pages[p].compressed, pageErrors[p], pages[p].words));
+    }
+    console.log('标注完成，共', markedImages.length, '页');
+
+    // 保存到数据库（多页时存 JSON 数组）
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('essay_grading_results')
       .insert({
         user_id: String(userId),
-        original_image: image,
-        marked_image: markedImage,
+        original_image: JSON.stringify(imageList),
+        marked_image: JSON.stringify(markedImages),
         reference_answer,
         grading_result: gradingResult,
         max_score,
@@ -218,7 +233,8 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       data: {
         id: data?.id,
         grading: gradingResult,
-        marked_image: markedImage,
+        marked_image: markedImages[0],
+        marked_images: markedImages,
       },
     });
   } catch (error: any) {
@@ -345,7 +361,7 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 /**
  * 调用千问 VL 模型
  */
-async function callQwenVL(imageBase64: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = [], subject: string = 'english'): Promise<GradingResult> {
+async function callQwenVL(images: string[], joinedTranscription: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = [], subject: string = 'english'): Promise<GradingResult> {
   const isChinese = subject === 'chinese';
   const ocrBoard = ocrWords.length > 0
     ? `\n\n## OCR 词表（机器识别的手写词，按出现顺序编号，用于定位）
@@ -406,6 +422,14 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
 
   const prompt = `${roleLine}
 
+## 作文原文（OCR 分页转录，共 ${images.length} 页，已按阅读顺序合并为完整作文）
+${joinedTranscription}
+
+> 说明：上面的作文原文是系统 OCR 从${images.length}页图片转录合并的，可能含个别识别误差。你**必须基于这段原文**批改：
+> - transcription 字段**原样返回**上面这段原文，不要改写、不要重组；
+> - errors 里的 original 必须从这段原文中取样，与原文逐字完全一致；
+> - 结合各页图片可辅助判断书写/卷面，但错别字、病句、标点等**以这段原文为准**。
+
 ## 参考答案
 ${referenceAnswer || '无'}
 
@@ -450,12 +474,15 @@ ${noteLine}
           {
             role: 'user',
             content: [
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
+              ...images.flatMap((img, i) => [
+                { type: 'text', text: `（第${i + 1}页图片）` },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}`,
+                  },
                 },
-              },
+              ]),
               {
                 type: 'text',
                 text: prompt,
@@ -544,6 +571,57 @@ ${noteLine}
 /**
  * 在 OCR 结果中查找匹配的文字块
  */
+// 按阅读顺序把一页的词表重建为文本（行内按 x 排序、行间换行，兼容词级/行级框）
+function reconstructText(words: OCRWord[]): string {
+  if (!words.length) return '';
+  const rows: Record<number, { x: number; text: string }[]> = {};
+  for (const w of words) {
+    const key = Math.round((w.y + (w.height || 0) / 2) / 12);
+    if (!rows[key]) rows[key] = [];
+    rows[key].push({ x: w.x, text: w.text });
+  }
+  return Object.keys(rows)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((k) => rows[k].slice().sort((a, b) => a.x - b.x).map(r => r.text).join(' '))
+    .join('\n');
+}
+
+// 把千问返回的（全局 wordIdx）错误分发到对应页，并把 wordIdx 改写为页内序号；无法用序号定位的用文本匹配兜底
+function assignErrorsByPage(
+  errors: ErrorAnnotation[],
+  pages: { start: number; words: OCRWord[] }[],
+  _allWords: OCRWord[],
+): ErrorAnnotation[][] {
+  const result = pages.map(() => [] as ErrorAnnotation[]);
+  for (const e of errors) {
+    let target: number | null = null;
+    const widx = (e as unknown as { wordIdx?: number }).wordIdx;
+    if (typeof widx === 'number' && widx >= 0) {
+      for (let p = 0; p < pages.length; p++) {
+        if (widx >= pages[p].start && widx < pages[p].start + pages[p].words.length) {
+          target = p;
+          break;
+        }
+      }
+      if (target != null) {
+        result[target].push({ ...e, wordIdx: widx - pages[target].start });
+        continue;
+      }
+    }
+    let matched = false;
+    for (let p = 0; p < pages.length; p++) {
+      if (findMatchingOCRWord(e.original || '', pages[p].words)) {
+        result[p].push({ ...e, wordIdx: undefined });
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) result[0].push({ ...e, wordIdx: undefined });
+  }
+  return result;
+}
+
 function findMatchingOCRWord(errorText: string, ocrWords: OCRWord[]): OCRWord | null {
   if (!errorText || ocrWords.length === 0) return null;
   

@@ -32,13 +32,14 @@ interface GradingResult {
 export default function EssayGradingScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const MAX_PAGES = 3; // 一篇作文最多允许上传 3 页（语文多页）
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [referenceAnswer, setReferenceAnswer] = useState('');
   const [subject, setSubject] = useState<'english' | 'chinese'>('english');
   const [maxScore, setMaxScore] = useState('15');
   const [loading, setLoading] = useState(false);
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
-  const [markedImage, setMarkedImage] = useState<string | null>(null);
+  const [markedImages, setMarkedImages] = useState<string[]>([]);
 
   const switchSubject = (s: 'english' | 'chinese') => {
     setSubject(s);
@@ -46,22 +47,44 @@ export default function EssayGradingScreen() {
     setMaxScore(s === 'chinese' ? '40' : '15');
   };
 
+  const maxAllowedPages = subject === 'chinese' ? MAX_PAGES : 1;
+  const canAddMore = selectedImages.length < maxAllowedPages;
+
+  const appendImages = (newUris: string[]) => {
+    if (!newUris.length) return;
+    const remaining = maxAllowedPages - selectedImages.length;
+    const toAdd = newUris.slice(0, remaining);
+    if (!toAdd.length) return;
+    setSelectedImages((prev) => [...prev, ...toAdd].slice(0, maxAllowedPages));
+    setGradingResult(null);
+    setMarkedImages([]);
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+    setGradingResult(null);
+    setMarkedImages([]);
+  };
+
   const pickImage = async () => {
+    if (selectedImages.length >= maxAllowedPages) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: false,
       quality: 0.8,
       base64: true,
+      // 语文最多 3 页，可一次多选多张；英语仅 1 张
+      selectionLimit: maxAllowedPages - selectedImages.length,
+      allowsMultipleSelection: subject === 'chinese',
     });
 
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
-      setGradingResult(null);
-      setMarkedImage(null);
+    if (!result.canceled && result.assets.length) {
+      appendImages(result.assets.map((a) => a.uri));
     }
   };
 
   const takePhoto = async () => {
+    if (selectedImages.length >= maxAllowedPages) return;
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('需要相机权限', '请在设置中允许访问相机');
@@ -75,29 +98,31 @@ export default function EssayGradingScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
-      setGradingResult(null);
-      setMarkedImage(null);
+      appendImages([result.assets[0].uri]);
     }
   };
 
   const handleGrade = async () => {
-    if (!selectedImage) {
+    if (!selectedImages.length) {
       Alert.alert('提示', '请先选择作文图片');
       return;
     }
 
     setLoading(true);
     try {
-      // 读取图片 base64
-      const imageResponse = await fetch(selectedImage);
-      const imageBlob = await imageResponse.blob();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(imageBlob);
-      });
+      // 逐张读取 base64（支持多页）
+      const images: string[] = [];
+      for (const uri of selectedImages) {
+        const imageResponse = await fetch(uri);
+        const imageBlob = await imageResponse.blob();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(imageBlob);
+        });
+        images.push(base64);
+      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -110,7 +135,7 @@ export default function EssayGradingScreen() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          image: base64,
+          images,
           reference_answer: referenceAnswer,
           max_score: parseInt(maxScore, 10) || 15,
           subject,
@@ -127,7 +152,7 @@ export default function EssayGradingScreen() {
 
       if (data.success) {
         setGradingResult(data.data.grading);
-        setMarkedImage(data.data.marked_image);
+        setMarkedImages(data.data.marked_images || (data.data.marked_image ? [data.data.marked_image] : []));
       } else {
         const errorMsg = data.error || '未知错误';
         if (Platform.OS === 'web') {
@@ -172,7 +197,7 @@ export default function EssayGradingScreen() {
   };
 
   // 渲染带错误标注的原文
-  const renderTranscriptionWithErrors = (transcription: string, errors: typeof gradingResult.errors) => {
+  const renderTranscriptionWithErrors = (transcription: string, errors: NonNullable<typeof gradingResult>['errors']) => {
     if (!transcription) return null;
 
     // 按段落分割
@@ -299,12 +324,31 @@ export default function EssayGradingScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. 上传作文图片</Text>
           
-          {selectedImage ? (
-            <View style={styles.imageContainer}>
-              <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="contain" />
-              <TouchableOpacity style={styles.changeImageButton} onPress={pickImage}>
-                <Text style={styles.changeImageText}>更换图片</Text>
-              </TouchableOpacity>
+          {selectedImages.length > 0 ? (
+            <View style={styles.previewRow}>
+              {selectedImages.map((uri, idx) => (
+                <View key={idx} style={styles.thumbContainer}>
+                  <Image source={{ uri }} style={styles.previewThumb} resizeMode="contain" />
+                  {!loading && (
+                    <TouchableOpacity style={styles.thumbRemove} onPress={() => removeImage(idx)}>
+                      <Ionicons name="close-circle" size={20} color="#ff3b30" />
+                    </TouchableOpacity>
+                  )}
+                  <Text style={styles.thumbLabel}>第{idx + 1}页</Text>
+                </View>
+              ))}
+              {canAddMore && (
+                <TouchableOpacity style={styles.addImageButton} onPress={takePhoto}>
+                  <Ionicons name="camera-outline" size={26} color="#4CAF50" />
+                  <Text style={styles.addImageText}>拍照添加</Text>
+                </TouchableOpacity>
+              )}
+              {canAddMore && (
+                <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
+                  <Ionicons name="images-outline" size={26} color="#4CAF50" />
+                  <Text style={styles.addImageText}>相册添加</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <View style={styles.imagePickerContainer}>
@@ -373,9 +417,9 @@ export default function EssayGradingScreen() {
 
         {/* 批改按钮 */}
         <TouchableOpacity
-          style={[styles.gradeButton, (!selectedImage || loading) && styles.gradeButtonDisabled]}
+          style={[styles.gradeButton, (selectedImages.length === 0 || loading) && styles.gradeButtonDisabled]}
           onPress={handleGrade}
-          disabled={!selectedImage || loading}
+          disabled={selectedImages.length === 0 || loading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -429,11 +473,39 @@ export default function EssayGradingScreen() {
               </View>
             </View>
 
-            {/* 标注图片 */}
-            {markedImage && (
+            {/* 标注图片（多页左右滑） */}
+            {markedImages.length > 0 && (
               <View style={styles.markedImageContainer}>
-                <Text style={styles.subSectionTitle}>标注图</Text>
-                <Image source={{ uri: markedImage }} style={styles.markedImage} resizeMode="contain" />
+                <Text style={styles.subSectionTitle}>
+                  标注图 {markedImages.length > 1 ? `（共${markedImages.length}页，左右滑动）` : ''}
+                </Text>
+                {markedImages.length === 1 ? (
+                  <Image
+                    source={{ uri: markedImages[0] }}
+                    style={styles.markedImage}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <View style={styles.carouselContainer}>
+                    <ScrollView
+                      horizontal
+                      pagingEnabled
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.carousel}
+                    >
+                      {markedImages.map((img, idx) => (
+                        <View key={idx} style={styles.carouselPage}>
+                          <Image source={{ uri: img }} style={styles.markedImage} resizeMode="contain" />
+                        </View>
+                      ))}
+                    </ScrollView>
+                    <View style={styles.pageDots}>
+                      {markedImages.map((_, idx) => (
+                        <View key={idx} style={styles.pageDot} />
+                      ))}
+                    </View>
+                  </View>
+                )}
               </View>
             )}
 
@@ -533,6 +605,75 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  thumbContainer: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  thumbRemove: {
+    position: 'absolute',
+    top: -8,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  thumbRemoveText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  addImageButton: {
+    width: 84,
+    height: 84,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#B0B0B0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FAFAFA',
+  },
+  addImageText: {
+    fontSize: 24,
+    color: '#999',
+  },
+  previewThumb: {
+    width: 84,
+    height: 84,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  thumbLabel: {
+    fontSize: 11,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 2,
+    width: 84,
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#E53935',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
   },
   imagePickerContainer: {
     flexDirection: 'row',
@@ -663,7 +804,6 @@ const styles = StyleSheet.create({
   errorWrongText: {
     color: '#DC2626',
     textDecorationLine: 'underline',
-    textDecorationStyle: 'wavy',
     textDecorationColor: '#DC2626',
     fontWeight: '600',
   },
@@ -733,6 +873,41 @@ const styles = StyleSheet.create({
   },
   markedImageContainer: {
     marginBottom: 16,
+  },
+  carouselContainer: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    overflow: 'hidden',
+  },
+  carousel: {
+    flexGrow: 0,
+  },
+  carouselPage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+  },
+  carouselImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+  },
+  pageDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  pageDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#D0D0D0',
+    marginHorizontal: 4,
+  },
+  pageDotActive: {
+    backgroundColor: '#4F46E5',
   },
   markedImage: {
     width: '100%',
