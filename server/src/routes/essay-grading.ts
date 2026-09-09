@@ -388,7 +388,7 @@ ${ocrBoard}
   console.log('API Key 长度:', getQwenApiKey().length);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 150000); // 150 秒超时
+  const timeoutId = setTimeout(() => controller.abort(), 300000); // 300 秒超时（qwen3.8-max 旗舰模型较慢）
 
   let response;
   try {
