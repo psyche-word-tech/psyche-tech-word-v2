@@ -178,29 +178,16 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       fs.appendFileSync('/tmp/grade-debug.log', '\n[' + new Date().toISOString() + ']\nERRORS:' + JSON.stringify(gradingResult.errors) + '\nOCR:' + JSON.stringify(ocrWords.map(w => ({ t: w.text, x: Math.round(w.x), y: Math.round(w.y) }))) + '\n');
     } catch {}
 
-    // 计算总分
+    // 计算总分：按配权对每个分项硬性封顶（弥补模型不严格执行配权、各维度按 0~满分 估分的偏差），
+    // 且不再强行凑满到 max_score —— 尊重模型的真实总评，允许低于满分。
     const scoreKeys = ['content', 'language', 'structure', 'handwriting'] as const;
+    const weights = { content: 0.4, language: 0.3, structure: 0.2, handwriting: 0.1 } as const;
+    const caps: Record<(typeof scoreKeys)[number], number> = { content: 0, language: 0, structure: 0, handwriting: 0 };
+    let capSum = 0;
+    for (const k of scoreKeys) { caps[k] = Math.round(max_score * weights[k]); capSum += caps[k]; }
+    if (capSum !== max_score) caps[scoreKeys[0]] += max_score - capSum; // 修正每维度舍入误差，使各上限求和恰为 max_score
+    for (const k of scoreKeys) gradingResult.scores[k] = Math.max(0, Math.min(caps[k], Math.round(gradingResult.scores[k])));
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
-    // 防止分项打分总和超过用户设定的满分：整体按比例归一化到 max_score，
-    // 并把四舍五入产生的差额补/减到当前最大的分项，保证 total_score 恰好等于 max_score。
-    if (gradingResult.total_score > max_score && gradingResult.total_score > 0) {
-      const ratio = max_score / gradingResult.total_score;
-      for (const k of scoreKeys) gradingResult.scores[k] = Math.round(gradingResult.scores[k] * ratio);
-      let diff = max_score - (gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting);
-      let guard = 0;
-      while (diff !== 0 && guard++ < 50) {
-        let target: (typeof scoreKeys)[number] = 'content';
-        if (diff > 0) {
-          for (const k of scoreKeys) if (gradingResult.scores[k] >= gradingResult.scores[target]) target = k;
-          gradingResult.scores[target] += 1;
-        } else {
-          for (const k of scoreKeys) if (gradingResult.scores[k] > gradingResult.scores[target]) target = k;
-          gradingResult.scores[target] -= 1;
-        }
-        diff = max_score - (gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting);
-      }
-      gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
-    }
     gradingResult.max_score = max_score;
     
     // 3. 绘制标注：参数顺序为 (image, errors, ocrWords)
@@ -378,12 +365,12 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
     ? `## 要求
 1. 识别作文原文（transcription，中文）
 2. 找出所有错误：错别字、病句、标点、用词不当、表达不畅
-3. 打分（满分${maxScore}分）：内容 40%、语言表达 30%、结构 20%、卷面书写 10%
+3. 打分（满分${maxScore}分）：内容 40%、语言表达 30%、结构 20%、卷面书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、卷面书写${Math.round(maxScore * 0.1)}，请在各自满分内估分）
 4. 给出评语和建议`
     : `## 要求
 1. 识别作文原文（transcription）
 2. 找出所有错误（语法、拼写、标点、用词、句式）
-3. 打分（满分${maxScore}分）：内容 40%、语言 30%、结构 20%、书写 10%
+3. 打分（满分${maxScore}分）：内容 40%、语言 30%、结构 20%、书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、书写${Math.round(maxScore * 0.1)}，请在各自满分内估分）
 4. 给出评语和建议`;
 
   const typeEnum = isChinese
