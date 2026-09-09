@@ -65,6 +65,10 @@ export async function callPaddleOCR(imageBase64: string): Promise<{
     const result = await getClient().ocr({
       filePath: tmpFile,
       model: Model.PPOCRv5,  // 使用 PP-OCRv5
+      options: {
+        // det_db_unclip_ratio：越小检测框越紧贴字迹。默认约 1.6 会让词框过宽过高
+        textDetUnclipRatio: 1.3,
+      },
     });
 
     const elapsed = Date.now() - startTime;
