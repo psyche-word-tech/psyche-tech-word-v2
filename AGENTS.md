@@ -423,6 +423,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **版本地狱（务必保持，否则 import 崩）**：`numpy==1.26.4` + `scipy==1.11.4` + `albucore==0.0.13` + `albumentations==1.4.10`。imgaug 会把 numpy 拉回 2.x→需最后 `--force-reinstall --no-deps numpy==1.26.4`；scipy 新版在 numpy<2 下报 `np.long`→要 scipy 1.11.4；albucore 新版要 torch→钉 0.0.13
 - **模型缓存**：首跑会自动下载 det/rec 模型到 `~/.paddleocr`，之后 init 约 0.6s、识别约 2s
 - **注意**：paddleocr 2.9 的公开 API 是 `ocr()`（无 `predict`/`return_word_box` 参数）；本地词框依赖 DB 检测对英文的拆分，印刷体/行距近仍可能短语一框，已用 `splitLocalWords` 内切兜底
+- **app.py 接线顺序（已恢复 import.meta.url）**：node 侧 `paddleocr.ts` 里 `localOcrPaths()` 定位 ocr-service 用 `import.meta.url`（esbuild 产物 `format:'esm'` + `"type":"module"`，**函数内 `__dirname` 不可用**，否则抛 `__dirname is not defined` 导致整个 OCR 失败）。
+- **⚠️ 沙箱会反复清空 `.venv`（bin/lib 全没）与 `~/.paddleocr`**：被清后 `localOcrPaths` 判定"本地 OCR 环境未就绪"，本地 OCR 静默回退云端 PP-OCRv5 行级粗切——**标注回到"线穿过下一行 / 词框并词"的老样子，看起来就跟 cloud 版一模一样**。排错先查 server 日志是否有 `回退 cloud PaddleOCR`。一键重建：`bash server/ocr-service/setup_local_ocr.sh`（重建 venv + 重装依赖 + imaug __init__ patch，模型也会重新下载）。
 
 ### 关键踩坑（务必遵守）
 - **base64 前缀**：前端会传 `data:image/jpeg;base64,...`，传给 PaddleOCR 前必须 `split(',')[1]` 去前缀，否则文件头损坏报"文件格式不支持"
