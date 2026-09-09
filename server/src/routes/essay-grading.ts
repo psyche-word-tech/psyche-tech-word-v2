@@ -179,7 +179,28 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     } catch {}
 
     // 计算总分
+    const scoreKeys = ['content', 'language', 'structure', 'handwriting'] as const;
     gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
+    // 防止分项打分总和超过用户设定的满分：整体按比例归一化到 max_score，
+    // 并把四舍五入产生的差额补/减到当前最大的分项，保证 total_score 恰好等于 max_score。
+    if (gradingResult.total_score > max_score && gradingResult.total_score > 0) {
+      const ratio = max_score / gradingResult.total_score;
+      for (const k of scoreKeys) gradingResult.scores[k] = Math.round(gradingResult.scores[k] * ratio);
+      let diff = max_score - (gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting);
+      let guard = 0;
+      while (diff !== 0 && guard++ < 50) {
+        let target: (typeof scoreKeys)[number] = 'content';
+        if (diff > 0) {
+          for (const k of scoreKeys) if (gradingResult.scores[k] >= gradingResult.scores[target]) target = k;
+          gradingResult.scores[target] += 1;
+        } else {
+          for (const k of scoreKeys) if (gradingResult.scores[k] > gradingResult.scores[target]) target = k;
+          gradingResult.scores[target] -= 1;
+        }
+        diff = max_score - (gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting);
+      }
+      gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
+    }
     gradingResult.max_score = max_score;
     
     // 3. 绘制标注：参数顺序为 (image, errors, ocrWords)
