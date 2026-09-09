@@ -1,7 +1,9 @@
 import { PaddleOCRClient, Model } from '@paddleocr/api-sdk';
+import { execFile } from 'child_process';
+import { existsSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { basename, join } from 'path';
 
 let client: PaddleOCRClient | null = null;
 
@@ -34,6 +36,120 @@ export interface WordBox {
 // 以顶边为锚把高度收窄到字迹区，使"词框最低点"贴近真实字迹底。
 const BOX_VERTICAL_SHRINK = 0.72;
 
+// 本地 PaddleOCR 环境（server/ocr-service 下的虚拟环境 + 脚本）
+function localOcrPaths(): { py: string; script: string } | null {
+  // esbuild 打包后 __dirname = server/dist
+  const serverRoot = join(__dirname, '..');
+  const ocrDir = join(serverRoot, 'ocr-service');
+  const py = join(ocrDir, '.venv', 'bin', 'python');
+  const script = join(ocrDir, 'ocr_local.py');
+  if (!existsSync(py) || !existsSync(script)) return null;
+  return { py, script };
+}
+
+interface LocalRec {
+  text: string;
+  score: number;
+  box: number[][]; // [[x,y],[x,y],[x,y],[x,y]] 四点
+}
+
+// 把本地 det 词级框按内部空格再切成更细的词框，并做垂直收缩
+function splitLocalWords(recs: LocalRec[]): WordBox[] {
+  const words: WordBox[] = [];
+  for (const line of recs) {
+    const poly = line.box;
+    if (!poly || poly.length < 4) continue;
+    const x1 = Math.min(poly[0][0], poly[3][0]);
+    const x2 = Math.max(poly[1][0], poly[2][0]);
+    const y1 = Math.min(poly[0][1], poly[1][1]);
+    const y2 = Math.max(poly[3][1], poly[2][1]);
+    const width = x2 - x1;
+    const h = Math.round((y2 - y1) * BOX_VERTICAL_SHRINK);
+    const bottom = Math.round(y1) + h;
+
+    const tokens = (line.text || '').split(/\s+/).filter(Boolean);
+    if (tokens.length <= 1) {
+      words.push({
+        text: (line.text || '').trim(),
+        bbox: [Math.round(x1), Math.round(y1), Math.round(x2), bottom],
+        x: Math.round(x1),
+        y: Math.round(y1),
+        width: Math.round(x2 - x1),
+        height: h,
+        confidence: line.score,
+      });
+      continue;
+    }
+    const totalChars = tokens.reduce((s, w) => s + w.length, 0);
+    if (totalChars <= 0) continue;
+    let cursor = x1;
+    for (const token of tokens) {
+      const wordRight = cursor + (width * token.length) / totalChars;
+      words.push({
+        text: token,
+        bbox: [Math.round(cursor), Math.round(y1), Math.round(wordRight), bottom],
+        x: Math.round(cursor),
+        y: Math.round(y1),
+        width: Math.round(wordRight - cursor),
+        height: h,
+        confidence: line.score,
+      });
+      cursor = wordRight;
+    }
+  }
+  return words;
+}
+
+// 调用本地 PaddleOCR venv 脚本，返回词级框
+function runLocalOCR(filePath: string): Promise<{
+  success: boolean;
+  words: WordBox[];
+  error?: string;
+}> {
+  return new Promise((resolve) => {
+    const paths = localOcrPaths();
+    if (!paths) {
+      resolve({ success: false, words: [], error: '本地 OCR 环境未就绪' });
+      return;
+    }
+    execFile(
+      paths.py,
+      [paths.script, filePath],
+      { timeout: 120_000, maxBuffer: 64 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) {
+          resolve({ success: false, words: [], error: `本地 OCR 执行失败: ${err.message}` });
+          return;
+        }
+        try {
+          const lines = stdout.split('\n').filter(Boolean);
+          if (!lines.length) {
+            resolve({ success: false, words: [], error: '本地 OCR 输出为空' });
+            return;
+          }
+          const meta = JSON.parse(lines[0]);
+          if (!meta.ok) {
+            resolve({ success: false, words: [], error: meta.error || '本地 OCR 失败' });
+            return;
+          }
+          const recs: LocalRec[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            try {
+              recs.push(JSON.parse(lines[i]));
+            } catch {
+              /* skip bad line */
+            }
+          }
+          const words = splitLocalWords(recs);
+          resolve({ success: words.length > 0, words, error: words.length ? undefined : '无识别结果' });
+        } catch (e: any) {
+          resolve({ success: false, words: [], error: `本地 OCR 解析失败: ${e.message}` });
+        }
+      }
+    );
+  });
+}
+
 /**
  * 调用 PaddleOCR 获取词级坐标
  */
@@ -58,6 +174,14 @@ export async function callPaddleOCR(imageBase64: string): Promise<{
     const tmpFile = join(tmpdir(), `paddleocr_${Date.now()}.${ext}`);
     await writeFile(tmpFile, buffer);
     
+    // 优先本地 PaddleOCR（词级框更贴合字迹），本地不可用时回退 cloud
+    const local = await runLocalOCR(tmpFile);
+    if (local.success) {
+      console.log(`✅ 本地 PaddleOCR 完成，共 ${local.words.length} 个词`);
+      return { success: true, words: local.words };
+    }
+    console.log(`⚠️ 本地 OCR 不可用（${local.error}），回退 cloud PaddleOCR`);
+
     console.log('📝 调用 PaddleOCR API...', tmpFile);
     const startTime = Date.now();
 

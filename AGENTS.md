@@ -409,11 +409,20 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
    - 返回 `transcription`（作文原文）+ `errors[]`，每个 error 含 `original`（原文错误词）、`correction`（订正）、`type`、`explanation`、`wordIndex`/`line`
    - 满分 `max_score`（当前 15 分）
    - 响应可能被 markdown 包裹，必须容错提取 JSON
-2. **PaddleOCR 官方 API 获取行级坐标并分割成词**：`server/src/services/paddleocr.ts`
-   - 用 `@paddleocr/api-sdk`（Access Token 在 `server/.env` 的 `PADDLEOCR_ACCESS_TOKEN`）
-   - 模型 `Model.PPOCRv5`，返回结构是 `page.prunedResult.{dt_polys(行级框)/rec_texts/rec_scores}`，**默认 `return_word_box:false` 只给行级**
-   - 服务端自行把行文本按字符数比例分割成词级 bbox，返回 `WordBox[]`（字段 `text`/`bbox[x1,y1,x2,y2]`/`x`/`y`/`width`/`height`/`confidence`）
+2. **本地 PaddleOCR 词级框（优先）→ 云端回落**：`server/src/services/paddleocr.ts`
+   - **优先本地**：`callPaddleOCR` 用 `child_process.execFile` 调 `server/ocr-service/ocr_local.py`（venv 为 `ocr-service/.venv`，Python 3.12），一次性（非常驻服务）识别，避免手动服务被沙箱回收
+   - `ocr_local.py` 用 `PaddleOCR(lang='en', use_angle_cls=True)`，本地 det 直接产出**词/短语文级框**（比 cloud 整行框细得多），配合 `splitLocalWords()` 对带空格的短语框再按 token 字符比例切分 + `BOX_VERTICAL_SHRINK` 收缩
+   - **失败自动回落云端**：`runLocalOCR` 异常时回退 `getClient.extractDocument`（`@paddleocr/api-sdk`，`PADDLEOCR_ACCESS_TOKEN` 在 `server/.env`），PP-OCRv5 只给行级 `prunedResult.{dt_polys/rec_texts/rec_scores}`，再由 `splitRowByCharRatio` 把行文本按字符数比例切词
+   - 统一返回 `WordBox[]`（字段 `text`/`bbox[x1,y1,x2,y2]`/`x`/`y`/`width`/`height`/`confidence`）
 3. **图片标注**：`server/src/routes/essay-grading.ts` 中 `annotateImage`（sharp 拼接绘制）
+
+### 本地 PaddleOCR 词级框方案（essay-ocr-local）
+- **为什么本地化**：云端 `@paddleocr/api-sdk` 的 `return_word_box` **实测无效**（v5/v6 都只返回行级 `dt_polys`，`rec_polys==dt_polys`）；PaddleOCR-VL-1.6 大模型调用极慢（几十秒起、易超时 422）。标注要精确贴合单词，必须拿到词级框。
+- **运行方式**：`ocr_local.py <图片路径>`，stdout 首行 meta `{ok,count,...}`，其后每行一个词 JSON `{text,score,box[4点]}`；`PaddleOCR` init 日志在 stderr 不影响解析
+- **venv 位置**：`server/ocr-service/.venv`，Python 3.12 + paddlepaddle 2.6.2（CPU，Paddle CDN 源 `-i https://www.paddlepaddle.org.cn/packages/stable/cpu/` 装）+ paddleocr 2.9.1
+- **版本地狱（务必保持，否则 import 崩）**：`numpy==1.26.4` + `scipy==1.11.4` + `albucore==0.0.13` + `albumentations==1.4.10`。imgaug 会把 numpy 拉回 2.x→需最后 `--force-reinstall --no-deps numpy==1.26.4`；scipy 新版在 numpy<2 下报 `np.long`→要 scipy 1.11.4；albucore 新版要 torch→钉 0.0.13
+- **模型缓存**：首跑会自动下载 det/rec 模型到 `~/.paddleocr`，之后 init 约 0.6s、识别约 2s
+- **注意**：paddleocr 2.9 的公开 API 是 `ocr()`（无 `predict`/`return_word_box` 参数）；本地词框依赖 DB 检测对英文的拆分，印刷体/行距近仍可能短语一框，已用 `splitLocalWords` 内切兜底
 
 ### 关键踩坑（务必遵守）
 - **base64 前缀**：前端会传 `data:image/jpeg;base64,...`，传给 PaddleOCR 前必须 `split(',')[1]` 去前缀，否则文件头损坏报"文件格式不支持"
