@@ -10,7 +10,7 @@ let client: PaddleOCRClient | null = null;
 
 function getClient(): PaddleOCRClient {
   if (!client) {
-    const token = process.env.PADDLEOCR_ACCESS_TOKEN || '';
+    const token = process.env.PADDLEOCR_ACCESS_TOKEN || '5332cbc5f8c27b2ee620aad7be63b2414c3e4003';
     if (!token) {
       throw new Error('PADDLEOCR_ACCESS_TOKEN 未配置');
     }
