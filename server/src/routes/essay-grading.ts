@@ -81,8 +81,8 @@ async function compressImage(imageBase64: string): Promise<string> {
     
     // 使用 sharp 压缩图片
     const compressedBuffer = await sharp(buffer)
-      .resize(1000, 1000, { fit: 'inside', withoutEnlargement: true }) // 最大宽度 1000px
-      .jpeg({ quality: 70 }) // JPEG 质量 70%
+      .resize(900, 900, { fit: 'inside', withoutEnlargement: true }) // 最大宽度 900px
+      .jpeg({ quality: 65 }) // JPEG 质量 65%
       .toBuffer();
     
     console.log('[CompressImage] 压缩后图片大小:', Math.round(compressedBuffer.length / 1024), 'KB');
@@ -419,6 +419,7 @@ ${ocrBoard}
         ],
         temperature: 0.3,
         max_tokens: 2048,
+        enable_thinking: false,
       }),
       signal: controller.signal,
     });
