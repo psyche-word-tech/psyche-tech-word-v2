@@ -57,7 +57,7 @@ function getQwenApiUrl() {
   return baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`;
 }
 function getQwenModel() {
-  return process.env.QWEN_MODEL || 'qwen3.7-plus';
+  return process.env.QWEN_MODEL || 'qwen3.8-max';
 }
 
 // 阿里云 OCR 配置（使用函数延迟读取环境变量）
