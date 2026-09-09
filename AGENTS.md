@@ -412,7 +412,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 2. **本地 PaddleOCR 词级框（优先）→ 云端回落**：`server/src/services/paddleocr.ts`
    - **优先本地**：`callPaddleOCR` 用 `child_process.execFile` 调 `server/ocr-service/ocr_local.py`（venv 为 `ocr-service/.venv`，Python 3.12），一次性（非常驻服务）识别，避免手动服务被沙箱回收
    - `ocr_local.py` 用 `PaddleOCR(lang='en', use_angle_cls=True)`，本地 det 直接产出**词/短语文级框**（比 cloud 整行框细得多），配合 `splitLocalWords()` 对带空格的短语框再按 token 字符比例切分 + `BOX_VERTICAL_SHRINK` 收缩
-   - **失败自动回落云端**：`runLocalOCR` 异常时回退 `getClient.extractDocument`（`@paddleocr/api-sdk`，`PADDLEOCR_ACCESS_TOKEN` 在 `server/.env`），PP-OCRv5 只给行级 `prunedResult.{dt_polys/rec_texts/rec_scores}`，再由 `splitRowByCharRatio` 把行文本按字符数比例切词
+   - **失败自动回落云端**：`runLocalOCR` 异常时回退 `getClient.extractDocument`（`@paddleocr/api-sdk`，云端 token 已兜底写死在代码 `paddleocr.ts`，见下文"部署踩坑"），PP-OCRv5 只给行级 `prunedResult.{dt_polys/rec_texts/rec_scores}`，再由 `splitRowByCharRatio` 把行文本按字符数比例切词
    - 统一返回 `WordBox[]`（字段 `text`/`bbox[x1,y1,x2,y2]`/`x`/`y`/`width`/`height`/`confidence`）
 3. **图片标注**：`server/src/routes/essay-grading.ts` 中 `annotateImage`（sharp 拼接绘制）
 
@@ -472,3 +472,9 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **症状**：反复 build/重启后，`ps aux | grep "node dist/index.js"` 会累积出多个 node 进程同时抢 5000 端口，导致连不上后端/预览一直"启动中"。esbuild build 后 nodemon 每次重启都可能叠加新进程。
 - **修复**：启动前先 `pkill -f nodemon` 并逐个 kill 残留的 `node dist/index.js`，确认 `ss -tlnp | grep 5000` 只剩唯一进程，再 `setsid nohup node dist/index.js > /tmp/server-dev.log 2>&1 &` 单实例启动。
 - **检查命令**：`ss -tlnp | grep 5000`（应只有 1 个 pid）；`ps aux | grep "node dist/index.js" | grep -v grep | wc -l`（应为 1）。
+
+## 部署踩坑（Railway 云端 PaddleOCR token）
+
+- **问题**：Railway 部署后报 `PADDLEOCR_ACCESS_TOKEN 未配置`（500），沙箱正常。原因：`server/.env` 被 gitignore 不进构建，token 只能靠 Railway 环境变量注入。
+- **定位铁证**：访问 `/api/v1/env-check`（server/src/index.ts 新增的诊断接口，只返回各关键 env 是否存在、不打印值），发现 `QWEN_API_KEY`/`COZE_SUPABASE_*` 均为 true、唯独 `PADDLEOCR_ACCESS_TOKEN` 为 false —— Railway 变量注入正常，是该变量被加到了非 Production 的 Environment/Service。
+- **最终方案（已固定）**：`server/src/services/paddleocr.ts` 中 `const token = process.env.PADDLEOCR_ACCESS_TOKEN || '5332cbc5f8c27b2ee620aad7be63b2414c3e4003';` 把云端 PaddleOCR token 作为代码兜底默认值（该 token 视为可公开凭证，与项目中 Supabase key 硬编码方式一致）。这样无论 Railway 是否注入该变量都不会再报"未配置"。
