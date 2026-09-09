@@ -34,9 +34,17 @@ export default function EssayGradingScreen() {
   const { user } = useAuth();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [referenceAnswer, setReferenceAnswer] = useState('');
+  const [subject, setSubject] = useState<'english' | 'chinese'>('english');
+  const [maxScore, setMaxScore] = useState('15');
   const [loading, setLoading] = useState(false);
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
   const [markedImage, setMarkedImage] = useState<string | null>(null);
+
+  const switchSubject = (s: 'english' | 'chinese') => {
+    setSubject(s);
+    // 切换科目时给一个合理的默认满分，用户可按需修改
+    setMaxScore(s === 'chinese' ? '40' : '15');
+  };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -104,7 +112,8 @@ export default function EssayGradingScreen() {
         body: JSON.stringify({
           image: base64,
           reference_answer: referenceAnswer,
-          max_score: 15,
+          max_score: parseInt(maxScore, 10) || 15,
+          subject,
         }),
         signal: AbortSignal.timeout(180000), // 180 秒超时（千问 API 需要 50-60 秒）
       });
@@ -311,9 +320,45 @@ export default function EssayGradingScreen() {
           )}
         </View>
 
-        {/* 参考答案输入 */}
+        {/* 批改设置 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>2. 输入参考答案</Text>
+          <Text style={styles.sectionTitle}>2. 批改设置</Text>
+
+          {/* 科目选择 */}
+          <Text style={styles.fieldLabel}>作文科目</Text>
+          <View style={styles.subjectRow}>
+            <TouchableOpacity
+              style={[styles.subjectButton, subject === 'english' && styles.subjectButtonActive]}
+              onPress={() => switchSubject('english')}
+              disabled={loading}
+            >
+              <Text style={[styles.subjectButtonText, subject === 'english' && styles.subjectButtonTextActive]}>
+                英语作文
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.subjectButton, subject === 'chinese' && styles.subjectButtonActive]}
+              onPress={() => switchSubject('chinese')}
+              disabled={loading}
+            >
+              <Text style={[styles.subjectButtonText, subject === 'chinese' && styles.subjectButtonTextActive]}>
+                语文作文
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 满分分值 */}
+          <Text style={styles.fieldLabel}>满分分值</Text>
+          <TextInput
+            style={styles.scoreInput}
+            keyboardType="number-pad"
+            placeholder="请输入满分分值"
+            value={maxScore}
+            onChangeText={setMaxScore}
+            editable={!loading}
+          />
+
+          <Text style={styles.fieldLabel}>参考答案（可选）</Text>
           <TextInput
             style={styles.textInput}
             multiline
@@ -523,6 +568,47 @@ const styles = StyleSheet.create({
   changeImageText: {
     color: '#3B82F6',
     fontSize: 14,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  subjectRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 4,
+  },
+  subjectButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#FAFAFA',
+    alignItems: 'center',
+  },
+  subjectButtonActive: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+  },
+  subjectButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  subjectButtonTextActive: {
+    color: '#3B82F6',
+  },
+  scoreInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#333',
+    backgroundColor: '#FAFAFA',
   },
   textInput: {
     borderWidth: 1,

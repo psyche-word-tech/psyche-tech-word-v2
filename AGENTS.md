@@ -459,6 +459,15 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **标注四类映射**（annotateImage 按 error.errorType 分支）：extra→删除线穿过词；missing→插入符∧画在 original(前一个词)右侧、缺词写上方；wrong→词下方下划线、correctioon 写线下方；incomplete→locatePhrase 取句子各词包围盒并集框整句、正确句写下方。isSentence=`errorType==='incomplete' || type==='sentence_structure'`。
 - **SVG 字体**：订正/批注文字一律 `font-family="DejaVu Sans, WenQuanYi Micro Hei"`（沙箱无 Arial；文泉驿支持中文）。
 
+## 新增功能：批改设置（科目选择 + 满分分值）
+
+- **前端** `client/screens/essay-grading/index.tsx`：批改前增加"作文科目"（英语作文/语文作文）与"满分分值"输入框。切换科目时满分自动给默认值（语文 40、英语 15，用户可改）。请求体带 `subject`('english'|'chinese') 与 `max_score`。
+- **后端** `server/src/routes/essay-grading.ts`：
+  - `/grade` 接收 `subject`。`callPaddleOCR(compressedImage, ocrLang)`，语文传 `'ch'`，英语 `'en'`。
+  - `callQwenVL(..., subject)` 内按科目构造不同 prompt：语文教师识别错别字/病句/标点/用词/表达，评分维度"内容/语言表达/结构/卷面书写"；错误类别 type 仍用现有枚举（spelling=错别字、grammar=病句搭配等），errorType 四类标记语义不变。
+- **中文 OCR**（`server/src/services/paddleocr.ts`）：`lang === 'ch'` 时**跳过本地**、直接走云端 PP-OCRv5（其模型原生支持中英混排；本地 `.venv` 的 lang='en' 模型不认中文，且本地中文模型在沙箱下载不稳定）。英语保持"本地词级框优先 → 云端回退"。语文作文标注因此是**行级框**（云端返回整行，按字符比例切分多词场景有限），错字/病词定位到整行区域，具体哪个字由批注列表说明。
+- **中文标注**：`estimateTextWidth` 对汉字按全角计宽；SVG 字体 `DejaVu Sans, WenQuanYi Micro Hei` 支持中文；annotateImage 的标点跳过判断 `/[A-Za-z\u4e00-\u9fa5]/` 已兼容汉字。无需额外改动。
+
 ## 服务稳定性踩坑（多进程堆积导致 5000 端口无法连接）
 - **症状**：反复 build/重启后，`ps aux | grep "node dist/index.js"` 会累积出多个 node 进程同时抢 5000 端口，导致连不上后端/预览一直"启动中"。esbuild build 后 nodemon 每次重启都可能叠加新进程。
 - **修复**：启动前先 `pkill -f nodemon` 并逐个 kill 残留的 `node dist/index.js`，确认 `ss -tlnp | grep 5000` 只剩唯一进程，再 `setsid nohup node dist/index.js > /tmp/server-dev.log 2>&1 &` 单实例启动。

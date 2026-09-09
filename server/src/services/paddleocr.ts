@@ -155,7 +155,7 @@ function runLocalOCR(filePath: string): Promise<{
 /**
  * 调用 PaddleOCR 获取词级坐标
  */
-export async function callPaddleOCR(imageBase64: string): Promise<{
+export async function callPaddleOCR(imageBase64: string, lang: string = 'en'): Promise<{
   success: boolean;
   words: WordBox[];
   error?: string;
@@ -176,13 +176,20 @@ export async function callPaddleOCR(imageBase64: string): Promise<{
     const tmpFile = join(tmpdir(), `paddleocr_${Date.now()}.${ext}`);
     await writeFile(tmpFile, buffer);
     
-    // 优先本地 PaddleOCR（词级框更贴合字迹），本地不可用时回退 cloud
-    const local = await runLocalOCR(tmpFile);
-    if (local.success) {
-      console.log(`✅ 本地 PaddleOCR 完成，共 ${local.words.length} 个词`);
-      return { success: true, words: local.words };
+    // 中文（语文作文）直接走云端 PP-OCRv5：其模型默认支持中英混排，
+    // 本地 .venv 的 lang='en' 模型不认中文，且本地中文模型下载在沙箱不稳定。
+    // 英文保持"本地词级框优先 → 云端回退"，词框更贴合字迹。
+    const useLocal = lang !== 'ch';
+    if (useLocal) {
+      const local = await runLocalOCR(tmpFile);
+      if (local.success) {
+        console.log(`✅ 本地 PaddleOCR 完成，共 ${local.words.length} 个词`);
+        return { success: true, words: local.words };
+      }
+      console.log(`⚠️ 本地 OCR 不可用（${local.error}），回退 cloud PaddleOCR`);
+    } else {
+      console.log('📝 语文作文：直接走云端 PP-OCRv5（中英混排）');
     }
-    console.log(`⚠️ 本地 OCR 不可用（${local.error}），回退 cloud PaddleOCR`);
 
     console.log('📝 调用 PaddleOCR API...', tmpFile);
     const startTime = Date.now();

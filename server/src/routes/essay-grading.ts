@@ -138,7 +138,7 @@ interface GradingResult {
 router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
-    const { image, reference_answer, max_score = 15 } = req.body;
+    const { image, reference_answer, max_score = 15, subject = 'english' } = req.body;
 
     if (!image) {
       return res.status(400).json({ success: false, error: '缺少作文图片' });
@@ -153,8 +153,9 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     console.log('图片压缩完成，原始大小:', Math.round(image.length / 1024), 'KB, 压缩后:', Math.round(compressedImage.length / 1024), 'KB');
 
     // 1. 先调用 OCR 获取文字位置（词表，按出现顺序编号，供千问精确定位）
-    console.log('开始调用 PaddleOCR...');
-    const ocrResult = await callPaddleOCR(compressedImage);
+    console.log('开始调用 PaddleOCR，subject=', subject);
+    const ocrLang = subject === 'chinese' ? 'ch' : 'en';
+    const ocrResult = await callPaddleOCR(compressedImage, ocrLang);
     if (!ocrResult.success) {
       throw new Error(`PaddleOCR 调用失败：${ocrResult.error}`);
     }
@@ -168,7 +169,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 2. 调用千问 VL 模型批改作文（看图 + 引用 OCR 词表序号精确定位）
     console.log('开始调用千问 VL 模型批改作文...');
     const ocrBoard = ocrWords.map((w, i) => ({ index: i, text: w.text }));
-    const gradingResult = await callQwenVL(compressedImage, refAnswer, max_score, ocrBoard);
+    const gradingResult = await callQwenVL(compressedImage, refAnswer, max_score, ocrBoard, subject);
     console.log('千问 VL 模型批改完成');
     console.log('识别的原文:', gradingResult.transcription);
     console.log('错误数量:', gradingResult.errors.length);
@@ -336,7 +337,8 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 /**
  * 调用千问 VL 模型
  */
-async function callQwenVL(imageBase64: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = []): Promise<GradingResult> {
+async function callQwenVL(imageBase64: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = [], subject: string = 'english'): Promise<GradingResult> {
+  const isChinese = subject === 'chinese';
   const ocrBoard = ocrWords.length > 0
     ? `\n\n## OCR 词表（机器识别的手写词，按出现顺序编号，用于定位）
 ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
@@ -347,28 +349,36 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
 - 如果你认为 OCR 某处识别错了，仍以"图上真正该修正的那个位置"为准，选一个**最贴近的 OCR 序号**填入 wordIdx。
 - 数组 errors 里每个元素必须带 wordIdx（incomplete 整句时填句中第一个字的 OCR 序号）。` : '';
 
-  const prompt = `你是英语教师，请批改这篇作文。
+  const roleLine = isChinese
+    ? '你是语文教师，请批改这篇汉语作文。批改以汉字原文中的**错别字、病句、标点、用词、表达**为标准。'
+    : '你是英语教师，请批改这篇作文。';
 
-## 参考答案
-${referenceAnswer || '无'}
-
-## 要求
+  const task = isChinese
+    ? `## 要求
+1. 识别作文原文（transcription，中文）
+2. 找出所有错误：错别字、病句、标点、用词不当、表达不畅
+3. 打分（满分${maxScore}分）：内容 40%、语言表达 30%、结构 20%、卷面书写 10%
+4. 给出评语和建议`
+    : `## 要求
 1. 识别作文原文（transcription）
 2. 找出所有错误（语法、拼写、标点、用词、句式）
 3. 打分（满分${maxScore}分）：内容 40%、语言 30%、结构 20%、书写 10%
-4. 给出评语和建议
+4. 给出评语和建议`;
 
-## 输出格式（JSON）
-{"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"errors":[{"type":"grammar/spelling/punctuation/word_choice/sentence_structure","errorType":"missing/wrong/extra/incomplete","wordIdx":0,"original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
+  const typeEnum = isChinese
+    ? '"spelling"(错别字)/"grammar"(病句/搭配)/"punctuation"(标点)/"word_choice"(用词不当)/"sentence_structure"(表达行文)'
+    : '"grammar/spelling/punctuation/word_choice/sentence_structure"';
 
-## errorType（决定批改标记类型，务必准确）
-- extra: 多了一个词（可直接删掉）。original=多余的那个词，correction 填空字符串 ""
-- missing: 少了一个词（需插入）。**original=缺失位置之前紧邻的那个单词**（用于标记插入点），correction=缺失的内容
-- wrong: 改一个词。original=错误单词，correction=正确单词
-- incomplete: 句子错误/不完整/整体表达不佳（需改写整句或整段）。original=出错的完整句子片段或短语，correction=正确的完整句子
-${ocrBoard}
-
-## 【重要】拆细到单词，严禁合并
+  const decompose = isChinese
+    ? `### 【重要】拆细到词，严禁合并
+同一个句子里即使有多个错误，也必须把每个**错字/病词**分别列成独立的 error（每条 error 只对应一个最小错误单元），不要合并成一条大的 incomplete。规则：
+1. **优先词语级**：只要错误可通过改/删/增一个词（或一个错别字）修正，就用 wrong/extra/missing，**不要**用 incomplete。
+   - 错别字 → 单独一条 wrong，original=错字，correction=正确字
+   - 多写了一个词 → 单独一条 extra，original=该词，correction 填空字符串 ""
+   - 少了一个词/字 → 单独一条 missing，original=缺失位置之前的那个词，correction=缺失内容
+2. **incomplete 仅限**：只有整句语序混乱、逻辑错误、需整句重写时才用，此时 original 给整句、correction 给正确整句。**能局部修正的绝不用 incomplete**。
+3. 一条 error 的 original 必须是最小连续片段，不要贪大。同一处错误只报一次。`
+    : `### 【重要】拆细到单词，严禁合并
 同一个句子里即使有多个错误，也必须**把每个单词错误分别列成独立的 error**（每条 error 只对应一个最小错误单元），不要把它们合并成一条大的 incomplete。规则：
 1. **优先单词级**：只要某个错误可以通过加/删/换一个单词修正，就用 extra/missing/wrong，**不要**用 incomplete。
    - 例：'Socialization can enables' 是 'enables' 冗余 → 单独一条 wrong，original='enables'，correction='enable'
@@ -377,10 +387,35 @@ ${ocrBoard}
    - 例：多了个词 → 单独一条 extra，original=该词
 2. **incomplete 仅限**：只有当一个句子**整体结构无法通过局部加/删/换词修复**（语序混乱、整句逻辑错误、需整句重写）时才用 incomplete，此时 original 才给整句、correction 给整句。**能局部修正的绝不用 incomplete**。
 3. 一条 error 的 original 必须是**最小连续片段**（优先精确到 1 个单词），不要贪大。incomplete 也尽量给出确切范围，不要拖到一整个长段。
-- 同一处错误只报一次，不要重复列出相同单词
+- 同一处错误只报一次，不要重复列出相同单词`;
 
-## 注意
+  const noteLine = isChinese
+    ? `## 注意
+- original 必须与 transcription 中的文本完全一致（汉字不能写错）`
+    : `## 注意
 - original 必须与 transcription 中的文本完全一致
+`;
+
+  const prompt = `${roleLine}
+
+## 参考答案
+${referenceAnswer || '无'}
+
+${task}
+
+## 输出格式（JSON）
+{"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"errors":[{"type":"${typeEnum}","errorType":"missing/wrong/extra/incomplete","wordIdx":0,"original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
+
+## errorType（决定批改标记类型，务必准确）
+- extra: 多了一个词（可直接删掉）。original=多余的那个词，correction 填空字符串 ""
+- missing: 少了一个词（需插入）。**original=缺失位置之前紧邻的那个单词**（用于标记插入点），correction=缺失的内容
+- wrong: 改一个词/字。original=错误写法，correction=正确写法
+- incomplete: 句子错误/不完整/整体表达不佳（需改写整句或整段）。original=出错的完整句子片段或短语，correction=正确的完整句子
+${ocrBoard}
+
+${decompose}
+
+${noteLine}
 `;
 
   console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());
