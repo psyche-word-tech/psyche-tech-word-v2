@@ -6,6 +6,11 @@ FROM node:20-slim
 # 安装 pnpm
 RUN npm install -g pnpm
 
+# 安装字体（DejaVu 英文 + 文泉驿中文）：annotateImage 用 librsvg 渲染 SVG 文本，缺字体会把标注渲染成方块
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-dejavu-core fonts-wqy-microhei \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # 复制所有源码

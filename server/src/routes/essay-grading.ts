@@ -834,7 +834,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           if (ix < margin) ix = margin;
           if (iy < 12) iy = y + wordHeight + cfon + 6 * scale;
           svgAnnotations += `
-            <text x="${ix}" y="${iy}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei">${insText}</text>
+            <text x="${ix}" y="${iy}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif">${insText}</text>
           `;
         }
       } else if (isSentence) {
@@ -854,7 +854,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
             if (cxp < margin) cxp = margin;
             const cyp = py + ph + 18 * scale;
             svgAnnotations += `
-              <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei">${error.correction}</text>
+              <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif">${error.correction}</text>
             `;
           }
         }
@@ -882,7 +882,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
           if (cxp < margin) cxp = margin;
           // 订正文字
           svgAnnotations += `
-            <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei">${error.correction}</text>
+            <text x="${cxp}" y="${cyp}" font-size="${cfon}" fill="${color}" font-style="italic" font-family="DejaVu Sans, WenQuanYi Micro Hei, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif">${error.correction}</text>
           `;
         }
       }
@@ -914,7 +914,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     let listSvg = `
       <rect x="0" y="${height}" width="${width}" height="${listHeight}" fill="#FFF9E6"/>
       <line x1="0" y1="${height}" x2="${width}" y2="${height}" stroke="#FFCC00" stroke-width="4"/>
-      <text x="20" y="${listStartY}" font-size="28" fill="#333" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">
+      <text x="20" y="${listStartY}" font-size="28" fill="#333" font-family="DejaVu Sans, WenQuanYi Micro Hei, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-weight="bold">
         批改标注：
       </text>
     `;
@@ -922,7 +922,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     wrappedRows.forEach((rows) => {
       for (const ln of rows) {
         listSvg += `
-          <text x="20" y="${listCursorY}" font-size="${listItemFont}" fill="${color}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-weight="bold">${ln}</text>
+          <text x="20" y="${listCursorY}" font-size="${listItemFont}" fill="${color}" font-family="DejaVu Sans, WenQuanYi Micro Hei, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-weight="bold">${ln}</text>
         `;
         listCursorY += listLineH;
       }
@@ -944,7 +944,7 @@ async function annotateImage(imageBase64: string, errors: ErrorAnnotation[], ocr
     const debugBoxes = ocrWords.map((w, i) => `
       <rect x="${w.x}" y="${w.y}" width="${w.width}" height="${w.height}"
         fill="none" stroke="#FACC15" stroke-width="2" />
-      <text x="${w.x + 2}" y="${w.y - 4}" font-family="DejaVu Sans" font-size="13"
+      <text x="${w.x + 2}" y="${w.y - 4}" font-family="DejaVu Sans, WenQuanYi Micro Hei, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13"
         fill="#FACC15">${i}</text>
     `).join('');
 
