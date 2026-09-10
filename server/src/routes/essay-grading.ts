@@ -132,6 +132,8 @@ interface GradingResult {
   comments: string;
   strengths: string[];
   improvements: string[];
+  // 其他学科主观题：按打分标准逐点评分
+  points?: { name: string; max: number; score: number; comment: string }[];
 }
 
 /**
@@ -141,7 +143,7 @@ interface GradingResult {
 router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
-    const { images, image, reference_answer, max_score = 15, subject = 'english' } = req.body;
+    const { images, image, reference_answer, grading_standard = '', max_score = 15, subject = 'english' } = req.body;
 
     // 兼容单图（image）与多张（images[]）入参
     let imageList: string[] = [];
@@ -197,7 +199,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
 
     // 3. 调用千问 VL 模型整体批改（基于拼接文本 + 各页图片）
     console.log('开始调用千问 VL 模型批改作文...');
-    const gradingResult = await callQwenVL(imageList, joinedTranscription, refAnswer, max_score, ocrBoard, subject);
+    const gradingResult = await callQwenVL(imageList, joinedTranscription, refAnswer, max_score, ocrBoard, subject, grading_standard);
     gradingResult.transcription = joinedTranscription; // 以拼接文本为准，前端展示整篇
     console.log('千问 VL 模型批改完成，错误数量:', gradingResult.errors.length);
     try {
@@ -205,22 +207,33 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       fs.appendFileSync('/tmp/grade-debug.log', '\n[' + new Date().toISOString() + ']\nPAGES:' + imageList.length + '\nERRORS:' + JSON.stringify(gradingResult.errors) + '\n');
     } catch {}
 
-    // 计算总分：按配权对每个分项硬性封顶，且不再强行凑满到 max_score（尊重模型真实总评）
-    const scoreKeys = ['content', 'language', 'structure', 'handwriting'] as const;
-    const weights = { content: 0.4, language: 0.3, structure: 0.2, handwriting: 0.1 } as const;
-    const caps: Record<(typeof scoreKeys)[number], number> = { content: 0, language: 0, structure: 0, handwriting: 0 };
-    let capSum = 0;
-    for (const k of scoreKeys) { caps[k] = Math.round(max_score * weights[k]); capSum += caps[k]; }
-    if (capSum !== max_score) caps[scoreKeys[0]] += max_score - capSum; // 修正每维度舍入误差，使各上限求和恰为 max_score
-    for (const k of scoreKeys) gradingResult.scores[k] = Math.max(0, Math.min(caps[k], Math.round(gradingResult.scores[k])));
-    gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
-    gradingResult.max_score = max_score;
+    // 计算总分：对作文按配权对每个分项硬性封顶；其他学科主观题则按各采分点得分直接求和
+    const isOtherSubject = subject === 'other';
+    if (isOtherSubject) {
+      const points = gradingResult.points || [];
+      gradingResult.total_score = points.reduce((sum, p) => sum + (p.score || 0), 0);
+      gradingResult.max_score = max_score;
+    } else {
+      const scoreKeys = ['content', 'language', 'structure', 'handwriting'] as const;
+      const weights = { content: 0.4, language: 0.3, structure: 0.2, handwriting: 0.1 } as const;
+      const caps: Record<(typeof scoreKeys)[number], number> = { content: 0, language: 0, structure: 0, handwriting: 0 };
+      let capSum = 0;
+      for (const k of scoreKeys) { caps[k] = Math.round(max_score * weights[k]); capSum += caps[k]; }
+      if (capSum !== max_score) caps[scoreKeys[0]] += max_score - capSum; // 修正每维度舍入误差，使各上限求和恰为 max_score
+      for (const k of scoreKeys) gradingResult.scores[k] = Math.max(0, Math.min(caps[k], Math.round(gradingResult.scores[k])));
+      gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
+      gradingResult.max_score = max_score;
+    }
 
-    // 4. 多页标注：把全局 wordIdx 分发到对应页，页内各自标注，每页返回一张标记图
-    const pageErrors = assignErrorsByPage(gradingResult.errors, pages, allWords);
+    // 4. 标注：作文按错误词级定位画红笔标记图；其他学科主观题无词级错误，直接返回原压缩图
     const markedImages: string[] = [];
-    for (let p = 0; p < pages.length; p++) {
-      markedImages.push(await annotateImage(pages[p].compressed, pageErrors[p], pages[p].words));
+    if (isOtherSubject) {
+      markedImages.push(...pages.map((pg) => pg.compressed));
+    } else {
+      const pageErrors = assignErrorsByPage(gradingResult.errors, pages, allWords);
+      for (let p = 0; p < pages.length; p++) {
+        markedImages.push(await annotateImage(pages[p].compressed, pageErrors[p], pages[p].words));
+      }
     }
     console.log('标注完成，共', markedImages.length, '页');
 
@@ -376,8 +389,9 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 /**
  * 调用千问 VL 模型
  */
-async function callQwenVL(images: string[], joinedTranscription: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = [], subject: string = 'english'): Promise<GradingResult> {
+async function callQwenVL(images: string[], joinedTranscription: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = [], subject: string = 'english', gradingStandard: string = ''): Promise<GradingResult> {
   const isChinese = subject === 'chinese';
+  const isOther = subject === 'other';
   const ocrBoard = ocrWords.length > 0
     ? `\n\n## OCR 词表（机器识别的手写词，按出现顺序编号，用于定位）
 ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
@@ -390,9 +404,17 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
 
   const roleLine = isChinese
     ? '你是语文教师，请批改这篇汉语作文。批改以汉字原文中的**错别字、病句、标点、用词、表达**为标准。'
-    : '你是英语教师，请批改这篇作文。';
+    : isOther
+      ? '你是严谨、专业的学科教师。请依据用户提供的【参考答案】与【打分标准】，对学生的这道主观题作答逐点判分。'
+      : '你是英语教师，请批改这篇作文。';
 
-  const task = isChinese
+  const task = isOther
+    ? `## 要求
+1. 识别学生作答（transcription，原样返回上面这段 OCR 作答文本）
+2. 依据【参考答案】逐条对照学生作答，再结合【打分标准】对每个采分点给出得分（points）
+3. 打分：满分${maxScore}分，各采分点分值以【打分标准】为准；若未提供打分标准，按参考答案要点与常见主观题评分惯例合理分配
+4. 给出总评、优点与改进建议`
+    : isChinese
     ? `## 要求
 1. 识别作文原文（transcription，中文）
 2. 找出所有错误：错别字、病句、标点、用词不当、表达不畅
@@ -435,7 +457,41 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
 - original 必须与 transcription 中的文本完全一致
 `;
 
-  const prompt = `${roleLine}
+  let prompt: string;
+  if (isOther) {
+    // 其他学科主观题：按参考答案 + 打分标准逐点评分，不做词/句纠错
+    prompt = `${roleLine}
+
+## 学生作答（OCR 分页转录，共 ${images.length} 页，已按阅读顺序合并为完整作答）
+${joinedTranscription}
+
+> 说明：上面的作答是系统 OCR 从${images.length}页图片转录合并的，可能含个别识别误差。你**必须基于这段转录的作答**评分：
+> - transcription 字段**原样返回**上面这段作答，不要改写、不要重组；
+> - 评分以【参考答案】与【打分标准】为准，逐条核对采分点给分。
+> - 结合各页图片辅助理解书写/图像/公式/图表，但判分以转录文本为准。
+
+${task}
+
+## 参考答案
+${referenceAnswer || '（未提供）'}
+
+## 打分标准
+${gradingStandard || '（未提供，请按常识合理评分）'}
+
+## 输出格式（JSON）
+{"transcription":"作答转录","max_score":${maxScore},"total_score":0,"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"errors":[],"points":[{"name":"采分点名称","max":分,"score":得分,"comment":"点评"}],"comments":"总评","strengths":[],"improvements":[]}
+
+## 评分说明（务必遵守）
+- points 数组按【打分标准】逐条列出采分点，每条对应一个可核对的给分点；name 写清该采分点内容（含分值），max 为该点满分，score 为该点实得，comment 简述得/失分依据。
+- total_score 必须等于各条 points 的 score 之和，且不超过 max_score。
+- scores 字段不参与其他学科评分，content 填 total_score 即可，其余填 0。
+- errors 恒为空数组。
+
+## 严格输出要求（必须遵守）
+你只能输出一个合法的 JSON 对象，禁止输出任何解释、前言、思考过程、批注说明或 markdown 代码块，禁止在 JSON 外附加任何文字。所有批改结论都必须放进上方 JSON 结构的对应字段里。
+`;
+  } else {
+    prompt = `${roleLine}
 
 ## 作文原文（OCR 分页转录，共 ${images.length} 页，已按阅读顺序合并为完整作文）
 ${joinedTranscription}
@@ -467,6 +523,7 @@ ${noteLine}
 ## 严格输出要求（必须遵守）
 你只能输出一个合法的 JSON 对象，禁止输出任何解释、前言、思考过程、批注说明或 markdown 代码块，禁止在 JSON 外附加任何文字。所有批改结论都必须放进上方 JSON 结构的对应字段里。
 `;
+  }
 
   console.log('调用千问 VL 模型，API URL:', getQwenApiUrl());
   console.log('模型:', getQwenModel());

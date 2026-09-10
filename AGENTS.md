@@ -475,6 +475,20 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **中文 OCR**（`server/src/services/paddleocr.ts`）：`lang === 'ch'` 时**跳过本地**、直接走云端 PP-OCRv5（其模型原生支持中英混排；本地 `.venv` 的 lang='en' 模型不认中文，且本地中文模型在沙箱下载不稳定）。英语保持"本地词级框优先 → 云端回退"。语文作文标注因此是**行级框**（云端返回整行，按字符比例切分多词场景有限），错字/病词定位到整行区域，具体哪个字由批注列表说明。
 - **中文标注**：`estimateTextWidth` 对汉字按全角计宽；SVG 字体 `DejaVu Sans, WenQuanYi Micro Hei` 支持中文；annotateImage 的标点跳过判断 `/[A-Za-z\u4e00-\u9fa5]/` 已兼容汉字。无需额外改动。
 
+## 新增功能：AI 主观题批改 + 其他学科（按参考答案+打分标准逐点评分）
+
+- **定位**：入口文案"AI 作文批改"升级为"AI 主观题批改"（`study/index.tsx`），页面标题同步"主观题批改"；批改界面科目从"英语作文/语文作文"扩展为三选：**英语作文/语文作文/其他学科**（`subject`: `'english'|'chinese'|'other'`）。
+- **前端** `client/screens/essay-grading/index.tsx`：
+  - `switchSubject` 支持 `'other'`；其他学科默认满分可改，且**允许多图**（与其他学科/语文一致，不受英语 1 页限制）。
+  - 科目 UI 加"其他学科"按钮；`subject==='other'` 时额外显示**"打分标准"**多行输入框（state `gradingStandard`），并把"参考答案"标签强调为参照。
+  - 请求体带 `{ images[], subject:'other', grading_standard, reference_answer, max_score }`。
+  - `GradingResult` 增加可选 `points: { point, max, score, comment }[]`（得分点）。结果展示：`subject==='other'` 时渲染**得分点列表**（pointsContainer/pointItem/pointBadge 序号+pointTitle 要点+pointScore 得分/满分+pointComment 点评）与总分；四维分数卡片（内容/语言/结构/书写）与标注图仅作文科目显示；错误改错列表按 `errors.length>0`（其他学科 errors 为空则隐藏）。
+  - 样式需补齐 points 一组（pointsContainer/pointItem/pointBadge/pointBadgeText/pointTitle/pointScore/pointScoreValue/pointScoreMax/pointComment），否则运行时 `undefined is not an object` 白屏。
+- **后端** `server/src/routes/essay-grading.ts`：
+  - `/grade` 请求体读取 `subject`、`grading_standard`、`reference_answer`、`max_score`；`ocrLang`：`chinese`→`'ch'`、其他（`english`/`other`）→`'en'`。
+  - `callQwenVL(..., subject, grading_standard)`：`subject==='other'` 时构造"学科主观题批改教师"prompt，要求依据 `reference_answer`+`grading_standard` **逐点评分**，输出 `points:[{point,max,score,comment}]`（不找错字、不输出 errors/四维 scores）。
+  - 总分计算：`subject==='other'` 时 `total_score = sum(points.score)`（不走作文四维配权）；标注跳过 annotateImage，`marked_images` 直接返回每页压缩原图（无红笔）；保存 original/marked 同作文格式。
+
 ## 新增功能：多页批改（语文作文可多张图，最多 3 页）
 
 - **前端** `client/screens/essay-grading/index.tsx`：图片选择由单张改多图。state 用 `selectedImages: string[]`（替代 `selectedImage`）、结果用 `markedImages: string[]`（替代单张 `markedImage`）。语文最多 3 张（`MAX_PAGES`），英语 1 张。已选图缩略图行 + "添加页面/继续添加"按钮 + 每张可移除（`removeImage`）。请求体把每张 uri 读成 base64 后提交 `images[]`。

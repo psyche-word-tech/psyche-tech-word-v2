@@ -17,6 +17,13 @@ interface GradingResult {
     structure: number;
     handwriting: number;
   };
+  // 其他学科主观题：逐点评分列表
+  points?: Array<{
+    point: string;
+    max: number;
+    score: number;
+    comment: string;
+  }>;
   errors: Array<{
     type: string;
     errorType: 'missing' | 'wrong' | 'extra' | 'incomplete';
@@ -35,19 +42,22 @@ export default function EssayGradingScreen() {
   const MAX_PAGES = 3; // 一篇作文最多允许上传 3 页（语文多页）
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [referenceAnswer, setReferenceAnswer] = useState('');
-  const [subject, setSubject] = useState<'english' | 'chinese'>('english');
+  const [subject, setSubject] = useState<'english' | 'chinese' | 'other'>('english');
   const [maxScore, setMaxScore] = useState('15');
+  const [gradingStandard, setGradingStandard] = useState('');
   const [loading, setLoading] = useState(false);
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
   const [markedImages, setMarkedImages] = useState<string[]>([]);
 
-  const switchSubject = (s: 'english' | 'chinese') => {
+  const switchSubject = (s: 'english' | 'chinese' | 'other') => {
     setSubject(s);
     // 切换科目时给一个合理的默认满分，用户可按需修改
-    setMaxScore(s === 'chinese' ? '40' : '15');
+    if (s === 'chinese') setMaxScore('40');
+    else if (s === 'other') setMaxScore('10');
+    else setMaxScore('15');
   };
 
-  const maxAllowedPages = subject === 'chinese' ? MAX_PAGES : 1;
+  const maxAllowedPages = subject === 'english' ? 1 : MAX_PAGES;
   const canAddMore = selectedImages.length < maxAllowedPages;
 
   const appendImages = (newUris: string[]) => {
@@ -139,6 +149,7 @@ export default function EssayGradingScreen() {
           reference_answer: referenceAnswer,
           max_score: parseInt(maxScore, 10) || 15,
           subject,
+          grading_standard: gradingStandard,
         }),
         signal: AbortSignal.timeout(180000), // 180 秒超时（千问 API 需要 50-60 秒）
       });
@@ -314,7 +325,7 @@ export default function EssayGradingScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>作文批改</Text>
+          <Text style={styles.headerTitle}>主观题批改</Text>
           <TouchableOpacity onPress={() => router.push('/batch-grading')} style={styles.batchButton}>
             <Ionicons name="layers-outline" size={24} color="#4CAF50" />
           </TouchableOpacity>
@@ -369,7 +380,7 @@ export default function EssayGradingScreen() {
           <Text style={styles.sectionTitle}>2. 批改设置</Text>
 
           {/* 科目选择 */}
-          <Text style={styles.fieldLabel}>作文科目</Text>
+          <Text style={styles.fieldLabel}>批改科目</Text>
           <View style={styles.subjectRow}>
             <TouchableOpacity
               style={[styles.subjectButton, subject === 'english' && styles.subjectButtonActive]}
@@ -389,6 +400,15 @@ export default function EssayGradingScreen() {
                 语文作文
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.subjectButton, subject === 'other' && styles.subjectButtonActive]}
+              onPress={() => switchSubject('other')}
+              disabled={loading}
+            >
+              <Text style={[styles.subjectButtonText, subject === 'other' && styles.subjectButtonTextActive]}>
+                其他学科
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* 满分分值 */}
@@ -402,7 +422,25 @@ export default function EssayGradingScreen() {
             editable={!loading}
           />
 
-          <Text style={styles.fieldLabel}>参考答案（可选）</Text>
+          {subject === 'other' && (
+            <>
+              <Text style={styles.fieldLabel}>打分标准</Text>
+              <TextInput
+                style={styles.textInput}
+                multiline
+                numberOfLines={5}
+                placeholder="请输入打分标准，如：要点完整得4分、语言准确得3分、逻辑清晰得2分...（模型将按此标准逐点评分）"
+                value={gradingStandard}
+                onChangeText={setGradingStandard}
+                textAlignVertical="top"
+                editable={!loading}
+              />
+            </>
+          )}
+
+          <Text style={styles.fieldLabel}>
+            {subject === 'other' ? '参考答案' : '参考答案（可选）'}
+          </Text>
           <TextInput
             style={styles.textInput}
             multiline
@@ -443,38 +481,72 @@ export default function EssayGradingScreen() {
               </View>
             )}
 
-            {/* 分数卡片 */}
-            <View style={styles.scoreCard}>
-              <View style={styles.totalScoreContainer}>
-                <Text style={styles.totalScoreLabel}>总分</Text>
-                <Text style={styles.totalScoreValue}>
-                  {gradingResult.total_score}
-                  <Text style={styles.totalScoreMax}>/{gradingResult.max_score}</Text>
-                </Text>
-              </View>
-              
-              <View style={styles.scoreDetails}>
-                <View style={styles.scoreItem}>
-                  <Text style={styles.scoreItemLabel}>内容</Text>
-                  <Text style={styles.scoreItemValue}>{gradingResult.scores.content}</Text>
+            {/* 分数卡片 / 其他学科得分点 */}
+            {subject === 'other' ? (
+              <View style={styles.scoreCard}>
+                <View style={styles.totalScoreContainer}>
+                  <Text style={styles.totalScoreLabel}>总分</Text>
+                  <Text style={styles.totalScoreValue}>
+                    {gradingResult.total_score}
+                    <Text style={styles.totalScoreMax}>/{gradingResult.max_score}</Text>
+                  </Text>
                 </View>
-                <View style={styles.scoreItem}>
-                  <Text style={styles.scoreItemLabel}>语言</Text>
-                  <Text style={styles.scoreItemValue}>{gradingResult.scores.language}</Text>
-                </View>
-                <View style={styles.scoreItem}>
-                  <Text style={styles.scoreItemLabel}>结构</Text>
-                  <Text style={styles.scoreItemValue}>{gradingResult.scores.structure}</Text>
-                </View>
-                <View style={styles.scoreItem}>
-                  <Text style={styles.scoreItemLabel}>书写</Text>
-                  <Text style={styles.scoreItemValue}>{gradingResult.scores.handwriting}</Text>
-                </View>
-              </View>
-            </View>
 
-            {/* 标注图片（多页左右滑） */}
-            {markedImages.length > 0 && (
+                {gradingResult.points && gradingResult.points.length > 0 && (
+                  <View style={styles.pointsContainer}>
+                    {gradingResult.points.map((point, index) => (
+                      <View key={index} style={styles.pointItem}>
+                        <View style={styles.pointHeader}>
+                          <View style={styles.pointBadge}>
+                            <Text style={styles.pointBadgeText}>{index + 1}</Text>
+                          </View>
+                          <Text style={styles.pointTitle}>{point.point}</Text>
+                          <Text style={styles.pointScore}>
+                            <Text style={styles.pointScoreValue}>{point.score}</Text>
+                            <Text style={styles.pointScoreMax}>/{point.max}</Text>
+                          </Text>
+                        </View>
+                        {point.comment ? (
+                          <Text style={styles.pointComment}>{point.comment}</Text>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={styles.scoreCard}>
+                <View style={styles.totalScoreContainer}>
+                  <Text style={styles.totalScoreLabel}>总分</Text>
+                  <Text style={styles.totalScoreValue}>
+                    {gradingResult.total_score}
+                    <Text style={styles.totalScoreMax}>/{gradingResult.max_score}</Text>
+                  </Text>
+                </View>
+
+                <View style={styles.scoreDetails}>
+                  <View style={styles.scoreItem}>
+                    <Text style={styles.scoreItemLabel}>内容</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores.content}</Text>
+                  </View>
+                  <View style={styles.scoreItem}>
+                    <Text style={styles.scoreItemLabel}>语言</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores.language}</Text>
+                  </View>
+                  <View style={styles.scoreItem}>
+                    <Text style={styles.scoreItemLabel}>结构</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores.structure}</Text>
+                  </View>
+                  <View style={styles.scoreItem}>
+                    <Text style={styles.scoreItemLabel}>书写</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores.handwriting}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* 标注图片（多页左右滑）——仅作文有红笔标注 */}
+            {subject !== 'other' && markedImages.length > 0 && (
               <View style={styles.markedImageContainer}>
                 <Text style={styles.subSectionTitle}>
                   标注图 {markedImages.length > 1 ? `（共${markedImages.length}页，左右滑动）` : ''}
@@ -870,6 +942,55 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  pointsContainer: {
+    marginTop: 12,
+  },
+  pointItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  pointBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#4F46E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 2,
+  },
+  pointBadgeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  pointTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    lineHeight: 20,
+  },
+  pointScore: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  pointScoreValue: {
+    color: '#4F46E5',
+  },
+  pointScoreMax: {
+    color: '#999',
+    fontWeight: '500',
+  },
+  pointComment: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 20,
+    marginTop: 4,
+    marginLeft: 34,
   },
   markedImageContainer: {
     marginBottom: 16,

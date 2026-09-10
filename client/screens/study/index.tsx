@@ -693,7 +693,7 @@ export default function StudyScreen() {
               activeOpacity={0.7}
             >
               <Ionicons name="create-outline" size={24} color="#8B5CF6" />
-              <Text style={styles.menuItemText}>AI 作文批改</Text>
+              <Text style={styles.menuItemText}>AI 主观题批改</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
