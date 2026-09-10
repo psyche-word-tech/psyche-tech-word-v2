@@ -107,12 +107,6 @@ def main():
             xs = [p[0] for p in box]; ys = [p[1] for p in box]
             bx1, by1, bx2, by2 = int(min(xs)), int(min(ys)), int(max(xs)) + 1, int(max(ys)) + 1
             bx1, by1 = max(0, bx1), max(0, by1)
-            # 过滤 engine 对孤立笔画/字母的极小碎片误检（面积远小于行高，宽高过窄）
-            bw, bh0 = bx2 - bx1, by2 - by1
-            if bw < 6 and bh0 < 6:
-                continue
-            if max(bw, bh0) < 10:
-                continue
             bx2, by2 = min(W, bx2), min(H, by2)
             if bx2 <= bx1 or by2 <= by1:
                 continue
@@ -127,21 +121,8 @@ def main():
             blocks = merge_blocks(blocks, max(4, round(bh * 0.18)))
             if not blocks:
                 blocks = [(0, band.shape[1])]
-            tokens = [t for t in text.replace('_', ' ').split() if t]
+            tokens = [t for t in text.split() if t]
             assigned = fold_tokens_to_blocks(blocks, tokens, band.shape[1])
-            # 连笔手写：行框内无足够 gap（只有 1 个块），但文本含多词时，
-            # 按 token 字符数比例等分行框宽度还原各词坐标（每词一框、上下贴字）
-            if len(assigned) == 1 and len(tokens) > 1 and blocks and (blocks[0][1] - blocks[0][0]) > max(30, band.shape[1] * 0.6):
-                total_chars = sum(len(t) for t in tokens)
-                acc = 0
-                assigned = []
-                for t in tokens:
-                    if total_chars == 0:
-                        continue
-                    frac = len(t) / total_chars
-                    w0 = int(round(band.shape[1] * acc)); w1 = int(round(band.shape[1] * (acc + frac)))
-                    acc += frac
-                    assigned.append((w0, w1, t))
             for (s, e, wtext) in assigned:
                 sub = rawband[:, s:e]
                 rows = np.where(sub.any(axis=1))[0]
