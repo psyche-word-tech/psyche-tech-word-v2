@@ -405,6 +405,11 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 ## 新增功能：英语作文 AI 批改（essay-grading）
 
 ### 批改流水线（三层协作）
+0. **腾讯云「中英文手写作文识别」HandwritingEssayOCR（词级坐标，默认优先）**：`server/src/services/tencent-ocr.ts` 的 `callTencentOcr(imageBase64, lang)`
+   - 按 `subject` 选 `ConfigId`：英语 `ArticleRecognizeEng`、语文 `ArticleRecognizeCmn`
+   - 返回 `WordList[]`（按行分块）+ 行内 `WordCoord[]` 即**逐词精确坐标**（`Coord.LeftTop/RightBottom`，y 向下为正），空格天然切词、标点单独成块、连笔词也能贴字分割——正是"上下紧贴 + 按空白聚合 + 提供坐标"的方案
+   - **纯 HTTP 无本地模型，可部署 Railway**；凭证 `TENCENT_SECRET_ID`/`TENCENT_SECRET_KEY`（`server/.env`，gitignore）
+   - 引擎开关：`OCR_ENGINE` env（默认 `tencent`；`paddle` 回退旧 PaddleOCR 链路），腾讯云失败自动回退 `callPaddleOCR`
 1. **千问 VL（qwen 多模态）识别手写内容 + 判错**：`server/src/routes/essay-grading.ts` 中 `callQwenVL`
    - 返回 `transcription`（作文原文）+ `errors[]`，每个 error 含 `original`（原文错误词）、`correction`（订正）、`type`、`explanation`、`wordIndex`/`line`
    - 满分 `max_score`（当前 15 分）
@@ -417,6 +422,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 3. **图片标注**：`server/src/routes/essay-grading.ts` 中 `annotateImage`（sharp 拼接绘制）
 
 ### 本地 PaddleOCR 词级框方案（essay-ocr-local）
+> ⚠️ **当前定位**：腾讯云 HandwritingEssayOCR（见流水线第 0 层）已是词级坐标主引擎；本地 PaddleOCR（本段）+ 云端 PP-OCRv5 仅在腾讯云不可用时作为回退（`OCR_ENGINE=paddle` 或腾讯云抛错时自动回落）。本段保留作为回退链路的实现知识。
 - **为什么本地化**：云端 `@paddleocr/api-sdk` 的 `return_word_box` **实测无效**（v5/v6 都只返回行级 `dt_polys`，`rec_polys==dt_polys`）；PaddleOCR-VL-1.6 大模型调用极慢（几十秒起、易超时 422）。标注要精确贴合单词，必须拿到词级框。
 - **运行方式**：`ocr_local.py <图片路径>`，stdout 首行 meta `{ok,count,...}`，其后每行一个词 JSON `{text,score,box[4点]}`；`PaddleOCR` init 日志在 stderr 不影响解析
 - **venv 位置**：`server/ocr-service/.venv`，Python 3.12 + paddlepaddle 2.6.2（CPU，Paddle CDN 源 `-i https://www.paddlepaddle.org.cn/packages/stable/cpu/` 装）+ paddleocr 2.9.1
@@ -492,3 +498,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **问题**：Railway 部署后报 `PADDLEOCR_ACCESS_TOKEN 未配置`（500），沙箱正常。原因：`server/.env` 被 gitignore 不进构建，token 只能靠 Railway 环境变量注入。
 - **定位铁证**：访问 `/api/v1/env-check`（server/src/index.ts 新增的诊断接口，只返回各关键 env 是否存在、不打印值），发现 `QWEN_API_KEY`/`COZE_SUPABASE_*` 均为 true、唯独 `PADDLEOCR_ACCESS_TOKEN` 为 false —— Railway 变量注入正常，是该变量被加到了非 Production 的 Environment/Service。
 - **最终方案（已固定）**：`server/src/services/paddleocr.ts` 中 `const token = process.env.PADDLEOCR_ACCESS_TOKEN || '5332cbc5f8c27b2ee620aad7be63b2414c3e4003';` 把云端 PaddleOCR token 作为代码兜底默认值（该 token 视为可公开凭证，与项目中 Supabase key 硬编码方式一致）。这样无论 Railway 是否注入该变量都不会再报"未配置"。
+
+### 部署踩坑（腾讯云 HandwritingEssayOCR 凭证）
+- **问题**：Railway 部署后腾讯云 OCR 整体失败。原因：`TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY` 在 `server/.env`（gitignore，不进构建），Railway 上只能靠环境变量注入；未注入时 `getClient()` 抛 `TENCENT_SECRET_ID / TENCENT_SECRET_KEY 未配置`，批改路由捕获后回退 PaddleOCR。**部署前务必确认 Railway Production 的 Variables 里配好这两个变量**（en.bind变量在 Service → Variables 新增，而非固定在某个 Environment）。
+- **域名**：endpoint 固定 `ocr.tencentcloudapi.com`；区域默认 `ap-guangzhou`（可用 `TENCENT_OCR_REGION` 覆盖）。
+- **费用**：HandwritingEssayOCR 计费（约 0.36 元/次，含免费额度），在线调试/每次批改都是真实调用计费，部署前提醒用户留意。

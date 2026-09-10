@@ -6,7 +6,9 @@ import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { optionalAuthMiddleware } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
-import { callPaddleOCR, WordBox } from '../services/paddleocr';
+import { callPaddleOCR } from '../services/paddleocr';
+import type { WordBox } from '../services/paddleocr';
+import { callTencentOcr } from '../services/tencent-ocr';
 
 // 加载环境变量 - 使用 process.cwd() 获取当前工作目录
 dotenv.config({ path: path.join(process.cwd(), '.env') });
@@ -153,9 +155,11 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 参考答案可选
     const refAnswer = reference_answer || '';
     const ocrLang = subject === 'chinese' ? 'ch' : 'en';
+    // OCR 引擎优先级：腾讯云「中英文手写作文识别」词级坐标最贴合手写 → 失败回退 PaddleOCR（本地词框/云端 PP-OCRv5 行级粗切）
+    const ocrEngine = (process.env.OCR_ENGINE || 'tencent') as 'tencent' | 'paddle';
 
     // 1. 逐页压缩 + OCR，保留每页词表与全局词表（wordIdx 为跨页全局编号，供千问精确定位）
-    console.log('开始逐页 OCR，页数=', imageList.length, 'subject=', subject);
+    console.log('开始逐页 OCR，页数=', imageList.length, 'subject=', subject, 'engine=', ocrEngine);
     const pages: { compressed: string; words: OCRWord[]; start: number }[] = [];
     const allWords: OCRWord[] = [];
     let globalStart = 0;
@@ -163,9 +167,20 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       console.log(`开始压缩第 ${p + 1} 页图片...`);
       const compressedImage = await compressImage(imageList[p]);
       console.log(`第 ${p + 1} 页压缩完成，压缩后:`, Math.round(compressedImage.length / 1024), 'KB');
-      const ocrResult = await callPaddleOCR(compressedImage, ocrLang);
+      let ocrResult: { success: boolean; words: OCRWord[]; error?: string };
+      if (ocrEngine === 'tencent') {
+        try {
+          const wc = await callTencentOcr(compressedImage, ocrLang);
+          ocrResult = { success: true, words: wc };
+        } catch (e: any) {
+          console.log(`⚠️ 腾讯云 OCR 失败（${e.message}），回退 PaddleOCR`);
+          ocrResult = await callPaddleOCR(compressedImage, ocrLang);
+        }
+      } else {
+        ocrResult = await callPaddleOCR(compressedImage, ocrLang);
+      }
       if (!ocrResult.success) {
-        throw new Error(`PaddleOCR 调用失败：第${p + 1}页 ${ocrResult.error}`);
+        throw new Error(`OCR 调用失败：第${p + 1}页 ${ocrResult.error}`);
       }
       const words = ocrResult.words || [];
       pages.push({ compressed: compressedImage, words, start: globalStart });
@@ -209,7 +224,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     }
     console.log('标注完成，共', markedImages.length, '页');
 
-    // 保存到数据库（多页时存 JSON 数组）
+    // 保存到数据库（多页时存 JSON 数组）；reference_answer 未传时给空串，避免 NOT NULL 约束报错
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('essay_grading_results')
@@ -217,7 +232,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
         user_id: String(userId),
         original_image: JSON.stringify(imageList),
         marked_image: JSON.stringify(markedImages),
-        reference_answer,
+        reference_answer: reference_answer || '',
         grading_result: gradingResult,
         max_score,
       })

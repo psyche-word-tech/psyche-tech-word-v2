@@ -85,6 +85,8 @@ app.post('/api/v1/health/reset', (req, res) => {
 app.get('/api/v1/env-check', (req, res) => {
   const keys = [
     'PADDLEOCR_ACCESS_TOKEN',
+    'TENCENT_SECRET_ID',
+    'TENCENT_SECRET_KEY',
     'QWEN_API_KEY',
     'QWEN_API_URL',
     'QWEN_MODEL',
