@@ -476,7 +476,7 @@ export default function EssayGradingScreen() {
               <View style={styles.transcriptionContainer}>
                 <Text style={styles.subSectionTitle}>原文转录（红色 = 错误处）</Text>
                 <View style={styles.transcriptionTextContainer}>
-                  {renderTranscriptionWithErrors(gradingResult.transcription, gradingResult.errors)}
+                  {renderTranscriptionWithErrors(gradingResult.transcription, gradingResult.errors ?? [])}
                 </View>
               </View>
             )}
@@ -527,19 +527,19 @@ export default function EssayGradingScreen() {
                 <View style={styles.scoreDetails}>
                   <View style={styles.scoreItem}>
                     <Text style={styles.scoreItemLabel}>内容</Text>
-                    <Text style={styles.scoreItemValue}>{gradingResult.scores.content}</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.content}</Text>
                   </View>
                   <View style={styles.scoreItem}>
                     <Text style={styles.scoreItemLabel}>语言</Text>
-                    <Text style={styles.scoreItemValue}>{gradingResult.scores.language}</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.language}</Text>
                   </View>
                   <View style={styles.scoreItem}>
                     <Text style={styles.scoreItemLabel}>结构</Text>
-                    <Text style={styles.scoreItemValue}>{gradingResult.scores.structure}</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.structure}</Text>
                   </View>
                   <View style={styles.scoreItem}>
                     <Text style={styles.scoreItemLabel}>书写</Text>
-                    <Text style={styles.scoreItemValue}>{gradingResult.scores.handwriting}</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.handwriting}</Text>
                   </View>
                 </View>
               </View>
@@ -582,10 +582,10 @@ export default function EssayGradingScreen() {
             )}
 
             {/* 错误列表 */}
-            {gradingResult.errors.length > 0 && (
+            {(gradingResult.errors ?? []).length > 0 && (
               <View style={styles.errorsContainer}>
-                <Text style={styles.subSectionTitle}>错误详情 ({gradingResult.errors.length}处)</Text>
-                {gradingResult.errors.map((error, index) => (
+                <Text style={styles.subSectionTitle}>错误详情 ({(gradingResult.errors ?? []).length}处)</Text>
+                {(gradingResult.errors ?? []).map((error, index) => (
                   <View key={index} style={styles.errorItem}>
                     <View style={styles.errorHeader}>
                       <View style={[styles.errorTypeBadge, { backgroundColor: getErrorTypeColor(error.type) }]}>
@@ -609,20 +609,20 @@ export default function EssayGradingScreen() {
             </View>
 
             {/* 优点 */}
-            {gradingResult.strengths.length > 0 && (
+            {(gradingResult.strengths ?? []).length > 0 && (
               <View style={styles.strengthsContainer}>
                 <Text style={styles.subSectionTitle}>✨ 优点</Text>
-                {gradingResult.strengths.map((strength, index) => (
+                {(gradingResult.strengths ?? []).map((strength, index) => (
                   <Text key={index} style={styles.strengthItem}>• {strength}</Text>
                 ))}
               </View>
             )}
 
             {/* 改进建议 */}
-            {gradingResult.improvements.length > 0 && (
+            {(gradingResult.improvements ?? []).length > 0 && (
               <View style={styles.improvementsContainer}>
                 <Text style={styles.subSectionTitle}> 改进建议</Text>
-                {gradingResult.improvements.map((improvement, index) => (
+                {(gradingResult.improvements ?? []).map((improvement, index) => (
                   <Text key={index} style={styles.improvementItem}>• {improvement}</Text>
                 ))}
               </View>

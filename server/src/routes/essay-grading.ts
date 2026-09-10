@@ -637,6 +637,20 @@ ${noteLine}
     } catch {}
   }
 
+  // 归一化返回结构，防止千问缺字段导致前端渲染崩溃（线上白屏根因）
+  const g = gradingResult as any;
+  g.transcription = g.transcription ?? '';
+  g.max_score = g.max_score ?? (parseInt(String(maxScore || '0'), 10) || 0);
+  g.total_score = g.total_score ?? (g.scores ? (g.scores.content || 0) + (g.scores.language || 0) + (g.scores.structure || 0) + (g.scores.handwriting || 0) : 0);
+  g.comments = g.comments ?? '';
+  g.errors = Array.isArray(g.errors) ? g.errors : [];
+  g.strengths = Array.isArray(g.strengths) ? g.strengths : [];
+  g.improvements = Array.isArray(g.improvements) ? g.improvements : [];
+  g.scores = g.scores && typeof g.scores === 'object'
+    ? { content: g.scores.content || 0, language: g.scores.language || 0, structure: g.scores.structure || 0, handwriting: g.scores.handwriting || 0 }
+    : { content: 0, language: 0, structure: 0, handwriting: 0 };
+  g.points = Array.isArray(g.points) ? g.points : [];
+
   return gradingResult!;
 }
 

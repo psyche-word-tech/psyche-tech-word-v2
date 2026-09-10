@@ -517,3 +517,14 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **问题**：Railway 部署后腾讯云 OCR 整体失败。原因：`TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY` 在 `server/.env`（gitignore，不进构建），Railway 上只能靠环境变量注入；未注入时 `getClient()` 抛 `TENCENT_SECRET_ID / TENCENT_SECRET_KEY 未配置`，批改路由捕获后回退 PaddleOCR。**部署前务必确认 Railway Production 的 Variables 里配好这两个变量**（en.bind变量在 Service → Variables 新增，而非固定在某个 Environment）。
 - **域名**：endpoint 固定 `ocr.tencentcloudapi.com`；区域默认 `ap-guangzhou`（可用 `TENCENT_OCR_REGION` 覆盖）。
 - **费用**：HandwritingEssayOCR 计费（约 0.36 元/次，含免费额度），在线调试/每次批改都是真实调用计费，部署前提醒用户留意。
+
+## 线上批改白屏根因与修复（essay-grading 稳定性）
+- **症状**：Railway 部署后批改页面白屏，控制台 `TypeError: Cannot read properties of undefined (reading 'length')`、批改失败 500 `无法解析千问 API 返回的 JSON`。
+- **根因 1（前端渲染崩溃）**：千问(Qwen)返回的 `grading` 可能缺 `errors/scores/strengths/improvements` 等字段（尤其 `subject==='other'` 不输出 errors/四维 scores），而 `client/screens/essay-grading/index.tsx` 渲染时直接 `gradingResult.errors.length`、`gradingResult.strengths.length`、`gradingResult.improvements.length`、`gradingResult.scores.content`，对 undefined 读属性 → React 渲染中断 → 白屏。
+- **修复（前端）**：对所有可能缺失字段加空值保护——`(gradingResult.errors ?? [])`、`(gradingResult.strengths ?? [])`、`(gradingResult.improvements ?? [])`、`gradingResult.scores?.content`，以及 `renderTranscriptionWithErrors(..., gradingResult.errors ?? [])`。markedImages 已由 `|| [...]` 兜底为数组，无需改。
+- **根因 2（后端字段不完整）**：`server/src/routes/essay-grading.ts` 的 `callQwenVL` 返回前未归一化，千问缺字段直接传前端。且 L204 `gradingResult.errors.length` 在后端也会崩（500）。
+- **修复（后端）**：`callQwenVL` 返回前统一归一化——`transcription/max_score/total_score/comments` 缺省给空值，`errors/strengths/improvements/points` 缺省为 `[]`，`scores` 归一化为四维默认 0 对象（`g.scores && typeof==='object' ? {content||0,...} : {0,0,0,0}`）。这样前端拿到的 grading 结构永远完整。
+- **根因 3（KaTeX 字体缺失）**：`npx expo export --platform web` 只生成了 `katex.min-*.css`，**不拷贝引用的 `fonts/KaTeX_*.woff2`**（CSS url 引用不被 metro 当 asset 依赖）。线上旧提交曾删除这些字体，导致 SVG 渲染异常。
+- **修复（字体）**：`cp client/node_modules/katex/dist/fonts/* client/dist/_expo/static/css/fonts/`，再同步到 `server/public/_expo/static/css/fonts/`（共 60 个）。**每次 web 导出后都要补这一步**。
+- **关键排查经验**：esbuild/metro 会把中文文案压缩成 `\uXXXX` 转义。grep 产物查"主观题批改"明文找不到不代表产物旧——要 grep `\\u4e3b\\u89c2\\u9898\\u6279\\u6539`（主观题批改）等转义串确认。判断产物是否包含新功能优先对比 entry hash 与 `grep -cP '\\uXXXX'`。
+- **部署链路**：线上前端由 `server/public/`（git 跟踪）驱动；`prod_build.sh` 的 `expo export --platform all` 不产 web、不刷新 server/public。**改前端后必须本地 `expo export --platform web` + 补字体 + 同步到 `server/public` + git 提交推送**，Railway 才会用新版。确认本地 `main` 无 `ahead`（`git status -sb`）避免漏推。
