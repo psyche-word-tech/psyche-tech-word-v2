@@ -318,7 +318,7 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
   }
 
   console.log('OCR API 响应状态:', response.status);
-  const data = await response.json();
+  const data = (await response.json()) as { choices?: { message?: { content?: string } }[] };
   const content = data.choices?.[0]?.message?.content;
 
   console.log('OCR API 响应:', JSON.stringify(data).substring(0, 500));
@@ -528,7 +528,7 @@ ${noteLine}
     throw new Error(`千问 API 调用失败: ${response.status} - ${errorText}`);
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as { choices?: { message?: { content?: string } }[] };
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
@@ -545,7 +545,7 @@ ${noteLine}
   try {
     // 尝试直接解析
     gradingResult = JSON.parse(content);
-    fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult, null, 2));
+    fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult!, null, 2));
     console.log('千问 VL 模型响应已写入 /tmp/qwen-response.log');
   } catch {
     // 依次尝试：markdown 代码块提取 → 花括号对象 → 截断补全修复
@@ -576,11 +576,11 @@ ${noteLine}
     }
     console.log('千问 JSON 通过容错修复后解析成功');
     try {
-      fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult, null, 2));
+      fs.writeFileSync('/tmp/qwen-response.log', JSON.stringify(gradingResult!, null, 2));
     } catch {}
   }
 
-  return gradingResult;
+  return gradingResult!;
 }
 
 /**

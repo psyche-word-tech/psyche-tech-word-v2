@@ -93,6 +93,13 @@ fi
 echo "=== 完整启动服务 ==="
 echo ""
 
+# 产物已存在时跳过构建，直接启动，加快预览就绪速度
+if [ -f "server/public/index.html" ] && [ -f "server/dist/index.js" ]; then
+    echo "产物已存在，跳过构建直接启动服务"
+    start_service_with_nodemon
+    exit 0
+fi
+
 # 构建前端
 build_frontend
 

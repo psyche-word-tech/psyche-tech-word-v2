@@ -1,5 +1,5 @@
-import { Router, Response } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { Router, type Response } from 'express';
+import { authMiddleware, type AuthRequest } from '../middleware/auth';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 
 const router = Router();

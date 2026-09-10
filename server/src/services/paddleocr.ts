@@ -200,7 +200,7 @@ export async function callPaddleOCR(imageBase64: string, lang: string = 'en'): P
     }
     
     const tmpFile = join(tmpdir(), `paddleocr_${Date.now()}.${ext}`);
-    await writeFile(tmpFile, buffer);
+    await writeFile(tmpFile, new Uint8Array(buffer));
     
     // 中文（语文作文）直接走云端 PP-OCRv5：其模型默认支持中英混排，
     // 本地 .venv 的 lang='en' 模型不认中文，且本地中文模型下载在沙箱不稳定。

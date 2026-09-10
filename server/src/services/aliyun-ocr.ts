@@ -8,6 +8,13 @@ export interface WordBox {
   height: number;
 }
 
+interface OcrResponse {
+  success: boolean;
+  error?: string;
+  count?: number;
+  words?: WordBox[];
+}
+
 export async function callAlibabaOCR(
   imageBase64: string,
   isUrl: boolean = false
@@ -31,14 +38,14 @@ export async function callAlibabaOCR(
       throw new Error('OCR 服务调用失败：' + errorText);
     }
     
-    const result = await response.json();
+    const result = (await response.json()) as OcrResponse;
     
     if (!result.success) {
       throw new Error(result.error || 'OCR 识别失败');
     }
     
     console.log('[OCR] 识别完成，返回', result.count, '个单词');
-    return result.words;
+    return result.words ?? [];
     
   } catch (error) {
     console.error('[OCR] 调用失败:', error);

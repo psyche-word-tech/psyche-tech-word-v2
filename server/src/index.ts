@@ -30,7 +30,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = Number(process.env.PORT) || 5000;
 
 // Middleware
 app.use(cors());
@@ -93,7 +93,7 @@ app.get('/api/v1/env-check', (req, res) => {
     'COZE_SUPABASE_URL',
     'COZE_SUPABASE_SERVICE_ROLE_KEY',
   ];
-  const result = {};
+  const result: Record<string, boolean> = {};
   for (const k of keys) {
     result[k] = !!(process.env[k] && String(process.env[k]).trim());
   }

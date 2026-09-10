@@ -115,7 +115,7 @@ function fixJsonLaTeX(jsonStr: string): string {
  * 计算图片 hash
  */
 function imageHash(buffer: Buffer): string {
-  return createHash("sha256").update(buffer).digest("hex");
+  return createHash("sha256").update(new Uint8Array(buffer)).digest("hex");
 }
 
 /**
@@ -294,14 +294,14 @@ router.post("/", upload.single("image"), async (req, res) => {
           try {
             result = JSON.parse(fixedJson);
           } catch (e2) {
-            console.error("[SolveProblem] JSON parse failed after fixes:", e2.message);
+            console.error("[SolveProblem] JSON parse failed after fixes:", (e2 as Error).message);
             console.error("[SolveProblem] Fixed JSON preview:", fixedJson.substring(0, 500));
             // 尝试修复 LaTeX 反斜杠问题
             let latexFixed = fixJsonLaTeX(jsonStr);
             try {
               result = JSON.parse(latexFixed);
             } catch (e3) {
-              console.error("[SolveProblem] LaTeX fix also failed:", e3.message);
+              console.error("[SolveProblem] LaTeX fix also failed:", (e3 as Error).message);
               // 尝试更激进的修复：移除所有换行符和制表符
               let aggressiveFixed = jsonStr
                 .replace(/\r\n/g, '\\n')
@@ -312,7 +312,7 @@ router.post("/", upload.single("image"), async (req, res) => {
               try {
                 result = JSON.parse(aggressiveFixed);
               } catch (e4) {
-                console.error("[SolveProblem] Aggressive fix also failed:", e4.message);
+                console.error("[SolveProblem] Aggressive fix also failed:", (e4 as Error).message);
                 result = {
                   questions: [
                     {

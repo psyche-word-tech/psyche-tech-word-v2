@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
