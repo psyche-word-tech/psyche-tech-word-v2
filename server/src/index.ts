@@ -5,6 +5,9 @@ import cors from "cors";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { checkDatabaseHealth, startKeepAlive, resetSupabaseClient } from "./storage/database/supabase-client";
+import dns from "node:dns/promises";
+import net from "node:net";
+import https from "node:https";
 import wordsRouter from "./routes/words";
 import userWordsRouter from "./routes/user-words";
 import wordbooksRouter from "./routes/wordbooks";
@@ -98,6 +101,70 @@ app.get('/api/v1/env-check', (req, res) => {
     result[k] = !!(process.env[k] && String(process.env[k]).trim());
   }
   res.json({ env: result });
+});
+
+/**
+ * OCR 网络诊断接口 - 检测部署环境到腾讯云 OCR 的连通性
+ * 用于定位 Railway 上 "Connection failed: fetch failed" 的根因
+ * 依次测试 DNS 解析、TCP 连接、HTTPS 完整往返
+ */
+app.get('/api/v1/ocr-diagnose', async (req, res) => {
+  const HOST = process.env.TENCENT_OCR_HOST || 'ocr.tencentcloudapi.com';
+  const out: Record<string, unknown> = {
+    host: HOST,
+    env: {
+      TENCENT_SECRET_ID: !!(process.env.TENCENT_SECRET_ID && process.env.TENCENT_SECRET_ID.trim()),
+      TENCENT_SECRET_KEY: !!(process.env.TENCENT_SECRET_KEY && process.env.TENCENT_SECRET_KEY.trim()),
+      TENCENT_OCR_REGION: process.env.TENCENT_OCR_REGION || 'ap-guangzhou',
+    },
+  };
+
+  // 1. DNS 解析
+  try {
+    const t0 = Date.now();
+    const addrs = await dns.lookup(HOST, { all: true });
+    out.dns = { ok: true, ms: Date.now() - t0, addresses: addrs.map((a) => a.address) };
+  } catch (e) {
+    out.dns = { ok: false, error: (e as Error).message };
+    return res.json(out);
+  }
+
+  // 2. TCP 连接
+  try {
+    const t0 = Date.now();
+    await new Promise<void>((resolve, reject) => {
+      const sock = net.connect({ host: HOST, port: 443, timeout: 8000 });
+      sock.once('connect', () => { sock.destroy(); resolve(); });
+      sock.once('error', reject);
+      sock.once('timeout', () => { sock.destroy(); reject(new Error('TCP connect timeout')); });
+    });
+    out.tcpConnect = { ok: true, ms: Date.now() - t0 };
+  } catch (e) {
+    out.tcpConnect = { ok: false, error: (e as Error).message };
+    return res.json(out);
+  }
+
+  // 3. HTTPS 完整往返（GET，仅测连通性）
+  try {
+    const t0 = Date.now();
+    await new Promise<void>((resolve, reject) => {
+      const req = https.request({ host: HOST, path: '/', port: 443, method: 'GET', timeout: 10000 }, (r) => {
+        r.resume();
+        r.once('end', () => resolve());
+        r.once('error', reject);
+      });
+      req.once('timeout', () => { req.destroy(new Error('HTTPS request timeout')); });
+      req.once('error', reject);
+      req.end();
+    });
+    out.https = { ok: true, ms: Date.now() - t0 };
+  } catch (e) {
+    out.https = { ok: false, error: (e as Error).message };
+    return res.json(out);
+  }
+
+  out.conclusion = '网络连通正常：DNS`+TCP+HTTPS 全部通过';
+  res.json(out);
 });
 
 /**
