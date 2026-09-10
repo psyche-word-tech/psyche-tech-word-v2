@@ -411,7 +411,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
    - 响应可能被 markdown 包裹，必须容错提取 JSON
 2. **本地 PaddleOCR 词级框（优先）→ 云端回落**：`server/src/services/paddleocr.ts`
    - **优先本地**：`callPaddleOCR` 用 `child_process.execFile` 调 `server/ocr-service/ocr_local.py`（venv 为 `ocr-service/.venv`，Python 3.12），一次性（非常驻服务）识别，避免手动服务被沙箱回收
-   - `ocr_local.py` 用 `PaddleOCR(lang='en', use_angle_cls=True)`，本地 det 直接产出**词/短语文级框**（比 cloud 整行框细得多），配合 `splitLocalWords()` 对带空格的短语框再按 token 字符比例切分 + `BOX_VERTICAL_SHRINK` 收缩
+   - `ocr_local.py` 用 `PaddleOCR(lang='en', use_angle_cls=True)`。**已改为"按空白切词"方案**：det 只给行级框，对每行内部做**列方向墨迹投影**，按单词间**真实空白 gap** 切出词块，tight bbox 从字迹像素精确计算（上下左右紧贴），输出 `{text,bbox,x,y,width,height,score}`（见下方"本地 PaddleOCR 词级框方案"）
    - **失败自动回落云端**：`runLocalOCR` 异常时回退 `getClient.extractDocument`（`@paddleocr/api-sdk`，云端 token 已兜底写死在代码 `paddleocr.ts`，见下文"部署踩坑"），PP-OCRv5 只给行级 `prunedResult.{dt_polys/rec_texts/rec_scores}`，再由 `splitRowByCharRatio` 把行文本按字符数比例切词
    - 统一返回 `WordBox[]`（字段 `text`/`bbox[x1,y1,x2,y2]`/`x`/`y`/`width`/`height`/`confidence`）
 3. **图片标注**：`server/src/routes/essay-grading.ts` 中 `annotateImage`（sharp 拼接绘制）
@@ -422,7 +422,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **venv 位置**：`server/ocr-service/.venv`，Python 3.12 + paddlepaddle 2.6.2（CPU，Paddle CDN 源 `-i https://www.paddlepaddle.org.cn/packages/stable/cpu/` 装）+ paddleocr 2.9.1
 - **版本地狱（务必保持，否则 import 崩）**：`numpy==1.26.4` + `scipy==1.11.4` + `albucore==0.0.13` + `albumentations==1.4.10`。imgaug 会把 numpy 拉回 2.x→需最后 `--force-reinstall --no-deps numpy==1.26.4`；scipy 新版在 numpy<2 下报 `np.long`→要 scipy 1.11.4；albucore 新版要 torch→钉 0.0.13
 - **模型缓存**：首跑会自动下载 det/rec 模型到 `~/.paddleocr`，之后 init 约 0.6s、识别约 2s
-- **注意**：paddleocr 2.9 的公开 API 是 `ocr()`（无 `predict`/`return_word_box` 参数）；本地词框依赖 DB 检测对英文的拆分，印刷体/行距近仍可能短语一框，已用 `splitLocalWords` 内切兜底
+- **注意**：paddleocr 2.9 的公开 API 是 `ocr()`（无 `predict`/`return_word_box` 参数）；实测 det 对英文无论 unclip ratio 多小都合并成行级框（`hello world` 一个框），**必须自己按空白切词**，不能依赖 DB 拆词。
+- **按空白切词（当前本地方案）**：`ocr_local.py` 里对每个 det 行框，垂直方向在行 band 内做列墨迹投影（`mask>0` 计数），gap 宽度 ≥ `max(4, round(bh*0.28))` 视为词间空白切分点；多块再按其文本 token 合并；tight bbox 用 `cv2.findNonZero` 精确包络（上下左右贴字，无 0.72 收缩）。node 侧 `splitLocalWords` 只要见到 `x`+`width` 字段就**直接采用**紧贴框，不再量比例。**参数目前用合成印刷体微调，真实手写需用真实作文图校准（词间距更宽，应更准）。**
 - **app.py 接线顺序（已恢复 import.meta.url）**：node 侧 `paddleocr.ts` 里 `localOcrPaths()` 定位 ocr-service 用 `import.meta.url`（esbuild 产物 `format:'esm'` + `"type":"module"`，**函数内 `__dirname` 不可用**，否则抛 `__dirname is not defined` 导致整个 OCR 失败）。
 - **⚠️ 沙箱会反复清空 `.venv`（bin/lib 全没）与 `~/.paddleocr`**：被清后 `localOcrPaths` 判定"本地 OCR 环境未就绪"，本地 OCR 静默回退云端 PP-OCRv5 行级粗切——**标注回到"线穿过下一行 / 词框并词"的老样子，看起来就跟 cloud 版一模一样**。排错先查 server 日志是否有 `回退 cloud PaddleOCR`。一键重建：`bash server/ocr-service/setup_local_ocr.sh`（重建 venv + 重装依赖 + imaug __init__ patch，模型也会重新下载）。
 

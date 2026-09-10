@@ -35,7 +35,14 @@ export interface WordBox {
 
 // 词框(行框)纵向 padding 收缩比例：PP-OCRv5 行框上下常带多余空白，
 // 以顶边为锚把高度收窄到字迹区，使"词框最低点"贴近真实字迹底。
-const BOX_VERTICAL_SHRINK = 0.72;
+const BOX_VERTICAL_SHRINK = 0.9;
+
+// 对检测盒做垂直收缩并水平居中：返回 { y, height }（顶部对齐会让框底悬空/下探字母被切，居中更贴字迹）
+function shrinkV(y1: number, y2: number): { y: number; height: number } {
+  const h = Math.round((y2 - y1) * BOX_VERTICAL_SHRINK);
+  const offset = Math.round((y2 - y1 - h) / 2);
+  return { y: Math.round(y1) + offset, height: h };
+}
 
 // 本地 PaddleOCR 环境（server/ocr-service 下的虚拟环境 + 脚本）
 function localOcrPaths(): { py: string; script: string } | null {
@@ -52,13 +59,32 @@ function localOcrPaths(): { py: string; script: string } | null {
 interface LocalRec {
   text: string;
   score: number;
-  box: number[][]; // [[x,y],[x,y],[x,y],[x,y]] 四点
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  box?: number[][]; // [[x,y],[x,y],[x,y],[x,y]] 四点（旧脚本）
 }
 
-// 把本地 det 词级框按内部空格再切成更细的词框，并做垂直收缩
-function splitLocalWords(recs: LocalRec[]): WordBox[] {
+// 把本地输出转成 WordBox：新脚本已给出贴字词级框（x/y/w/h），直接采用；
+// 旧脚本（无 x/y/w/h 字段）回退到"按空格 token 比例硬拆 + 垂直收缩"
+function splitLocalWords(recs: LocalRec[], meta?: any): WordBox[] {
   const words: WordBox[] = [];
   for (const line of recs) {
+    // 新脚本字段：直接使用紧贴字迹的框
+    if (typeof line.x === 'number' && typeof line.width === 'number') {
+      words.push({
+        text: line.text || '',
+        bbox: [Math.round(line.x), Math.round(line.y!), Math.round(line.x + line.width), Math.round(line.y! + line.height!)],
+        x: Math.round(line.x),
+        y: Math.round(line.y!),
+        width: Math.round(line.width),
+        height: Math.round(line.height!),
+        confidence: line.score,
+      });
+      continue;
+    }
+    // 旧脚本：多边形 + 比例硬拆
     const poly = line.box;
     if (!poly || poly.length < 4) continue;
     const x1 = Math.min(poly[0][0], poly[3][0]);
@@ -66,16 +92,16 @@ function splitLocalWords(recs: LocalRec[]): WordBox[] {
     const y1 = Math.min(poly[0][1], poly[1][1]);
     const y2 = Math.max(poly[3][1], poly[2][1]);
     const width = x2 - x1;
-    const h = Math.round((y2 - y1) * BOX_VERTICAL_SHRINK);
-    const bottom = Math.round(y1) + h;
+    const { y: topY, height: h } = shrinkV(y1, y2);
+    const bottom = topY + h;
 
     const tokens = (line.text || '').split(/\s+/).filter(Boolean);
     if (tokens.length <= 1) {
       words.push({
         text: (line.text || '').trim(),
-        bbox: [Math.round(x1), Math.round(y1), Math.round(x2), bottom],
+        bbox: [Math.round(x1), topY, Math.round(x2), bottom],
         x: Math.round(x1),
-        y: Math.round(y1),
+        y: topY,
         width: Math.round(x2 - x1),
         height: h,
         confidence: line.score,
@@ -89,9 +115,9 @@ function splitLocalWords(recs: LocalRec[]): WordBox[] {
       const wordRight = cursor + (width * token.length) / totalChars;
       words.push({
         text: token,
-        bbox: [Math.round(cursor), Math.round(y1), Math.round(wordRight), bottom],
+        bbox: [Math.round(cursor), topY, Math.round(wordRight), bottom],
         x: Math.round(cursor),
-        y: Math.round(y1),
+        y: topY,
         width: Math.round(wordRight - cursor),
         height: h,
         confidence: line.score,
@@ -142,7 +168,7 @@ function runLocalOCR(filePath: string): Promise<{
               /* skip bad line */
             }
           }
-          const words = splitLocalWords(recs);
+          const words = splitLocalWords(recs, meta);
           resolve({ success: words.length > 0, words, error: words.length ? undefined : '无识别结果' });
         } catch (e: any) {
           resolve({ success: false, words: [], error: `本地 OCR 解析失败: ${e.message}` });

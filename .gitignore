@@ -48,3 +48,12 @@ web-build/
 tmp/
 temp/
 .cozeproj/reduction
+
+# Python 虚拟环境
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# OCR 模型缓存
+.paddleocr/
