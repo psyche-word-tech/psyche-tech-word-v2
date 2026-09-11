@@ -566,3 +566,4 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - `annotateRecordingImage(base64, blanks)`：blanks 需按 page 过滤后再调用（每页传该页 blanks）。图超 1200x1800 时按 `coordScale` 缩小并同步缩放 bbox。正确画绿✓+`gained/points`，错误画红✗ + 下方红字正确写法；SVG 字体 `DejaVu Sans, WenQuanYi Micro Hei`。
   - 关键函数/常量：`RECORDING_MAX_PAGES=6`、`RecordingBlank`/`RecordingResult` 接口、`normalizeRecording`、`callRecordingQwenVL`、`annotateRecordingImage`、`getImageSize`（sharp metadata 读数）。
 - **注意**：`bbox` 是相对压缩后图片的坐标（千问看到的就是压缩图），标注与放大图同源坐标一致；千问未给 bbox 时估算到左列排布，定位会不准——真实卷建议让千问给准 bbox。
+- **⚠️ 标注图在 Web 预览/鸿蒙 WebView 显示空白窄条的根因（已修复）**：录题标注图 `<Image>` 之前用 Tailwind 任意高度类 `h-[520px]`，在 Uniwind Web 下未生成实际高度 → Image 高度塌陷成窄条、看起来"没有标注图"。**必须用 `StyleSheet.create` 数值 `height`（如 `markedImage:{height:520}`）+ `style={styles.markedImage}` + `resizeMode="contain"`**，与作文页 `essay-grading` 完全一致（作文页一直正常）。后端 `annotateRecordingImage` 输出为 `.png()`（JPEG 在部分 WebView 渲染更不可靠）。前端加"卷面标注"标题 + 空时"暂未生成标注图"提示。

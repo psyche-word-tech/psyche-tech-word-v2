@@ -1406,9 +1406,9 @@ async function annotateRecordingImage(
 
   const final = await sharp(processedBuffer)
     .composite([{ input: Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${svg}</svg>`), top: 0, left: 0 }])
-    .jpeg({ quality: 82 })
+    .png()
     .toBuffer();
-  return `data:image/jpeg;base64,${final.toString('base64')}`;
+  return `data:image/png;base64,${final.toString('base64')}`;
 }
 
 router.post('/recording-grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {

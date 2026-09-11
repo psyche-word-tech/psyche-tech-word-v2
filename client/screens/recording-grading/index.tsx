@@ -9,6 +9,7 @@ import {
   TextInput,
   Platform,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -294,7 +295,7 @@ export default function RecordingGradingScreen() {
                   <Text className="text-base font-semibold text-gray-800 mb-3">卷面标注（点击可查看批注位置）</Text>
                   {markedImages.length > 0 ? (
                     markedImages.map((img, idx) => (
-                      <Image key={idx} source={{ uri: img }} className="w-full h-[520px] rounded-xl bg-white mb-3" resizeMode="contain" />
+                      <Image key={idx} source={{ uri: img }} style={styles.markedImage} resizeMode="contain" />
                     ))
                   ) : (
                     <Text className="text-sm text-gray-400">暂未生成标注图</Text>
@@ -348,3 +349,13 @@ export default function RecordingGradingScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  markedImage: {
+    width: '100%',
+    height: 520,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    marginBottom: 12,
+  },
+});
