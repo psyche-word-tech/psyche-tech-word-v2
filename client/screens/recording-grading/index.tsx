@@ -172,7 +172,7 @@ export default function RecordingGradingScreen() {
         <View className="w-8" />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         {/* 1. 上传卷子 */}
         <View className="bg-white rounded-xl p-4 mb-4">
           <Text className="text-base font-semibold text-gray-800 mb-3">1. 上传卷子图片</Text>
@@ -353,7 +353,7 @@ export default function RecordingGradingScreen() {
 const styles = StyleSheet.create({
   markedImage: {
     width: '100%',
-    height: 520,
+    height: 340,
     borderRadius: 12,
     backgroundColor: '#fff',
     marginBottom: 12,
