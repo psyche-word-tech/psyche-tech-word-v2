@@ -332,9 +332,15 @@ export default function EssayGradingScreen() {
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>主观题批改</Text>
-          <TouchableOpacity onPress={() => router.push('/batch-grading')} style={styles.batchButton}>
-            <Ionicons name="layers-outline" size={24} color="#4CAF50" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => router.push('/recording-grading')} style={[styles.batchButton, { marginRight: 12 }]}>
+              <Ionicons name="create-outline" size={24} color="#4F46E5" />
+              <Text style={styles.headerActionText}>录题</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/batch-grading')} style={styles.batchButton}>
+              <Ionicons name="layers-outline" size={24} color="#4CAF50" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 图片选择区域 */}
@@ -661,6 +667,17 @@ const styles = StyleSheet.create({
   },
   batchButton: {
     padding: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerActionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#4F46E5',
+    marginTop: 1,
+    textAlign: 'center',
   },
   headerTitle: {
     fontSize: 18,

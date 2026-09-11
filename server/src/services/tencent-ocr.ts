@@ -26,7 +26,7 @@ const ENDPOINT = `https://${HOST}`;
 
 // ---------- 腾讯云 TC3-HMAC-SHA256 签名 ----------
 function hmacSha256(key: Buffer | string, msg: string): Buffer {
-  return createHmac('sha256', key).update(msg).digest();
+  return createHmac('sha256', Buffer.isBuffer(key) ? new Uint8Array(key) : key).update(msg).digest();
 }
 
 function sha256Hex(msg: string): string {

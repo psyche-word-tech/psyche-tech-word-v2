@@ -592,7 +592,7 @@ ${noteLine}
   }
 
   // 解析 JSON 响应
-  let gradingResult: GradingResult;
+  let gradingResult: GradingResult = {} as GradingResult;
   // 写入文件日志（无论如何解析都记录）
   const fs = await import('fs');
   try {
@@ -1179,6 +1179,281 @@ router.get('/:id', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   } catch (error: any) {
     console.error('获取批改详情失败:', error);
     res.status(500).json({ success: false, error: error.message || '获取失败' });
+  }
+});
+
+// ==================== 录题模式（逐空判分） ====================
+
+const RECORDING_MAX_PAGES = 6; // 一份卷子最多 6 页
+
+interface RecordingBlank {
+  page: number;          // 第几页（0 起）
+  part: string;          // 大题标题，如"一、重点单词"
+  term: string;          // 题干/词条
+  student_answer: string; // 学生作答
+  reference_answer: string; // 标准答案
+  is_correct: boolean;   // 对错
+  points: number;        // 该空分值（从题目要求识别）
+  gained: number;        // 该空得分
+  note: string;          // 简单点评
+  bbox?: [number, number, number, number]; // x1,y1,x2,y2（图内坐标）
+}
+
+interface RecordingResult {
+  blanks: RecordingBlank[];
+  total_score: number;
+  max_score: number;
+  comments: string;
+}
+
+function normalizeRecording(g: any): RecordingResult {
+  const blanks = (Array.isArray(g.blanks) ? g.blanks : [])
+    .map((b: any) => ({
+      page: Number(b.page ?? 0) || 0,
+      part: String(b.part ?? ''),
+      term: String(b.term ?? ''),
+      student_answer: String(b.student_answer ?? ''),
+      reference_answer: String(b.reference_answer ?? ''),
+      is_correct: !!b.is_correct,
+      points: Number(b.points ?? 0) || 0,
+      gained: Number(b.gained ?? 0) || 0,
+      note: String(b.note ?? ''),
+      bbox: Array.isArray(b.bbox) && b.bbox.length === 4 ? b.bbox.map(Number) : undefined,
+    }));
+  const total_score = Number(g.total_score ?? (Array.isArray(g.blanks) ? g.blanks.reduce((s: number, b: any) => s + (Number(b.gained) || 0), 0) : 0)) || 0;
+  const max_score = Number(g.max_score ?? 0) || 0;
+  return { blanks, total_score, max_score, comments: String(g.comments ?? '') };
+}
+
+// 读取图片元数据尺寸（供前端按比例叠加 bbox）
+async function getImageSize(imageBase64: string): Promise<{ width: number; height: number }> {
+  const data = imageBase64.split(',')[1] || imageBase64;
+  const metadata = await sharp(Buffer.from(data, 'base64')).metadata();
+  return { width: metadata.width || 800, height: metadata.height || 600 };
+}
+
+// 用千问 VL 读卷子，识别每空分值 + 学生答案 + 标准答案判对错
+async function callRecordingQwenVL(
+  images: string[],
+  referenceAnswer: string,
+  maxScore: number,
+  lang: 'en' | 'ch',
+): Promise<RecordingResult> {
+  const prompt = `你是一位严谨、专业的老师。请批改这张试卷，逐空判分。
+
+## 任务
+1. 仔细阅读图片中的每道题：识别每个"填空处"（空白/下划线/作答处）、该空所属的大题（如"一、重点单词"）与题干。
+2. 识别学生作答：读出学生在每个空里填写的内容（${lang === 'ch' ? '答案可能是中文或英文' : '答案可能是英文，也可能夹中文'}）。
+3. 识别分值：从题目要求（如"每空2分"）、总分或用最大分${maxScore}合理推断每个空的满分分值；未标注时按常见惯例每空计分，使各空分值之和尽量等于最大分${maxScore}。
+4. 判分：对照参考答案，判断每个空的对错。正确答案不得分；错误、空着、部分正确相应扣分但尽量按空给分。
+5. 每个空返回该答案在图片中的大致位置 bbox（[x1,y1,x2,y2]，相对那张图片像素坐标，用于画 ✓/✗）。页码 page 从 0 开始。
+
+## 参考答案（${referenceAnswer ? '以此为准' : '未提供，请根据题干与知识推断正确写法'}）
+${referenceAnswer || '（未提供，请自行判断正确写法）'}
+
+## 强制要求
+- 不放过任何一个空；空着未作答也算一空（is_correct=false，gained=0）。
+- is_correct 只在学生答案与参考答案语义/拼写一致时为 true。
+- points 为该空满分，gained 为该空实得（可部分得分），gained 不超过 points。
+- total_score = 所有空 gained 之和；max_score 为整卷满分。
+
+## 输出格式（JSON）
+{"max_score":${maxScore},"total_score":0,"comments":"总体简评","blanks":[{"page":0,"part":"大题名","term":"题干/词条","student_answer":"学生答案","reference_answer":"标准答案","is_correct":true,"points":2,"gained":2,"note":"点评","bbox":[0,0,0,0]}]}
+
+## 严格输出要求
+你只能输出一个合法的 JSON 对象，禁止输出任何解释、前言、思考过程、批注或 markdown 代码块，禁止在 JSON 外附加任何文字。`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 300000);
+  let response;
+  try {
+    response = await fetch(getQwenApiUrl(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getQwenApiKey()}`,
+      },
+      body: JSON.stringify({
+        model: getQwenModel(),
+        messages: [
+          {
+            role: 'user',
+            content: [
+              ...images.flatMap((img, i) => [
+                { type: 'text', text: `（第${i + 1}页图片，该页空格的 page=${i}）` },
+                { type: 'image_url', image_url: { url: img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}` } },
+              ]),
+              { type: 'text', text: prompt },
+            ],
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 4096,
+        enable_thinking: false,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    throw err.name === 'AbortError' ? new Error('千问 API 调用超时') : err;
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`千问 API 调用失败: ${response.status} - ${errorText}`);
+  }
+
+  const data = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error('千问 API 返回内容为空');
+
+  const fs = await import('fs');
+  try { fs.writeFileSync('/tmp/recording-qwen-raw.log', content); } catch {}
+
+  let result: any;
+  try {
+    result = JSON.parse(content);
+  } catch {
+    let parsed = false;
+    const fenced = content.match(/```json\s*([\s\S]*?)\s*```/);
+    const obj = content.match(/\{[\s\S]*\}/);
+    for (const cand of [fenced?.[1], obj?.[0], repairJsonTrailing(content)].filter(Boolean)) {
+      try { result = JSON.parse(cand as string); parsed = true; break; } catch {}
+    }
+    if (!parsed) throw new Error('无法解析千问 API 返回的 JSON');
+  }
+  return normalizeRecording(result);
+}
+
+// 在卷子标注图上画 ✓/✗ 与得分
+async function annotateRecordingImage(
+  imageBase64: string,
+  blanks: RecordingBlank[],
+): Promise<string> {
+  const data = imageBase64.split(',')[1] || imageBase64;
+  const buffer = Buffer.from(data, 'base64');
+  const metadata = await sharp(buffer).metadata();
+  let width = metadata.width || 800;
+  let height = metadata.height || 600;
+
+  let processedBuffer = buffer;
+  let coordScale = 1;
+  if (width > 1200 || height > 1800) {
+    coordScale = Math.min(1200 / width, 1800 / height);
+    width = Math.floor(width * coordScale);
+    height = Math.floor(height * coordScale);
+    processedBuffer = await sharp(buffer).resize(width, height).toBuffer();
+  }
+
+  const scale = Math.min(width, height) / 1000;
+  let svg = '';
+  let no = 0;
+  for (const b of blanks) {
+    no += 1;
+    let x = 0, y = 0, w = 120 * scale, h = 60 * scale, hasPos = false;
+    let d = b;
+    if (b.bbox && b.bbox.length === 4) {
+      const [x1, y1, x2, y2] = (b as any).bbox;
+      if (x2 > x1 && y2 > y1 && x2 - x1 < width && y2 - y1 < height) {
+        x = x1 * coordScale; y = y1 * coordScale; w = (x2 - x1) * coordScale; h = (y2 - y1) * coordScale;
+        hasPos = true;
+      }
+    }
+    if (!hasPos) {
+      // 估算：按顺序排布在最左侧一列
+      x = 30 * scale;
+      y = (60 + no * 90) * scale;
+      w = 120 * scale; h = 40 * scale;
+    }
+
+    const isCorrect = !!d.is_correct;
+    const color = isCorrect ? '#16A34A' : '#DC2626'; // 正确绿，错误红
+    const mark = isCorrect ? '✓' : '✗';
+    const markSize = Math.max(26, Math.min(46, h * 0.9)) * scale;
+
+    // ✓/✗ 标记（放答案右侧留白，若溢出则放左侧）
+    let mx = x + w + 12 * scale;
+    let my = y + h / 2;
+    if (mx + 30 * scale > width) mx = x - 30 * scale;
+
+    svg += `
+      <text x="${mx}" y="${my + markSize * 0.35}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-size="${markSize}" fill="${color}" font-weight="bold" text-anchor="middle">${mark}</text>
+      <text x="${mx}" y="${my - markSize + 6 * scale}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-size="${Math.max(12, 16 * scale)}" fill="${color}" text-anchor="middle" font-weight="bold">${d.gained}/${d.points}</text>
+    `;
+
+    // 错误时在答案附近给出正确写法
+    if (!isCorrect && d.reference_answer) {
+      const cx = x + w / 2;
+      const cyv = y + h + 14 * scale;
+      if (cyv < height) {
+        svg += `<text x="${cx}" y="${cyv}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-size="${Math.max(13, 18 * scale)}" fill="#DC2626" text-anchor="middle" font-weight="bold">${d.reference_answer}</text>`;
+      }
+    }
+  }
+
+  const final = await sharp(processedBuffer)
+    .composite([{ input: Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${svg}</svg>`), top: 0, left: 0 }])
+    .jpeg({ quality: 82 })
+    .toBuffer();
+  return `data:image/jpeg;base64,${final.toString('base64')}`;
+}
+
+router.post('/recording-grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId;
+    const { images, image, reference_answer = '', max_score = 0, lang = 'en' } = req.body;
+
+    let imageList: string[] = [];
+    if (Array.isArray(images) && images.length) imageList = images;
+    else if (image) imageList = [image];
+    if (!imageList.length) {
+      return res.status(400).json({ success: false, error: '缺少试卷图片' });
+    }
+    imageList = imageList.slice(0, RECORDING_MAX_PAGES);
+
+    console.log('[recording-grade] 开始录题判分，页数=', imageList.length, 'lang=', lang);
+
+    // 1. 逐页压缩 + 记录尺寸
+    const pages: { base64: string; size: { width: number; height: number } }[] = [];
+    for (let p = 0; p < imageList.length; p++) {
+      const compressed = await compressImage(imageList[p]);
+      const size = await getImageSize(compressed);
+      pages.push({ base64: compressed, size });
+    }
+    const here = pages.map((pg) => pg.base64);
+
+    // 2. 千问 VL 读卷判分
+    console.log('[recording-grade] 调用千问 VL 读卷判分...');
+    const result = await callRecordingQwenVL(here, reference_answer, Number(max_score) || 0, lang as 'en' | 'ch');
+    console.log('[recording-grade] 千问返回', result.blanks.length, '个空，总分', result.total_score);
+
+    // 3. 逐页标注
+    const markedImages: string[] = [];
+    for (let p = 0; p < pages.length; p++) {
+      const pageBlanks = result.blanks.filter((b) => b.page === p);
+      markedImages.push(await annotateRecordingImage(pages[p].base64, pageBlanks));
+    }
+
+    // 4. 保存到数据库
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.from('essay_grading_results').insert({
+        user_id: String(userId),
+        original_image: JSON.stringify(imageList),
+        marked_image: JSON.stringify(markedImages),
+        reference_answer: reference_answer || '',
+        grading_result: result,
+        max_score: result.max_score || Number(max_score) || 0,
+      });
+    } catch (e) {
+      console.error('[recording-grade] 保存失败:', e);
+    }
+
+    res.json({ success: true, data: { grading: result, marked_images: markedImages } });
+  } catch (error: any) {
+    console.error('[recording-grade] 录题判分失败:', error);
+    res.status(500).json({ success: false, error: error.message || '录题判分失败' });
   }
 });
 

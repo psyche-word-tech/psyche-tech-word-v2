@@ -549,3 +549,19 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **症状**：改历史/复杂输入时 HTTP 500 `{"code":"invalid_parameter_error","message":"Model output became abnormal while generating a JSON response for response_format..."}`。这是**鉴权已通过**（说明 Token Plan Key 配对了），卡在千问 3.8-max 在 `response_format:{type:'json_object'}` 下生成中途输出异常、JSON 不完整被强制中断。
 - **修复**：去掉 `callQwenVL` 及各处千问请求体里的 `response_format:{type:'json_object'}`（约 L556）。靠 prompt 强制"只输出合法 JSON" + 后端既有容错（repairJsonTrailing / markdown 包裹提取 / 多候选解析）兜底。实测去掉后 `qwen3.8-max` 返回 HTTP 200 合法 JSON（无中断）。
 - **注意**：reasoning 系模型（qwen3.8-max 默认 enable_thinking 即使显式 false）配 `response_format:json_object` 在多图/长上下文中容易触发该 400；普通文本对话也可能偶发。凡调用 qwen3.8-max 且需要 JSON 结构化的场景，倾向用 prompt 强约束而非 response_format。
+
+## 新增功能：录题判分（recording-grading，填空/词块/变形/翻译等逐空卷）
+
+- **定位**：批改页（essay-grading）顶部加"录题"文字按钮 → `router.push('/recording-grading')`。用于批量判分"有多个填空"的卷子（重点单词/词块/变形/句子翻译，中英答案皆可）。
+- **前端** `client/screens/recording-grading/index.tsx` + 路由 `client/app/recording-grading.tsx`（已加 `_layout.tsx` Stack.Screen）。
+  - 上传最多 6 页卷子图（拍照/相册），上传前 `manipulateAsync` 压到宽 1200、质量 0.7 JPEG（避免 base64 过大）。
+  - 设置：答案语言 `en`/`ch`、卷面总分（默认 60）、标准答案（可留空，模型按题干推断）。
+  - 请求 `POST /api/v1/essay-grading/recording-grade`，body `{images[], reference_answer, max_score, lang}`，`AbortSignal.timeout(300000)`。
+  - 展示：总分、标注图（每页一张，`marked_images[]`）、总体评语、逐空列表（✓/✗ + 学生答案 + 正确写法 + gained/points + 题干）。
+- **后端** `server/src/routes/essay-grading.ts`：
+  - `router.post('/recording-grade')`：逐页 `compressImage` 得 base64 + `getImageSize` 记录尺寸 → `callRecordingQwenVL`（千问 VL 直接读卷子图）→ 逐页 `annotateRecordingImage` 画 ✓/✗ → 存 `essay_grading_results`（grading_result 存 JSON）。
+  - `callRecordingQwenVL(images, referenceAnswer, maxScore, lang)`：prompt 要求识别每个填空（page/part/term/student_answer/reference_answer/is_correct/points/gained/note/bbox[x1,y1,x2,y2]），按题目要求（"每空2分"）或最大分推断每空分值；**不给 response_format**（qwen3.8-max 触发 400），靠 prompt 强约束 + 多候选解析容错；返回前 `normalizeRecording` 归一化。
+  - `normalizeRecording`：blanks 逐字段 Number/String/布尔归一化，total_score 缺省回退为 gained 之和。
+  - `annotateRecordingImage(base64, blanks)`：blanks 需按 page 过滤后再调用（每页传该页 blanks）。图超 1200x1800 时按 `coordScale` 缩小并同步缩放 bbox。正确画绿✓+`gained/points`，错误画红✗ + 下方红字正确写法；SVG 字体 `DejaVu Sans, WenQuanYi Micro Hei`。
+  - 关键函数/常量：`RECORDING_MAX_PAGES=6`、`RecordingBlank`/`RecordingResult` 接口、`normalizeRecording`、`callRecordingQwenVL`、`annotateRecordingImage`、`getImageSize`（sharp metadata 读数）。
+- **注意**：`bbox` 是相对压缩后图片的坐标（千问看到的就是压缩图），标注与放大图同源坐标一致；千问未给 bbox 时估算到左列排布，定位会不准——真实卷建议让千问给准 bbox。
