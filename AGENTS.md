@@ -535,3 +535,12 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **修复（后端 limit）**：`server/src/index.ts` 把 `express.json({limit:'50mb'})` 与 `urlencoded` 提到 `200mb`，避免极端多张超限。
 - **不要开响应 gzip**：AGENTS.md 白屏历史明确——WebView 的 fetch 无法解压响应 gzip；压缩响应会重蹈白屏覆辙。响应端 `marked_images` 已被后端 compressImage(900px/65%) 压过，体积可控。
 - **验证**：重导产物后必须在 `server/public` 补 KaTeX 字体（见上一条经验），并 sync 到 server/public + git 提交推送，Railway 才生效。tsc 注意本项目有既有未修复错误 `word-detail(280) fetchMindmapCountsRef.current().catch`，与本次无关（pipeline `lint:all --quiet` 仍能通过）。
+
+## Token Plan（阿里云百炼订阅）Key 接入
+- **付费方式**：用户从百炼"免费"换到 **Token Plan 订阅**（`sk-sp-` 开头专属 Key），换取直接调用 `qwen3.8-max` 且免按量费。
+- **必须配套专用 Base URL**：Token Plan 的 `sk-sp-` Key **不能配官方向量通用端点**，要配 `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`。模型 ID 用 `qwen3.8-max`（套餐内）。
+- **`.env` 三项**：`QWEN_API_KEY`（sk-sp 专属）、`QWEN_API_URL`（token-plan 端点）、`QWEN_MODEL=qwen3.8-max`。
+- **两个 sk-sp Key 的坑**：用户先后给了两个 `sk-sp-H.DEPXLY.*` Key——第一个 `QLB2` 无效（401 invalid_api_key），第二个 `ybkw` 才有效（HTTP 200）。**接 Key 一定要实测**，不要轻信 Key 格式相同。
+- **`qwen3.8-max` 默认开启 reasoning**：实测响应含 `reasoning_content` + `reasoning_tokens`，会额外消耗 Credits（reаson输出token + 推理token双计费），比纯文本贵。
+- **重要**：`server/.env` 被 gitignore，不随代码上传。**线上 Railway 必须手动在 Variables 里同步 `QWEN_API_KEY`/`QWEN_API_URL`/`QWEN_MODEL` 三个变量**，否则线上仍用旧的免费 Key 走按量计费。
+- **服务稳定性**：沙箱会反复 Killed nodemon/多进程抢 5000，导致 service_probe 失败。务必先 `pkill -f "dist/index.js"` + 按 PID 清场，再 `setsid nohup node dist/index.js` 单实例启动，确认 `ss -tlnp|grep 5000` 只有 1 个 pid 再验证。
