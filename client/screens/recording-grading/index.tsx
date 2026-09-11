@@ -289,10 +289,17 @@ export default function RecordingGradingScreen() {
             </View>
 
             {result.blanks.length > 0 && (
-              <View className="flex-row flex-wrap mb-2">
-                {markedImages.map((img, idx) => (
-                  <Image key={idx} source={{ uri: img }} className="w-full h-[520px] rounded-xl bg-white mb-3" resizeMode="contain" />
-                ))}
+              <View className="mb-4">
+                <View className="bg-white rounded-xl p-4 mb-4">
+                  <Text className="text-base font-semibold text-gray-800 mb-3">卷面标注（点击可查看批注位置）</Text>
+                  {markedImages.length > 0 ? (
+                    markedImages.map((img, idx) => (
+                      <Image key={idx} source={{ uri: img }} className="w-full h-[520px] rounded-xl bg-white mb-3" resizeMode="contain" />
+                    ))
+                  ) : (
+                    <Text className="text-sm text-gray-400">暂未生成标注图</Text>
+                  )}
+                </View>
               </View>
             )}
 

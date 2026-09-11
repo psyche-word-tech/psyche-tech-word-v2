@@ -1459,7 +1459,10 @@ router.post('/recording-grade', optionalAuthMiddleware, async (req: AuthRequest,
     const markedImages: string[] = [];
     for (let p = 0; p < pages.length; p++) {
       const pageBlanks = result.blanks.filter((b) => b.page === p);
-      markedImages.push(await annotateRecordingImage(pages[p].base64, pageBlanks, pages[p].words));
+      console.log(`[recording-grade] 标注第${p + 1}页，${pageBlanks.length}个空，OCR词${pages[p].words.length}个`);
+      const marked = await annotateRecordingImage(pages[p].base64, pageBlanks, pages[p].words);
+      console.log(`[recording-grade] 第${p + 1}页标注完成，base64长度=${marked.length}`);
+      markedImages.push(marked);
     }
 
     // 4. 保存到数据库
