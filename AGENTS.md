@@ -528,3 +528,10 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **修复（字体）**：`cp client/node_modules/katex/dist/fonts/* client/dist/_expo/static/css/fonts/`，再同步到 `server/public/_expo/static/css/fonts/`（共 60 个）。**每次 web 导出后都要补这一步**。
 - **关键排查经验**：esbuild/metro 会把中文文案压缩成 `\uXXXX` 转义。grep 产物查"主观题批改"明文找不到不代表产物旧——要 grep `\\u4e3b\\u89c2\\u9898\\u6279\\u6539`（主观题批改）等转义串确认。判断产物是否包含新功能优先对比 entry hash 与 `grep -cP '\\uXXXX'`。
 - **部署链路**：线上前端由 `server/public/`（git 跟踪）驱动；`prod_build.sh` 的 `expo export --platform all` 不产 web、不刷新 server/public。**改前端后必须本地 `expo export --platform web` + 补字体 + 同步到 `server/public` + git 提交推送**，Railway 才会用新版。确认本地 `main` 无 `ahead`（`git status -sb`）避免漏推。
+
+## 移动端 fail to fetch（单张偶发、多张必现）/ 上传体积与大请求体
+- **根因**：前端 `essay-grading/handleGrade` 直接把**原始照片 base64** 塞进 JSON body（`fetch(uri)` 读原始图）。手机拍的图 base64 单张 10~20MB，最多 3 页可达 30~60MB，逼近后端 `express.json limit 50mb`，移动网络上传统计/连接极易 `fail to fetch`。电脑宽带高、图小，故沙箱与电脑访问都正常，只有手机出问题。
+- **修复（前端压缩）**：`handleGrade` 里逐张 `manipulateAsync(uri,[{resize:{width:1000}}],{compress:0.6,format:SaveFormat.JPEG})`（expo-image-manipulator，`npx expo install` 装的 SDK54 兼容版 `~14.0.8`）压缩后再转 base64。单张降到 ~100~300KB，3 张 1MB 内，移动网络稳定。`image-manipulator` 的 `manipulateAsync` 返回 `{uri}`，再 `fetch(uri)`+FileReader 转 dataURL。
+- **修复（后端 limit）**：`server/src/index.ts` 把 `express.json({limit:'50mb'})` 与 `urlencoded` 提到 `200mb`，避免极端多张超限。
+- **不要开响应 gzip**：AGENTS.md 白屏历史明确——WebView 的 fetch 无法解压响应 gzip；压缩响应会重蹈白屏覆辙。响应端 `marked_images` 已被后端 compressImage(900px/65%) 压过，体积可控。
+- **验证**：重导产物后必须在 `server/public` 补 KaTeX 字体（见上一条经验），并 sync 到 server/public + git 提交推送，Railway 才生效。tsc 注意本项目有既有未修复错误 `word-detail(280) fetchMindmapCountsRef.current().catch`，与本次无关（pipeline `lint:all --quiet` 仍能通过）。

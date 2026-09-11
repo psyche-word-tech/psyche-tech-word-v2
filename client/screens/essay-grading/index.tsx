@@ -4,6 +4,7 @@ import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useState } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 
@@ -120,10 +121,15 @@ export default function EssayGradingScreen() {
 
     setLoading(true);
     try {
-      // 逐张读取 base64（支持多页）
+      // 逐张压缩 + 读取 base64（支持多页），显著减小上传体积（移动网络稳定）
       const images: string[] = [];
       for (const uri of selectedImages) {
-        const imageResponse = await fetch(uri);
+        const compressed = await manipulateAsync(
+          uri,
+          [{ resize: { width: 1000 } }],
+          { compress: 0.6, format: SaveFormat.JPEG },
+        );
+        const imageResponse = await fetch(compressed.uri);
         const imageBlob = await imageResponse.blob();
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -965,6 +971,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '700',
+  },
+  pointHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   pointTitle: {
     flex: 1,
