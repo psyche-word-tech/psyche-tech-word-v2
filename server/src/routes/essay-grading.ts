@@ -1330,6 +1330,7 @@ ${referenceAnswer || '（未提供，请自行判断正确写法）'}
 async function annotateRecordingImage(
   imageBase64: string,
   blanks: RecordingBlank[],
+  ocrWords: OCRWord[] = [],
 ): Promise<string> {
   const data = imageBase64.split(',')[1] || imageBase64;
   const buffer = Buffer.from(data, 'base64');
@@ -1353,7 +1354,18 @@ async function annotateRecordingImage(
     no += 1;
     let x = 0, y = 0, w = 120 * scale, h = 60 * scale, hasPos = false;
     let d = b;
-    if (b.bbox && b.bbox.length === 4) {
+    // 优先：用学生答案文本在 OCR 词表中精确定位该空所在词框（切断全局 index 换算页内，因每页单独传入）
+    if (ocrWords.length > 0 && (d.student_answer || d.reference_answer)) {
+      const hit = findMatchingOCRWord(d.student_answer || d.reference_answer || '', ocrWords);
+      if (hit) {
+        x = (hit.x ?? 0) * coordScale;
+        y = (hit.y ?? 0) * coordScale;
+        w = (hit.width ?? 0) * coordScale;
+        h = (hit.height ?? 0) * coordScale;
+        if (w > 1 && h > 1) hasPos = true;
+      }
+    }
+    if (!hasPos && b.bbox && b.bbox.length === 4) {
       const [x1, y1, x2, y2] = (b as any).bbox;
       if (x2 > x1 && y2 > y1 && x2 - x1 < width && y2 - y1 < height) {
         x = x1 * coordScale; y = y1 * coordScale; w = (x2 - x1) * coordScale; h = (y2 - y1) * coordScale;
@@ -1414,12 +1426,27 @@ router.post('/recording-grade', optionalAuthMiddleware, async (req: AuthRequest,
 
     console.log('[recording-grade] 开始录题判分，页数=', imageList.length, 'lang=', lang);
 
-    // 1. 逐页压缩 + 记录尺寸
-    const pages: { base64: string; size: { width: number; height: number } }[] = [];
+    // 1. 逐页压缩 + 词级 OCR（腾讯云词级坐标优先 → PaddleOCR 回退），拿到每页词框用于精确标注
+    const ocrLang = lang === 'ch' ? 'ch' : 'en';
+    const ocrEngine = (process.env.OCR_ENGINE || 'tencent') as 'tencent' | 'paddle';
+    const pages: { base64: string; size: { width: number; height: number }; words: OCRWord[] }[] = [];
     for (let p = 0; p < imageList.length; p++) {
       const compressed = await compressImage(imageList[p]);
       const size = await getImageSize(compressed);
-      pages.push({ base64: compressed, size });
+      let ocrResult: { success: boolean; words: OCRWord[]; error?: string };
+      if (ocrEngine === 'tencent') {
+        try {
+          const wc = await callTencentOcr(compressed, ocrLang);
+          ocrResult = { success: true, words: wc };
+        } catch (e: any) {
+          console.log(`[recording-grade] ⚠️ 腾讯云 OCR 第${p + 1}页失败（${e.message}），回退 PaddleOCR`);
+          ocrResult = await callPaddleOCR(compressed, ocrLang);
+        }
+      } else {
+        ocrResult = await callPaddleOCR(compressed, ocrLang);
+      }
+      if (!ocrResult.success) console.warn(`[recording-grade] 第${p + 1}页 OCR 失败：`, ocrResult.error);
+      pages.push({ base64: compressed, size, words: ocrResult.words || [] });
     }
     const here = pages.map((pg) => pg.base64);
 
@@ -1428,11 +1455,11 @@ router.post('/recording-grade', optionalAuthMiddleware, async (req: AuthRequest,
     const result = await callRecordingQwenVL(here, reference_answer, Number(max_score) || 0, lang as 'en' | 'ch');
     console.log('[recording-grade] 千问返回', result.blanks.length, '个空，总分', result.total_score);
 
-    // 3. 逐页标注
+    // 3. 逐页标注：用该页 OCR 词框精确定位答案，画 ✓/✗（贴字，类似英语作文标注）
     const markedImages: string[] = [];
     for (let p = 0; p < pages.length; p++) {
       const pageBlanks = result.blanks.filter((b) => b.page === p);
-      markedImages.push(await annotateRecordingImage(pages[p].base64, pageBlanks));
+      markedImages.push(await annotateRecordingImage(pages[p].base64, pageBlanks, pages[p].words));
     }
 
     // 4. 保存到数据库
