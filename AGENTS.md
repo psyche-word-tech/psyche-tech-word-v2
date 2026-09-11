@@ -544,3 +544,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **`qwen3.8-max` 默认开启 reasoning**：实测响应含 `reasoning_content` + `reasoning_tokens`，会额外消耗 Credits（reаson输出token + 推理token双计费），比纯文本贵。
 - **重要**：`server/.env` 被 gitignore，不随代码上传。**线上 Railway 必须手动在 Variables 里同步 `QWEN_API_KEY`/`QWEN_API_URL`/`QWEN_MODEL` 三个变量**，否则线上仍用旧的免费 Key 走按量计费。
 - **服务稳定性**：沙箱会反复 Killed nodemon/多进程抢 5000，导致 service_probe 失败。务必先 `pkill -f "dist/index.js"` + 按 PID 清场，再 `setsid nohup node dist/index.js` 单实例启动，确认 `ss -tlnp|grep 5000` 只有 1 个 pid 再验证。
+
+## qwen3.8-max + response_format:json_object 产生 400 JSON 中断
+- **症状**：改历史/复杂输入时 HTTP 500 `{"code":"invalid_parameter_error","message":"Model output became abnormal while generating a JSON response for response_format..."}`。这是**鉴权已通过**（说明 Token Plan Key 配对了），卡在千问 3.8-max 在 `response_format:{type:'json_object'}` 下生成中途输出异常、JSON 不完整被强制中断。
+- **修复**：去掉 `callQwenVL` 及各处千问请求体里的 `response_format:{type:'json_object'}`（约 L556）。靠 prompt 强制"只输出合法 JSON" + 后端既有容错（repairJsonTrailing / markdown 包裹提取 / 多候选解析）兜底。实测去掉后 `qwen3.8-max` 返回 HTTP 200 合法 JSON（无中断）。
+- **注意**：reasoning 系模型（qwen3.8-max 默认 enable_thinking 即使显式 false）配 `response_format:json_object` 在多图/长上下文中容易触发该 400；普通文本对话也可能偶发。凡调用 qwen3.8-max 且需要 JSON 结构化的场景，倾向用 prompt 强约束而非 response_format。

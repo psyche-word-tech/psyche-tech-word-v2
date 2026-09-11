@@ -565,7 +565,6 @@ ${noteLine}
         temperature: 0.3,
         max_tokens: 2560,
         enable_thinking: false,
-        response_format: { type: 'json_object' },
       }),
       signal: controller.signal,
     });
