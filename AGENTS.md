@@ -360,6 +360,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 7. **ESM 非法 require**：`require('fs')` → `fs.existsSync`（已导入）
 8. **模型文件丢失（已永久修复）**：Express 直接从 `server/models/` 提供模型文件（`app.use('/models', express.static(...))`），不再依赖 `server/public/models/`。无论 public 目录如何重建，模型文件都不受影响。
 9. **模型文件返回 HTML（已修复）**：Express 添加 `/models` 路由早期返回，避免 SPA fallback 拦截
+10. **录题页面看不到标注图（根因 WebView 缓存，已修复）**：后端 `/recording-grade` 实测始终返回 `marked_images`（有效 jpeg base64），`server/public` 的 entry 也含最新渲染（总分卡下方紧跟 `h-[520px]` 标注图，再 show 评语），但鸿蒙 WebView/浏览器会缓存同名 entry JS，导致部署更新后仍显示旧 UI（无标注图 + 逐空列表截断）。**修复**：`server/src/index.ts` 静态资源中间件对所有响应加 `Cache-Control: no-store`（此前仅为 `max-age=0`，WebView 仍可能按启发式缓存命中），彻底杜绝复用旧 bundle。改完后需重新 `node build.js` + 单实例重启 `node dist/index.js`，并用 `curl -sI / | grep -i cache` 验证头为 `no-store`。
 
 ## 新增功能：教师批改系统
 

@@ -41,7 +41,14 @@ app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 
 // Serve frontend static files
-app.use(express.static(path.join(__dirname, '../public')));
+// 禁用缓存：WebView/浏览器可能复用旧 bundle，导致部署成功后仍看不到更新
+app.use(
+  express.static(path.join(__dirname, '../public'), {
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'no-store');
+    },
+  })
+);
 
 // Serve face-api.js models from server/models/ (not public/models/)
 // This ensures models are never deleted when public/ is rebuilt
