@@ -4,6 +4,7 @@ import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { useState, useEffect } from 'react';
 import { MathText } from '@/components/MathText';
+import { MathView } from '@/components/MathView';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
@@ -355,7 +356,7 @@ export default function SearchScreen() {
                       {q.answer && (
                         <View style={styles.answerBlock}>
                           <Text style={styles.answerTitle}>答案</Text>
-                          <MathText text={q.answer} style={styles.answerContent} />
+                          <MathView text={q.answer} style={styles.answerContent} />
                         </View>
                       )}
 
@@ -369,7 +370,7 @@ export default function SearchScreen() {
                       {q.solution && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>解答</Text>
-                          <MathText text={q.solution} style={styles.blockContent} />
+                          <MathView text={q.solution} style={styles.blockContent} />
                         </View>
                       )}
 

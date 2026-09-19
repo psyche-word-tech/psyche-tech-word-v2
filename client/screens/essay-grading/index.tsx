@@ -434,21 +434,23 @@ export default function EssayGradingScreen() {
             editable={!loading}
           />
 
-          {subject === 'other' && (
-            <>
-              <Text style={styles.fieldLabel}>打分标准</Text>
-              <TextInput
-                style={styles.textInput}
-                multiline
-                numberOfLines={5}
-                placeholder="请输入打分标准，如：要点完整得4分、语言准确得3分、逻辑清晰得2分...（模型将按此标准逐点评分）"
-                value={gradingStandard}
-                onChangeText={setGradingStandard}
-                textAlignVertical="top"
-                editable={!loading}
-              />
-            </>
-          )}
+          <Text style={styles.fieldLabel}>
+            {subject === 'other' ? '打分标准' : '批改标准（扣分规则，可选）'}
+          </Text>
+          <TextInput
+            style={styles.textInput}
+            multiline
+            numberOfLines={5}
+            placeholder={
+              subject === 'other'
+                ? '请输入打分标准，如：要点完整得4分、语言准确得3分、逻辑清晰得2分...（模型将按此标准逐点评分）'
+                : '请输入批改/扣分标准，如：一个语法错误扣1分、一个句型错误扣1分、跑题扣5分...（模型将对照参考答案并按此标准扣分）'
+            }
+            value={gradingStandard}
+            onChangeText={setGradingStandard}
+            textAlignVertical="top"
+            editable={!loading}
+          />
 
           <Text style={styles.fieldLabel}>
             {subject === 'other' ? '参考答案' : '参考答案（可选）'}

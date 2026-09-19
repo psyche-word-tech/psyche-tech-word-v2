@@ -361,6 +361,18 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 8. **模型文件丢失（已永久修复）**：Express 直接从 `server/models/` 提供模型文件（`app.use('/models', express.static(...))`），不再依赖 `server/public/models/`。无论 public 目录如何重建，模型文件都不受影响。
 9. **模型文件返回 HTML（已修复）**：Express 添加 `/models` 路由早期返回，避免 SPA fallback 拦截
 10. **录题页面看不到标注图（根因 WebView 缓存，已修复）**：后端 `/recording-grade` 实测始终返回 `marked_images`（有效 jpeg base64），`server/public` 的 entry 也含最新渲染（总分卡下方紧跟 `h-[520px]` 标注图，再 show 评语），但鸿蒙 WebView/浏览器会缓存同名 entry JS，导致部署更新后仍显示旧 UI（无标注图 + 逐空列表截断）。**修复**：`server/src/index.ts` 静态资源中间件对所有响应加 `Cache-Control: no-store`（此前仅为 `max-age=0`，WebView 仍可能按启发式缓存命中），彻底杜绝复用旧 bundle。改完后需重新 `node build.js` + 单实例重启 `node dist/index.js`，并用 `curl -sI / | grep -i cache` 验证头为 `no-store`。
+11. **数学公式显示为裸 LaTeX / 搜题报"图片无法识别"（已修复）**：两个根因。(a) 渲染：`MathView` 只认 `$...$`/`$$...$$`，后端返回裸 LaTeX（`\boxed{\dfrac{3}{2}}`）时被当纯文本转义。**修复**：`client/components/MathView.tsx` 增加 `normalizeMathDelimiters`——`\(...\)`/`\[...\]` 归一化为 `$`/`$$`；无 `$` 但含 LaTeX 命令时整段包成 `$$...$$`。(b) 解析：让模型输出 LaTeX 后，JSON 里未转义反斜杠中 `\frac`(\f)、`\boxed`(\b)、`\right`(\r)、`\text`(\t)、`\nu`(\n) 恰好撞 JSON 合法转义，`JSON.parse` 报 "Bad escaped character"，兜底成"图片无法识别"且**该失败结果还被缓存**。**修复**：`server/src/routes/solve-problem.ts` 的 `fixJsonLaTeX` 先用 `LATEX_ESCAPE_FIX`（负向后行断言）转义已知 LaTeX 命令反斜杠再修控制字符；读缓存忽略 `question_text==='图片内容无法识别'` 的占位行；写缓存跳过占位行。改后端必须 `node build.js` + 单实例重启才生效。
+12. **长题（多问证明题）搜题仍报"无法识别"=模型输出被截断（已修复）**：症状为日志 `LaTeX fix also failed: Unterminated string ... position≈响应末尾`，即 JSON 尾部字符串未闭合=输出超 token 上限被拦腰截断。注意 `coze-coding-dev-sdk` 的 `LLMConfig` **不支持 max_tokens**（invoke 不透传，强加会 tsc 报错），不能靠调大 token。**修复**：`solve-problem.ts` 增加 `closeTruncatedJson` 截断自愈（扫描补未闭合引号+配对括号，salvaging 已完整字段）作为 LaTeX 修复失败后的兜底；prompt 要求 solution/analysis 简洁、并把 `answer` 字段顺序提前到 `solution` 之前（截断时保住答案）。解析失败时还会把原始/修复串 dump 到 `/tmp/solve_raw.json` 等供排查。
+13. **AI 解答混入"不对/哦/我写错了"等自我纠正碎念（已修复）**：模型把思考过程泄漏进正式解答，不适合给学生。**修复**：`solve-problem.ts` 的 system/user prompt 增加"答题风格"硬约束——解答必须是严谨、肯定、可直接呈现给学生的最终版本，严禁自我怀疑/自我纠正/口语化碎念、严禁暴露思考过程。注意：esbuild 产物把中文转成**大写** `\uXXXX`，校验 dist 是否含新文案时要用大写转义或 node `includes`，直接 grep 中文/小写转义会误判为缺失。另：预览脚本在"服务已运行"分支只重建不重启，改后端后必须 `pkill -9 -f "node dist/index.js"` 再启动，否则跑旧代码。
+
+## 首页（study/index.tsx）简化
+
+- **顶部**：保留大图背景 `iconRock` + 右上角四个功能按钮（搜索/历史/能力地图/添加），按钮与功能不变（`searchButton` 半透明圆底）。
+- **去掉了刻字（engrave）功能**：不再渲染 `iconRock` 上的刻字文字展示，也不再点击跳 `/engrave`。
+- **下半区**：由 2×2 图片网格（regionA/regionB/region4Bg/my-vocab 图片图标）改为简洁文字卡片（词汇学习/学习日历/个人中心/我的词汇书），保留全部跳转与登录判断。
+- **已清理**：不再使用的大图资源 require（`regionAImg/regionBImg/region4Bg/iconMyVocab`）、`engravedText*`/`regionAStyle`/`gridImageFull` 等样式、`useSafeSearchParams`。
+- **补齐历史缺失样式**：modal 弹窗引用的 `modalHeader`/`modalBody`/`modalCloseBtn` 在 HEAD 即缺失（运行时仅样式缺省不崩、但 tsc 报错），已补定义。
+- **type 修复**：`emotionDistribution`/`gazeDistribution` 的 `Object.entries(...)` 在新版 TS 推断 `count` 为 `unknown`，改为 `as [string, number][]`。
 
 ## 新增功能：教师批改系统
 
@@ -469,6 +481,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 
 ## 新增功能：批改设置（科目选择 + 满分分值）
 
+- **批改/扣分标准对全科目开放（含作文）**：前端 `essay-grading/index.tsx` 的"打分标准"输入框不再仅限 `subject==='other'`，对所有科目显示；作文科目（英语/语文）文案为"批改标准（扣分规则，可选）"，placeholder 示例"一个语法错误扣1分、一个句型错误扣1分、跑题扣5分"。请求体 `grading_standard` 本就全科目上送。后端 `essay-grading.ts` 作文分支 prompt 新增 `## 批改标准（扣分规则）` 段（消费已传入的 `gradingStandard`），并在中/英作文评分要求里加"若提供批改标准则扣分优先按其规则执行、落实到对应维度分并在评语说明依据"。作文总分仍=四维封顶求和，扣分通过影响各维度分体现。注意：Metro web bundle 中文用**小写** `\uXXXX` 转义（区别于 esbuild 的大写），校验前端产物时用小写转义。
+
 - **前端** `client/screens/essay-grading/index.tsx`：批改前增加"作文科目"（英语作文/语文作文）与"满分分值"输入框。切换科目时满分自动给默认值（语文 40、英语 15，用户可改）。请求体带 `subject`('english'|'chinese') 与 `max_score`。
 - **后端** `server/src/routes/essay-grading.ts`：
   - `/grade` 接收 `subject`。`callPaddleOCR(compressedImage, ocrLang)`，语文传 `'ch'`，英语 `'en'`。
@@ -564,7 +578,12 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - `callRecordingQwenVL(images, referenceAnswer, maxScore, lang)`：prompt 要求识别每个填空（page/part/term/student_answer/reference_answer/is_correct/points/gained/note/bbox[x1,y1,x2,y2]），按题目要求（"每空2分"）或最大分推断每空分值；**不给 response_format**（qwen3.8-max 触发 400），靠 prompt 强约束 + 多候选解析容错；返回前 `normalizeRecording` 归一化。
   - `normalizeRecording`：blanks 逐字段 Number/String/布尔归一化，total_score 缺省回退为 gained 之和。
   - `annotateRecordingImage(base64, blanks)`：blanks 需按 page 过滤后再调用（每页传该页 blanks）。图超 1200x1800 时按 `coordScale` 缩小并同步缩放 bbox。正确画绿✓+`gained/points`，错误画红✗ + 下方红字正确写法；SVG 字体 `DejaVu Sans, WenQuanYi Micro Hei`。
+  - **⚠️ 标注定位坐标策略（最新，Otsu+薄带）**：**优先用 Node 端本地印刷横线检测框住"横线/下划线本身"**（用户要求"框住每一条横线"；腾讯/千问只给词框/语义 bbox，不返回横线；`detectBlankLines` 纯像素检测，零三方 API，适配 Railway）。**判别核心（Otsu+薄带）**：① **Otsu 全局阈值**按灰度直方图最大化类间方差求分割阈值（旧"累计 90% 分位"在手机对屏拍的暗背景卷上会把背景误判为墨→横线全丢，务必用 Otsu）；② **薄带行判据**——下划线即使被手写答案/抗锯齿打断成多段，行内墨迹横向整体延伸 `span>=0.35*scanW` 且单行 dark 数 `<0.45*scanW`（细线 vs 文字）；③ 纵向聚合连续候选行(gap≤3)成"细长带"，限带高 `scanH*0.06+8` 且带内行数≤4。真实约束见下一条。
+  - **⚠️（重要实测结论）真实录题卷下划线多被手写答案压住，纯像素检测在"已作答+暗背景手机拍卷"上不稳定：短下划线 span 仅 0.2~0.35 达不到阈值会被漏，文字行 dark 密度又易被误收；标定需对真实未批改原卷逐条核对，勿用合成图调参。** 因此对真实卷，**横线检测宜作辅助精调，主力应让千问 VL 给准 bbox**（见 581 行）。
+  - `annotateRecordingImage` 匹配：`detectBlankLines` 返回按 y 排序的横线；对每个 blank 用**顺序对齐**（第 i 条未用横线）+ 千问 bbox y 校验（有 bbox 且其 y 中心与横线差距超 `b.yTol` 则跳过该横线用下一条），未命中则降级。**优先级：Node 横线检测 → OCR 词级贴字（locateTextRegion）→ 千问 bbox → 估算排布**。
+  - **为何不只用 OCR 贴字**：OCR 定位的是**学生答案字迹**，用户要的是**印刷横线**；答案被手写覆盖时 OCR 定位仍偏。真实带墨卷面横线可能被答案遮断，run 被拆——此场景宁可漏检回退 bbox 也不误框。阈值集中在 `detectBlankLines` 一处便于标定。
+  - **⚠️ 错误正确写法长文本换行（已修）**：错误空画 `reference_answer` 时若为长句（如翻译题正确译文），需用 `wrapText` 按 `min(width*0.42, 360*scale)` 折行、最多4行，整体超出底部时上移，避免横向拉成一条长龙贯穿图片。
   - 关键函数/常量：`RECORDING_MAX_PAGES=6`、`RecordingBlank`/`RecordingResult` 接口、`normalizeRecording`、`callRecordingQwenVL`、`annotateRecordingImage`、`getImageSize`（sharp metadata 读数）。
-- **注意**：`bbox` 是相对压缩后图片的坐标（千问看到的就是压缩图），标注与放大图同源坐标一致；千问未给 bbox 时估算到左列排布，定位会不准——真实卷建议让千问给准 bbox。
+- **注意**：`bbox` 是相对压缩后图片的坐标（千问看到的就是压缩图），标注与放大图同源坐标一致；千问未给 bbox 时估算到左列排布，定位会不准——真实卷建议让千问给准 bbox。**已作答+手机暗拍卷上不要依赖纯像素横线检测，应强化 `callRecordingQwenVL` 的 prompt 让千问为每个空返回精确 2 点像素 box（覆盖横线区域），横线检测仅用于千问无 bbox 或明显偏差时的兜底精调。**
 - **⚠️ 标注图在 Web 预览/鸿蒙 WebView 显示空白窄条的根因（已修复）**：录题标注图 `<Image>` 之前用 Tailwind 任意高度类 `h-[520px]`，在 Uniwind Web 下未生成实际高度 → Image 高度塌陷成窄条、看起来"没有标注图"。**必须用 `StyleSheet.create` 数值 `height`（如 `markedImage:{height:520}`）+ `style={styles.markedImage}` + `resizeMode="contain"`**，与作文页 `essay-grading` 完全一致（作文页一直正常）。后端 `annotateRecordingImage` 输出为 `.png()`（JPEG 在部分 WebView 渲染更不可靠）。前端加"卷面标注"标题 + 空时"暂未生成标注图"提示。
   - **⚠️ 标注图显示后无法滚动（已修复）**：录题页布局须与作文页一致——外层 `<View className="flex-1">` 内 `<ScrollView className="flex-1" contentContainerStyle={{padding:16,paddingBottom:40}}>`（**ScrollView 必须加 `flex-1`**，否则 web 端高度坍缩无法下滚）；标注图 `height:340`（勿用 520 占满整屏把下方评语/列表挤出可视区）。录题页可不用 `Screen` 组件（手动 ScrollView 即可），但 flex-1 不能少。

@@ -27,6 +27,8 @@ function repairJsonTrailing(raw: string): string {
     if (c === '"') inStr = !inStr;
   }
   if (inStr) out += '"';
+  // 清理未闭合数组/对象内部的尾部逗号（如 "[65,912," → "[65,912"）
+  out = out.replace(/,(\s*)$/, '$1');
   // 再按栈补齐未闭合的数组/对象
   const stack: string[] = [];
   inStr = false; escaped = false;
@@ -45,6 +47,8 @@ function repairJsonTrailing(raw: string): string {
   }
   while (stack.length) {
     const open = stack.pop();
+    // 补闭合括号前去掉可能残留的尾部逗号/空白，避免 "[65,912,]" 这类非法 JSON
+    out = out.replace(/,\s*$/, '');
     out += open === '[' ? ']' : '}';
   }
   return out;
@@ -419,12 +423,14 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
 1. 识别作文原文（transcription，中文）
 2. 找出所有错误：错别字、病句、标点、用词不当、表达不畅
 3. 打分（满分${maxScore}分）：内容 40%、语言表达 30%、结构 20%、卷面书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、卷面书写${Math.round(maxScore * 0.1)}，请在各自满分内估分）
-4. 给出评语和建议`
+4. 若提供了【批改标准】，扣分优先按其规则执行（如每个错别字扣X分、病句扣X分、跑题扣X分），把扣分落实到对应维度分里，并在评语中说明扣分依据
+5. 给出评语和建议`
     : `## 要求
 1. 识别作文原文（transcription）
 2. 找出所有错误（语法、拼写、标点、用词、句式）
 3. 打分（满分${maxScore}分）：内容 40%、语言 30%、结构 20%、书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、书写${Math.round(maxScore * 0.1)}，请在各自满分内估分）
-4. 给出评语和建议`;
+4. 若提供了【批改标准】，扣分优先按其规则执行（如每个语法错误扣X分、句型错误扣X分、跑题扣X分），把扣分落实到对应维度分里，并在评语中说明扣分依据
+5. 给出评语和建议`;
 
   const typeEnum = isChinese
     ? '"spelling"(错别字)/"grammar"(病句/搭配)/"punctuation"(标点)/"word_choice"(用词不当)/"sentence_structure"(表达行文)'
@@ -503,6 +509,9 @@ ${joinedTranscription}
 
 ## 参考答案
 ${referenceAnswer || '无'}
+
+## 批改标准（扣分规则）
+${gradingStandard || '（未提供，按常见作文评分惯例扣分）'}
 
 ${task}
 
@@ -739,6 +748,51 @@ function findMatchingOCRWord(errorText: string, ocrWords: OCRWord[]): OCRWord | 
   }
   
   return null;
+}
+
+interface LocatedBox { x: number; y: number; width: number; height: number; score: number; }
+
+// 将一段答案文本按词在 OCR 词表中精确匹配，合并所有命中词框得到"学生真实书写区域"。
+// 命中词越多 score 越高，返回并集矩形。适用于单词/短语/整句。匹配不到返回 null。
+function locateTextRegion(text: string | undefined, ocrWords: OCRWord[]): LocatedBox | null {
+  if (!text || ocrWords.length === 0) return null;
+  const clean = (s: string) => s.toLowerCase().replace(/[()\[\]{}.,;:'"!?，。；：、（）“”]/g, '').trim();
+  const tokenClean = clean(text);
+  if (!tokenClean) return null;
+  let tokens = tokenClean.split(/\s+/).filter((w) => w.length > 0);
+  if (tokens.length === 0) return null;
+
+  // 逐 token 在 OCR 词表找精确等于（clean 后）的词框；找不到则回退到该词的包含匹配（仅长词）
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let hit = 0;
+  const seen = new Set<OCRWord>();
+  for (const tk of tokens) {
+    let matched: OCRWord | null = null;
+    for (const w of ocrWords) {
+      if (seen.has(w)) continue;
+      if (clean(w.text) === tk) { matched = w; break; }
+    }
+    if (!matched) {
+      for (const w of ocrWords) {
+        if (seen.has(w)) continue;
+        const cw = clean(w.text);
+        if (cw.length >= 3 && (cw.includes(tk) || tk.includes(cw))) { matched = w; break; }
+      }
+    }
+    if (matched) {
+      seen.add(matched);
+      const l = matched.x ?? 0, t = matched.y ?? 0;
+      const r = l + (matched.width ?? 0), b = t + (matched.height ?? 0);
+      minX = Math.min(minX, l); minY = Math.min(minY, t);
+      maxX = Math.max(maxX, r); maxY = Math.max(maxY, b);
+      hit += 1;
+    }
+  }
+  if (hit === 0) return null;
+  // 至少命中一半词才算可信，否则退化为返回命中词中"宽度和最大的单个词"
+  if (hit < Math.max(1, Math.ceil(tokens.length / 2))) return null;
+  if (minX === Infinity) return null;
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY, score: hit / tokens.length };
 }
 
 /**
@@ -1238,21 +1292,24 @@ async function callRecordingQwenVL(
   referenceAnswer: string,
   maxScore: number,
   lang: 'en' | 'ch',
+  sizes?: { width: number; height: number }[],
 ): Promise<RecordingResult> {
   const prompt = `你是一位严谨、专业的老师。请批改这张试卷，逐空判分。
 
 ## 任务
-1. 仔细阅读图片中的每道题：识别每个"填空处"（空白/下划线/作答处）、该空所属的大题（如"一、重点单词"）与题干。
+1. 仔细阅读图片中的每道题：识别每个"填空处"（凡是有留空待填痕迹的位置都要算，包括：下划线/横线（如 ____）、括号（如 (  )、（ ）、方括号 [  ]、横线与括号组合、留白待填的短横线、题干末尾的空缺等任意形态），每个留空位置都算一个空）、该空所属的大题（如"一、重点单词"）与题干。
 2. 识别学生作答：读出学生在每个空里填写的内容（${lang === 'ch' ? '答案可能是中文或英文' : '答案可能是英文，也可能夹中文'}）。
 3. 识别分值：从题目要求（如"每空2分"）、总分或用最大分${maxScore}合理推断每个空的满分分值；未标注时按常见惯例每空计分，使各空分值之和尽量等于最大分${maxScore}。
 4. 判分：对照参考答案，判断每个空的对错。正确答案不得分；错误、空着、部分正确相应扣分但尽量按空给分。
-5. 每个空返回该答案在图片中的大致位置 bbox（[x1,y1,x2,y2]，相对那张图片像素坐标，用于画 ✓/✗）。页码 page 从 0 开始。
+5. 每个空返回该空在图片中的精确位置 bbox（[x1,y1,x2,y2]，数值为**该页图片的绝对像素坐标**，单位是像素、不是归一化比例），bbox 必须**精确框住那个空的下划线/括号/留空区域本身**，而不是学生手写的答案文字、也不是题干。即使手写答案正好压在或写在下划线附近，bbox 仍要框**印刷留空线**的横向范围、纵向取其 2~4 像素高的线所在位置（上下略微外扩 3~6 像素即可）。确定的 bbox 直接决定画框位置，必须与图片中该空的实际位置一致。页码 page 从 0 开始。
 
 ## 参考答案（${referenceAnswer ? '以此为准' : '未提供，请根据题干与知识推断正确写法'}）
 ${referenceAnswer || '（未提供，请自行判断正确写法）'}
 
 ## 强制要求
-- 不放过任何一个空；空着未作答也算一空（is_correct=false，gained=0）。
+- 不放过任何一个空；页面上每条横线、每对括号、每一处留空待填位置都必须是**独立的空**，分别判分并返回（每题几个留空位置，就输出几个 blank）。若一处有"横线上方再加括号等双重留空"，也各算各的。
+- **bbox 精度是第一优先级**：必须用你从图片中"看到"的该空实际印刷留空位置给出像素坐标，不要跳过、不要返回 [0,0,0,0]、不要让多个空共用同一 bbox。宁可加宽一点(上下各多 4~8 像素)也要确保覆盖下划线本体；x1<x2 且 y1<y2 恒成立。
+- 空着未作答也算一空（is_correct=false，gained=0）。
 - is_correct 只在学生答案与参考答案语义/拼写一致时为 true。
 - points 为该空满分，gained 为该空实得（可部分得分），gained 不超过 points。
 - total_score = 所有空 gained 之和；max_score 为整卷满分。
@@ -1279,16 +1336,20 @@ ${referenceAnswer || '（未提供，请自行判断正确写法）'}
           {
             role: 'user',
             content: [
-              ...images.flatMap((img, i) => [
-                { type: 'text', text: `（第${i + 1}页图片，该页空格的 page=${i}）` },
-                { type: 'image_url', image_url: { url: img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}` } },
-              ]),
+              ...images.flatMap((img, i) => {
+                const sz = sizes && sizes[i];
+                const dimHint = sz ? `，该图片像素尺寸为 ${sz.width} × ${sz.height}` : '';
+                return [
+                  { type: 'text', text: `（第${i + 1}页图片，该页空格的 page=${i}${dimHint}）` },
+                  { type: 'image_url', image_url: { url: img.startsWith('data:') ? img : `data:image/jpeg;base64,${img}` } },
+                ];
+              }),
               { type: 'text', text: prompt },
             ],
           },
         ],
         temperature: 0.2,
-        max_tokens: 4096,
+        max_tokens: 8192,
         enable_thinking: false,
       }),
       signal: controller.signal,
@@ -1326,6 +1387,86 @@ ${referenceAnswer || '（未提供，请自行判断正确写法）'}
   return normalizeRecording(result);
 }
 
+// Node 端本地水平线段检测：把图灰度化，逐行扫描黑色水平长线段（印刷下划线/横线），
+// 返回按 y 排序的横线矩形 [x1,y1,x2,y2]（图内像素坐标）。纯像素计算，零三方 API，适配 Railway。
+interface BlankLine { x1: number; y1: number; x2: number; y2: number; cy: number; }
+
+async function detectBlankLines(imageBase64: string): Promise<BlankLine[]> {
+  const data = (imageBase64.split(',')[1] || imageBase64);
+  const buf = Buffer.from(data, 'base64');
+  const meta = await sharp(buf).metadata();
+  const ow = meta.width || 800;
+  const oh = meta.height || 600;
+  const scanW = Math.min(ow, 1000);
+  const scanH = Math.round((oh * scanW) / ow);
+  const scaleX = ow / scanW;
+  const scaleY = oh / scanH;
+  const { data: gray } = await sharp(buf).resize(scanW, scanH).greyscale().raw().toBuffer({ resolveWithObject: true });
+  if (!gray) return [];
+
+  // Otsu 全局阈值：按灰度直方图最大化类间方差求分割阈值，鲁棒于整体亮度/逆光暗背景；
+  // 前版本用"累计 90% 分位"在整页深/暗背景(手机对屏拍卷)上会把大部分背景误判为墨，导致下划线丢。
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < gray.length; i++) hist[gray[i]]++;
+  const totalN = gray.length;
+  let sumAll = 0; for (let v = 0; v < 256; v++) sumAll += v * hist[v];
+  let sumB = 0, wB = 0, TH = 128, bestVar = -1;
+  for (let v = 0; v < 256; v++) {
+    wB += hist[v]; if (wB === 0) continue;
+    const wF = totalN - wB; if (wF === 0) break;
+    sumB += v * hist[v];
+    const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > bestVar) { bestVar = between; TH = v; }
+  }
+
+  // "薄带"行判据：填空下划线即使被手写答案/抗锯齿打断成多段，其横向整体延伸(span)仍覆盖大半图宽，
+  // 且 dark 总量小（是一条细线而非文字块）；普通文字/标题行虽然 span 也大，但 dark 密度高、纵向成段。
+  // 故取"span 足够大且 dark 足够少"的行作为下划线候选行，再纵向聚合出"细长带"。
+  const MIN_SPAN = scanW * 0.35;    // 行内墨迹横向延伸须覆盖图宽 35% 以上（含短下划线）
+  const MAX_ROW_DARK = scanW * 0.45; // 单行 dark 像素数上限（细线行 low；文字行 ofter 接近整行）
+  const MAX_LINE_H = scanH * 0.06 + 8; // 横线高度上限
+  const thinRows: { y: number; x1: number; x2: number }[] = [];
+  for (let y = 0; y < scanH; y++) {
+    const row = y * scanW;
+    let dark = 0, minX = Number.MAX_SAFE_INTEGER, maxX = -1;
+    for (let x = 0; x < scanW; x++) {
+      if (gray[row + x] < TH) { dark++; if (x < minX) minX = x; if (x > maxX) maxX = x; }
+    }
+    if (maxX < 0) continue;
+    const span = maxX - minX + 1;
+    if (span >= MIN_SPAN && dark <= MAX_ROW_DARK) thinRows.push({ y, x1: minX, x2: maxX });
+  }
+
+  const lines: BlankLine[] = [];
+  // 纵向聚合：连续候选行合并为"细长带"（允许 1 行断口，手写会把横线局部遮成非候选行）。下划线带很扁，
+  // 用 lh 限高 + 带内行数限制过滤文字段落（文字段落纵向行数多、lh 大）。
+  let idx = 0;
+  while (idx < thinRows.length) {
+    const ys: number[] = [thinRows[idx].y];
+    const xs1: number[] = [thinRows[idx].x1], xs2: number[] = [thinRows[idx].x2];
+    let k = idx;
+    while (k + 1 < thinRows.length && thinRows[k + 1].y - thinRows[k].y <= 3) {
+      k++; ys.push(thinRows[k].y); xs1.push(thinRows[k].x1); xs2.push(thinRows[k].x2);
+    }
+    idx = k + 1;
+    const x1 = Math.min(...xs1), x2 = Math.max(...xs2);
+    const lh = (ys[ys.length - 1] - ys[0] + 1) * scaleY;
+    const span = (x2 - x1 + 1) * scaleX;
+    if (span >= 40 && lh >= 2 && lh <= MAX_LINE_H && ys.length <= 4) {
+      lines.push({
+        x1: Math.round(x1 * scaleX),
+        y1: Math.round(ys[0] * scaleY),
+        x2: Math.round(x2 * scaleX),
+        y2: Math.round((ys[ys.length - 1] + 1) * scaleY),
+        cy: Math.round(((ys[0] + ys[ys.length - 1]) / 2) * scaleY),
+      });
+    }
+  }
+
+  return lines.sort((a: BlankLine, b: BlankLine) => a.cy - b.cy);
+}
+
 // 在卷子标注图上画 ✓/✗ 与得分
 async function annotateRecordingImage(
   imageBase64: string,
@@ -1350,22 +1491,22 @@ async function annotateRecordingImage(
   const scale = Math.min(width, height) / 1000;
   let svg = '';
   let no = 0;
+  // Node 端本地检测印刷横线（下划线），返回原图坐标；用于把方框精确框在横线上而非答案上
+  let detectedLines: BlankLine[] = [];
+  try { detectedLines = await detectBlankLines(imageBase64); } catch (e) { console.warn('[annotateRecordingImage] 横线检测失败，回退 bbox 定位:', (e as Error).message); }
+  const usedLine = new Set<number>();
+  // 当前空期望的 y 中心（从千问 bbox 推断，供最近横线匹配）
+  const blankIndexOf = (b: any) => {
+    if (b.bbox && b.bbox.length === 4) return (b.bbox[1] + b.bbox[3]) / 2;
+    return null;
+  };
   for (const b of blanks) {
     no += 1;
     let x = 0, y = 0, w = 120 * scale, h = 60 * scale, hasPos = false;
     let d = b;
-    // 优先：用学生答案文本在 OCR 词表中精确定位该空所在词框（切断全局 index 换算页内，因每页单独传入）
-    if (ocrWords.length > 0 && (d.student_answer || d.reference_answer)) {
-      const hit = findMatchingOCRWord(d.student_answer || d.reference_answer || '', ocrWords);
-      if (hit) {
-        x = (hit.x ?? 0) * coordScale;
-        y = (hit.y ?? 0) * coordScale;
-        w = (hit.width ?? 0) * coordScale;
-        h = (hit.height ?? 0) * coordScale;
-        if (w > 1 && h > 1) hasPos = true;
-      }
-    }
-    if (!hasPos && b.bbox && b.bbox.length === 4) {
+    // 1) 优先用千问 bbox：强化后的 prompt 让千问返回"精确覆盖该空下划线/括号区域的像素矩形"，
+    //    这是录题卷（下划线常被手写盖住、暗背景拍摄）下最可靠的定位来源，直接据此画框。
+    if (b.bbox && b.bbox.length === 4) {
       const [x1, y1, x2, y2] = (b as any).bbox;
       if (x2 > x1 && y2 > y1 && x2 - x1 < width && y2 - y1 < height) {
         x = x1 * coordScale; y = y1 * coordScale; w = (x2 - x1) * coordScale; h = (y2 - y1) * coordScale;
@@ -1373,7 +1514,32 @@ async function annotateRecordingImage(
       }
     }
     if (!hasPos) {
-      // 估算：按顺序排布在最左侧一列
+      // 2) 千问无 bbox/异常时才用本地检测的印刷横线兜底：检测横线按 y 排序，录题卷填空也按页内从上到下
+      //    返回，故第 no 个空顺序对应第 no 条未用横线；再校验 y 中心接近避免横线数与空数不齐时乱配。
+      if (detectedLines.length > 0) {
+        let bestLine: BlankLine | null = null;
+        let bestLineIdx = -1;
+        for (let li = 0; li < detectedLines.length; li++) {
+          if (usedLine.has(li)) continue;
+          bestLine = detectedLines[li]; bestLineIdx = li; break; // 顺序取第一条未用横线
+        }
+        if (bestLine) {
+          const wantY = blankIndexOf(b); // 原图坐标 y 中心
+          const lineCY = bestLine.cy;
+          const yOk = wantY == null || Math.abs(lineCY - wantY) <= Math.max(80, (width / coordScale) * 0.18);
+          if (yOk) {
+            usedLine.add(bestLineIdx);
+            x = bestLine.x1 * coordScale;
+            y = bestLine.y1 * coordScale;
+            w = (bestLine.x2 - bestLine.x1) * coordScale;
+            h = (bestLine.y2 - bestLine.y1) * coordScale;
+            hasPos = true;
+          }
+        }
+      }
+    }
+    if (!hasPos) {
+      // 估算：按顺序排布在最左侧一列（尽量不遮挡正文）
       x = 30 * scale;
       y = (60 + no * 90) * scale;
       w = 120 * scale; h = 40 * scale;
@@ -1381,6 +1547,16 @@ async function annotateRecordingImage(
 
     const isCorrect = !!d.is_correct;
     const color = isCorrect ? '#16A34A' : '#DC2626'; // 正确绿，错误红
+
+    // 用方框圈住该空的横线/留空区域，微外扩避免贴边
+    const pad = Math.max(4, 6 * scale);
+    const bx = Math.max(0, x - pad);
+    const by = Math.max(0, y - pad);
+    const bw = w + pad * 2;
+    const bh = h + pad * 2;
+    const frameColor = isCorrect ? '#16A34A' : '#DC2626';
+    svg += `<rect x="${bx}" y="${by}" width="${Math.min(bw, width - bx)}" height="${Math.min(bh, height - by)}" fill="none" stroke="${frameColor}" stroke-width="${Math.max(1.5, 2.5 * scale)}" rx="${Math.max(2, 3 * scale)}"/>`;
+
     const mark = isCorrect ? '✓' : '✗';
     const markSize = Math.max(26, Math.min(46, h * 0.9)) * scale;
 
@@ -1394,12 +1570,20 @@ async function annotateRecordingImage(
       <text x="${mx}" y="${my - markSize + 6 * scale}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-size="${Math.max(12, 16 * scale)}" fill="${color}" text-anchor="middle" font-weight="bold">${d.gained}/${d.points}</text>
     `;
 
-    // 错误时在答案附近给出正确写法
+    // 错误时在答案附近给出正确写法（长句自动换行，避免横向拉成一条长龙溢出图片）
     if (!isCorrect && d.reference_answer) {
-      const cx = x + w / 2;
-      const cyv = y + h + 14 * scale;
-      if (cyv < height) {
-        svg += `<text x="${cx}" y="${cyv}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-size="${Math.max(13, 18 * scale)}" fill="#DC2626" text-anchor="middle" font-weight="bold">${d.reference_answer}</text>`;
+      const arab = d.reference_answer.replace(/\s+/g, ' ').trim();
+      const fs = Math.max(13, 18 * scale);
+      const maxW = Math.min(width * 0.42, 360 * scale);
+      const lines = wrapText(arab, fs, maxW).slice(0, 4);
+      const lineH = fs * 1.3;
+      const blockH = lines.length * lineH;
+      let ty = y + h + 18 * scale;
+      if (ty + blockH > height) ty = Math.max(6 * scale, y - fs - blockH - 6 * scale);
+      for (let li = 0; li < lines.length; li++) {
+        const cx = x + w / 2;
+        const cyy = ty + li * lineH + fs * 0.8;
+        svg += `<text x="${cx}" y="${cyy}" font-family="DejaVu Sans, WenQuanYi Micro Hei" font-size="${fs}" fill="#DC2626" text-anchor="middle" font-weight="bold">${lines[li]}</text>`;
       }
     }
   }
@@ -1452,7 +1636,7 @@ router.post('/recording-grade', optionalAuthMiddleware, async (req: AuthRequest,
 
     // 2. 千问 VL 读卷判分
     console.log('[recording-grade] 调用千问 VL 读卷判分...');
-    const result = await callRecordingQwenVL(here, reference_answer, Number(max_score) || 0, lang as 'en' | 'ch');
+    const result = await callRecordingQwenVL(here, reference_answer, Number(max_score) || 0, lang as 'en' | 'ch', pages.map((p) => p.size));
     console.log('[recording-grade] 千问返回', result.blanks.length, '个空，总分', result.total_score);
 
     // 3. 逐页标注：用该页 OCR 词框精确定位答案，画 ✓/✗（贴字，类似英语作文标注）

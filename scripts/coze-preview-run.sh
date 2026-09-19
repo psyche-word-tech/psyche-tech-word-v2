@@ -35,20 +35,21 @@ build_backend() {
     cd "$PROJECT_DIR"
 }
 
-# ==================== 启动服务（使用 nodemon 监听 dist 目录自动重启） ====================
-start_service_with_nodemon() {
-    echo "[3/3] 启动后端服务 (端口 5000，使用 nodemon 自动重启)..."
+# 
+start_preview_service() {
+    echo "[3/3] 启动后端服务 (端口 5000，单实例 node)..."
     
     # 清理 5000 端口残留进程
     pkill -9 -f "node dist/index.js" 2>/dev/null || true
     pkill -9 -f "nodemon" 2>/dev/null || true
     sleep 2
     
+    # 单实例启动 node（nodemon 在该环境后台子 shell 中 npx 解析失败，直接跑 node 更稳）
     cd server
-    # 使用 nodemon 监听 dist 目录变化，自动重启服务
-    nohup npx nodemon --watch dist --ext js --exec "node dist/index.js" > /tmp/server-dev.log 2>&1 &
+    nohup node dist/index.js > /tmp/server-dev.log 2>&1 &
+    cd "$PROJECT_DIR"
     BACKEND_PID=$!
-    echo "后端服务已启动 (PID: $BACKEND_PID，使用 nodemon 自动重启)"
+    echo "后端服务已启动 (PID: $BACKEND_PID，单实例 node)"
     cd "$PROJECT_DIR"
     
     # 等待后端启动
@@ -77,11 +78,11 @@ if ss -tlnp | grep -q ":5000"; then
     # 构建前端
     build_frontend
     
-    # 构建后端（nodemon 会自动检测 dist 变化并重启）
+    # 构建后端（服务将按需重启）
     build_backend
     
     echo ""
-    echo "=== 已更新（nodemon 将自动重启服务） ==="
+    echo "=== 已更新（静态文件已更新） ==="
     echo "访问: http://localhost:5000/"
     echo "API:  http://localhost:5000/api/v1/"
     echo ""
@@ -96,7 +97,7 @@ echo ""
 # 产物已存在时跳过构建，直接启动，加快预览就绪速度
 if [ -f "server/public/index.html" ] && [ -f "server/dist/index.js" ]; then
     echo "产物已存在，跳过构建直接启动服务"
-    start_service_with_nodemon
+    start_preview_service
     exit 0
 fi
 
@@ -106,8 +107,8 @@ build_frontend
 # 构建后端
 build_backend
 
-# 启动服务（使用 nodemon）
-start_service_with_nodemon
+# 启动服务
+start_preview_service
 
 echo ""
 echo "=== 服务已就绪 ==="
@@ -115,4 +116,4 @@ echo "访问: http://localhost:5000/"
 echo "API:  http://localhost:5000/api/v1/"
 echo ""
 echo "查看日志: tail -f /tmp/server-dev.log"
-echo "注意：后端使用 nodemon 监听 dist 目录，代码变化时会自动重启"
+echo "注意：后端为单实例 node，代码变化后重新运行本脚本生效"

@@ -1,8 +1,7 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Modal, Platform, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Platform, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
-import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -25,19 +24,10 @@ const RadarChartIcon = ({ size = 22, color = '#FFFFFF' }) => (
 );
 
 const iconRock = require('@/assets/iconRock.png');
-const iconMyVocab = require('@/assets/my-vocab.png');
-const region4Bg = require('@/assets/region4-bg.webp');
-const regionAImg = require('@/assets/region-a.webp');
-const regionBImg = require('@/assets/region-b.webp');
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const HALF_HEIGHT = SCREEN_HEIGHT / 2; // 一半高度
 
 export default function StudyScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
-  const params = useSafeSearchParams<{ engravedText?: string }>();
-  const engravedText = params.engravedText || '';
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSubmissionMenu, setShowSubmissionMenu] = useState(false);
@@ -273,108 +263,88 @@ export default function StudyScreen() {
   return (
     <Screen safeAreaEdges={[]}>
       <View style={styles.container}>
-        {/* 上半部分：区域一（100% 宽，50% 高） */}
-        <View style={styles.topCardWrapper}>
+        {/* 全屏简洁虚化背景 */}
+        <Image
+          source={iconRock}
+          style={styles.backgroundImage}
+          resizeMode="cover"
+          blurRadius={55}
+        />
+        {/* 右上角功能按钮（保留） */}
+        <View style={styles.topRightButtons}>
           <TouchableOpacity 
-            style={styles.topCard} 
-            activeOpacity={0.9} 
-            onPress={() => router.push('/engrave')}
+            style={styles.searchButton}
+            activeOpacity={0.7}
+            onPress={() => setShowImagePicker(true)}
           >
-            <Image source={iconRock} style={styles.topImage} resizeMode="stretch" />
-            {engravedText.length > 0 && (
-              <View style={[styles.engravedTextContainer, { position: 'absolute', top: HALF_HEIGHT / 3 + 55, flexDirection: 'column', alignItems: 'center' }]}>
-                {engravedText.split(' ').map((word, wordIndex) => (
-                  <View key={wordIndex} style={{ flexDirection: 'row', marginVertical: 5 }}>
-                    {word.split('').map((char, charIndex) => (
-                      <View key={charIndex} style={{ marginHorizontal: 15 }}>
-                        <Text style={styles.engravedText}>{char}</Text>
-                        <Text style={styles.engravedTextHighlight}>{char}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ))}
-              </View>
-            )}
+            <Ionicons name="search" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          {/* Search Icon - Top Right */}
-          <View style={styles.topRightButtons}>
-            <TouchableOpacity 
-              style={styles.searchButton}
-              activeOpacity={0.7}
-              onPress={() => setShowImagePicker(true)}
-            >
-              <Ionicons name="search" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.searchButton}
-              activeOpacity={0.7}
-              onPress={() => {
-                handleLoadIrisData();
-                setShowHistory(true);
-              }}
-            >
-              <Ionicons name="time-outline" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.searchButton}
-              activeOpacity={0.7}
-              onPress={() => router.push('/competency-map')}
-            >
-              <RadarChartIcon size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.searchButton}
-              activeOpacity={0.7}
-              onPress={() => {
-                if (user?.role === 'teacher') {
-                  router.push('/teacher-review');
-                } else {
-                  setShowSubmissionMenu(true);
-                }
-              }}
-            >
-              <Ionicons name="add" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity 
+            style={styles.searchButton}
+            activeOpacity={0.7}
+            onPress={() => {
+              handleLoadIrisData();
+              setShowHistory(true);
+            }}
+          >
+            <Ionicons name="time-outline" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.searchButton}
+            activeOpacity={0.7}
+            onPress={() => router.push('/competency-map')}
+          >
+            <RadarChartIcon size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.searchButton}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (user?.role === 'teacher') {
+                router.push('/teacher-review');
+              } else {
+                setShowSubmissionMenu(true);
+              }
+            }}
+          >
+            <Ionicons name="add" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
 
-        {/* 下半部分：2x2 田字格（区域二、三、四、五） */}
+        {/* 功能入口：简洁卡片网格（保留原跳转） */}
         <View style={styles.bottomSection}>
-          {/* 上一行：区域二（左右分栏：区域a、区域b） */}
+          {/* 上一行 */}
           <View style={styles.bottomRow}>
             <TouchableOpacity 
               style={styles.gridItem} 
-              activeOpacity={0.9} 
+              activeOpacity={0.8} 
               onPress={() => router.push('/vocabulary')}
             >
-              <Image source={regionAImg} style={styles.regionAStyle} resizeMode="stretch" />
+              <Text style={styles.gridLabel}>词汇学习</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.gridItem} 
-              activeOpacity={0.9} 
+              activeOpacity={0.8} 
               onPress={() => router.push('/calendar')}
             >
-              <Image source={regionBImg} style={styles.regionAStyle} resizeMode="stretch" />
+              <Text style={styles.gridLabel}>学习日历</Text>
             </TouchableOpacity>
           </View>
-          {/* 下一行：区域四、区域五 */}
+          {/* 下一行 */}
           <View style={styles.bottomRow}>
             <TouchableOpacity 
               style={styles.gridItem}
-              activeOpacity={0.9}
+              activeOpacity={0.8}
               onPress={() => router.push(user ? '/profile' : '/login')}
             >
-              <Image source={region4Bg} style={styles.gridImageFull} resizeMode="cover" />
+              <Text style={styles.gridLabel}>个人中心</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.gridItem, { borderWidth: 0 }]} 
-              activeOpacity={0.9} 
+              activeOpacity={0.8} 
               onPress={() => router.push('/my-vocabulary')}
             >
-              <Image source={iconMyVocab} style={styles.gridImageFull} resizeMode="stretch" />
-              <View style={[styles.labelContainer, { marginTop: -10 }]}>
-                <Text style={styles.gridLabel}>我的词汇书</Text>
-              </View>
+              <Text style={styles.gridLabel}>我的词汇书</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -595,7 +565,7 @@ export default function StudyScreen() {
                     <Text style={{ color: '#666', fontSize: 14, marginBottom: 8 }}>
                       情绪分布
                     </Text>
-                    {Object.entries(emotionDistribution).map(([emotion, count]) => (
+                    {(Object.entries(emotionDistribution) as [string, number][]).map(([emotion, count]) => (
                       <View key={emotion} style={{ flexDirection: 'row', marginBottom: 6 }}>
                         <Text style={{ color: '#333', width: 60 }}>{emotion}</Text>
                         <View style={{ flex: 1, height: 6, backgroundColor: '#E5E7EB', borderRadius: 3 }}>
@@ -617,7 +587,7 @@ export default function StudyScreen() {
                     <Text style={{ color: '#666', fontSize: 14, marginBottom: 8 }}>
                       视线分布
                     </Text>
-                    {Object.entries(gazeDistribution).map(([gaze, count]) => (
+                    {(Object.entries(gazeDistribution) as [string, number][]).map(([gaze, count]) => (
                       <View key={gaze} style={{ flexDirection: 'row', marginBottom: 6 }}>
                         <Text style={{ color: '#333', width: 60 }}>{gaze}</Text>
                         <View style={{ flex: 1, height: 6, backgroundColor: '#E5E7EB', borderRadius: 3 }}>
@@ -705,30 +675,20 @@ export default function StudyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F7F8FA',
   },
-  // 文字在区域下方居中
-  labelContainer: {
+  backgroundImage: {
     position: 'absolute',
-    bottom: 12,
+    top: 0,
     left: 0,
     right: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topCard: {
-    height: HALF_HEIGHT,
+    bottom: 0,
     width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topCardWrapper: {
-    position: 'relative',
-    height: HALF_HEIGHT,
-    width: '100%',
+    height: '100%',
   },
   topRightButtons: {
     position: 'absolute',
-    top: 70,
+    top: 60,
     right: 20,
     flexDirection: 'row',
     gap: 10,
@@ -742,115 +702,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  topImage: {
-    width: '100%',
-    height: '100%',
-    marginTop: 50,
-  },
-  topLabel: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.75)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  // 下半部分：2x2 排列（区域二、三、四、五）
+  // 下半部分：2x2 功能卡片
   bottomSection: {
-    height: HALF_HEIGHT,
-    width: '100%',
-  },
-  gridRow: {
     flex: 1,
-    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'center',
+    padding: 16,
   },
   bottomRow: {
-    height: 177,
+    height: 150,
     flexDirection: 'row',
+    marginBottom: 16,
   },
   gridItem: {
     flex: 1,
-  },
-  regionAStyle: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
-  gridImageFull: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
-  region4Image: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
-  dangImage: {
-    width: 160,
-    height: 160,
-    marginLeft: -20,
-    marginTop: -1,
+    marginHorizontal: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   gridLabel: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#333333',
     fontWeight: '600',
-  },
-  emptyCard: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gridIcon: {
-    width: 48,
-    height: 48,
-  },
-  engravedTextContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  engravedWordColumn: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    marginHorizontal: 8,
-  },
-  engravedCharWrapper: {
-    position: 'relative',
-  },
-  // 刻字主体
-  engravedText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  // 高光层
-  engravedTextHighlight: {
-    position: 'absolute',
-    top: -0.5,
-    left: -0.5,
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'rgba(255,255,255,0.9)',
   },
   modalOverlay: {
     flex: 1,
@@ -897,6 +777,21 @@ const styles = StyleSheet.create({
   modalCancelText: {
     fontSize: 16,
     color: '#999',
+  },
+  modalHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalBody: {
+    width: '100%',
+  },
+  modalCloseBtn: {
+    fontSize: 20,
+    color: '#999',
+    fontWeight: '700',
   },
   historyModalContent: {
     backgroundColor: '#FFFFFF',

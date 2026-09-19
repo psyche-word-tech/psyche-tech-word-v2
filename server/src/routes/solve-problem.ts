@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { createHash } from "crypto";
+import { writeFileSync } from "fs";
 import { LLMClient, Config } from "coze-coding-dev-sdk";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 
@@ -95,20 +96,57 @@ function fixJsonControlChars(jsonStr: string): string {
   return result;
 }
 
+// 以 b/f/n/r/t 等"与 JSON 合法转义冲突"的字母开头的 LaTeX 命令。
+// 如 \frac(\f)、\boxed(\b)、\right(\r)、\text(\t)、\nu(\n)，
+// 若不先转义，JSON.parse 会把 \f/\b/\r/\t 当成控制字符而损坏或报错。
+const LATEX_ESCAPE_FIX =
+  /(?<!\\)\\(boxed|begin|end|big|bigg|bigl|bigr|binom|bar|beta|bmod|frac|dfrac|tfrac|text|times|to|tau|theta|top|right|rho|rangle|rfloor|rightarrow|nu|ne|neq|nabla|notin|sqrt|left|sum|prod|int|lim|infty|cdot|div|pm|mp|le|leq|ge|geq|approx|equiv|sim|propto|alpha|gamma|delta|lambda|mu|pi|sigma|omega|phi|psi|chi|eta|kappa|zeta|iota|upsilon|varepsilon|epsilon|cup|cap|subset|supset|subseteq|supseteq|forall|exists|partial|angle|triangle|circ|degree|hat|vec|overline|underline|displaystyle|quad|qquad|dbinom|langle|lfloor|leftarrow|leftrightarrow|mapsto|perp|cong|emptyset|varnothing|operatorname|mathrm|mathbf|mathit|mathsf|mathcal|mathbb)\b/g;
+
 /**
  * 更激进的 JSON 修复：处理 LaTeX 反斜杠问题
  * LLM 可能在 JSON 字符串中返回未转义的反斜杠（如 \frac）
  */
 function fixJsonLaTeX(jsonStr: string): string {
-  // 先修复控制字符
-  let result = fixJsonControlChars(jsonStr);
-  
-  // 然后修复字符串中的未转义反斜杠
-  // 在 JSON 字符串中，反斜杠必须转义为 \\
-  // 但 LLM 可能返回 \frac 而不是 \\frac
+  // 先把已知 LaTeX 命令的反斜杠转义（含与 JSON 转义冲突的 \f/\b/\r/\t 开头命令），
+  // 负向后行断言避免把已正确转义的 \\frac 再次转义
+  let result = jsonStr.replace(LATEX_ESCAPE_FIX, '\\\\$1');
+
+  // 再修复控制字符
+  result = fixJsonControlChars(result);
+
+  // 最后兜底：转义其余未转义的反斜杠（如 \(、\{、\l 等）
   result = result.replace(/(?<=^|[^\\])(?:\\\\)*\\(?!["\\\/bfnrtu])/g, '\\\\');
-  
+
   return result;
+}
+
+/**
+ * 截断自愈：模型输出超长被拦腰截断时，JSON 会留下未闭合的字符串/括号。
+ * 扫描一遍补上缺失的闭引号和配对的 ]/}，尽量 salvaging 已完整输出的字段。
+ */
+function closeTruncatedJson(s: string): string {
+  let inStr = false;
+  let esc = false;
+  const stack: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '{' || c === '[') stack.push(c);
+    else if (c === '}' || c === ']') stack.pop();
+  }
+  let out = s;
+  if (inStr) out += '"';
+  while (stack.length) {
+    const t = stack.pop();
+    out += t === '{' ? '}' : ']';
+  }
+  return out;
 }
 
 /**
@@ -142,8 +180,12 @@ router.post("/", upload.single("image"), async (req, res) => {
       .limit(1);
 
     if (!cacheError && cachedProblems && cachedProblems.length > 0) {
-      console.log("[SolveProblem] Cache hit by image hash");
       const cached = cachedProblems[0];
+      // 忽略之前误缓存的失败占位结果，让其重新走大模型解析
+      if (!cached.question_text || cached.question_text === "图片内容无法识别") {
+        console.log("[SolveProblem] Cache hit is a failed placeholder, ignore");
+      } else {
+      console.log("[SolveProblem] Cache hit by image hash");
       return res.json({
         questions: [
           {
@@ -160,6 +202,7 @@ router.post("/", upload.single("image"), async (req, res) => {
           }
         ]
       });
+      }
     }
 
     // 2. 缓存未命中，调用大模型解析
@@ -185,9 +228,9 @@ router.post("/", upload.single("image"), async (req, res) => {
     {
       "subject": "学科（如数学、物理、化学、英语等）",
       "question": "题目内容（文字描述）",
+      "answer": "最终答案",
       "analysis": "题目分析（考查知识点、解题思路）",
       "solution": "详细解答过程",
-      "answer": "最终答案",
       "tips": "解题技巧或注意事项（可选）",
       "knowledge_points": "考查的知识点（必填，如：函数、三角函数、概率统计等）",
       "core_competency": "考察的学科核心素养（必填，如：数学抽象、逻辑推理、数学建模、直观想象、数学运算、数据分析等）",
@@ -197,6 +240,12 @@ router.post("/", upload.single("image"), async (req, res) => {
 }
 
 **注意：knowledge_points、core_competency、difficulty 这三个字段是必填的，不能为空！**
+
+**数学公式格式（重要）：question、analysis、solution、answer、tips 中出现的任何数学公式、符号、表达式，都必须用 LaTeX 语法并用美元符号包裹——行内公式用 $...$，独立成行的公式用 $$...$$。例如：$x^2+1=0$、$$\\frac{1}{2}$$、$D(-1)=\\boxed{\\left(0,\\frac{3}{2}\\right)}$。不要输出未被 $ 包裹的裸 LaTeX。**
+
+**输出要求：solution/analysis 抓住关键步骤、表述简洁，不要冗长铺陈，确保返回的 JSON 完整、不被截断、可被直接解析。**
+
+**答题风格（极其重要）：这是面向学生的严肃数学解答。solution/analysis 必须是严谨、完整、可直接呈现给学生的最终解答——直接给出推理与结论，语气肯定、逻辑连贯。严禁出现任何自我怀疑、自我纠正、口语化思考碎念（如"不对""哦""我写错了""所以不满足？""重新整理"等），严禁暴露思考过程或反复改口。若某一步需要分类讨论，直接清晰地列出各类并给出结论，不要犹豫或否定自己。**
 
 如果图片中只有一道题，questions 数组中只有一个元素。
 只返回 JSON，不要有其他解释文字。如果图片不清晰或无法识别，请返回：
@@ -222,9 +271,9 @@ router.post("/", upload.single("image"), async (req, res) => {
     {
       "subject": "学科",
       "question": "题目内容（包含选项）",
+      "answer": "最终答案",
       "analysis": "详细解析过程",
       "solution": "解答步骤",
-      "answer": "最终答案",
       "tips": "解题技巧（可选）",
       "knowledge_points": "考查的知识点（必填）",
       "core_competency": "考察的学科核心素养（必填）",
@@ -234,6 +283,10 @@ router.post("/", upload.single("image"), async (req, res) => {
 }
 
 **重要：knowledge_points、core_competency、difficulty 三个字段必须填写，不能为空！**
+
+**数学公式必须用 LaTeX 并用美元符号包裹：行内用 $...$，独立成行用 $$...$$（如 $x^2+1$、$$\\frac{1}{2}$$），不要输出裸 LaTeX。**
+
+**解答必须是严谨、肯定、可直接给学生的最终版本，禁止"不对/哦/我写错了/重新整理"等自我纠正或思考碎念。**
 
 如果图片中有多道题，请在 questions 数组中包含所有题目。`,
           },
@@ -299,9 +352,23 @@ router.post("/", upload.single("image"), async (req, res) => {
             // 尝试修复 LaTeX 反斜杠问题
             let latexFixed = fixJsonLaTeX(jsonStr);
             try {
+              writeFileSync("/tmp/solve_raw.json", jsonStr);
+              writeFileSync("/tmp/solve_ctrl.json", fixJsonControlChars(jsonStr));
+              writeFileSync("/tmp/solve_latex.json", latexFixed);
+            } catch {}
+            try {
               result = JSON.parse(latexFixed);
             } catch (e3) {
               console.error("[SolveProblem] LaTeX fix also failed:", (e3 as Error).message);
+              // 截断自愈：补全未闭合的字符串/括号， salvaging 已完整输出的字段
+              try {
+                result = JSON.parse(closeTruncatedJson(latexFixed));
+                console.log("[SolveProblem] Salvaged truncated JSON OK");
+              } catch (eSalvage) {
+                console.error("[SolveProblem] Salvage failed:", (eSalvage as Error).message);
+              }
+
+              if (!result) {
               // 尝试更激进的修复：移除所有换行符和制表符
               let aggressiveFixed = jsonStr
                 .replace(/\r\n/g, '\\n')
@@ -325,6 +392,7 @@ router.post("/", upload.single("image"), async (req, res) => {
                     }
                   ]
                 };
+              }
               }
             }
           }
@@ -351,6 +419,8 @@ router.post("/", upload.single("image"), async (req, res) => {
     // 3. 缓存结果到数据库
     if (result.questions && Array.isArray(result.questions)) {
       for (const q of result.questions) {
+        // 失败兜底占位结果不入库，避免污染缓存
+        if (!q.question || q.question === "图片内容无法识别") continue;
         // 检查是否有相似题目（文本相似度 > 90%）
         const { data: similarProblems } = await supabase
           .from("problems")
