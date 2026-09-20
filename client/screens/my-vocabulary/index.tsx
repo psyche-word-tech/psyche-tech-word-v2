@@ -250,6 +250,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingTop: 20,
+    marginTop: 80,
     flexBasis: '100%',
   },
   gridContainer: {
