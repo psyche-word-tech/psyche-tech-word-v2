@@ -569,6 +569,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 ## qwen3.8-max + response_format:json_object 产生 400 JSON 中断
 - **症状**：改历史/复杂输入时 HTTP 500 `{"code":"invalid_parameter_error","message":"Model output became abnormal while generating a JSON response for response_format..."}`。这是**鉴权已通过**（说明 Token Plan Key 配对了），卡在千问 3.8-max 在 `response_format:{type:'json_object'}` 下生成中途输出异常、JSON 不完整被强制中断。
 - **修复**：去掉 `callQwenVL` 及各处千问请求体里的 `response_format:{type:'json_object'}`（约 L556）。靠 prompt 强制"只输出合法 JSON" + 后端既有容错（repairJsonTrailing / markdown 包裹提取 / 多候选解析）兜底。实测去掉后 `qwen3.8-max` 返回 HTTP 200 合法 JSON（无中断）。
+- **solve-problem（搜题）同样适用**：`server/src/routes/solve-problem.ts` 也不要传 `response_format:{type:'json_object'}`（qwen3.8-max 长题易 400 中断），靠 user prompt 里"JSON 格式硬约束"段落 + 既有 LaTeX/截断自愈容错链兜底。实测移除后简单题 HTTP 200、JSON 正常解析、`$x=5$`。
+- **解题答言要正式简洁（solve-problem.ts 输出要求 prompt）**：solution/analysis 必须"正式、简洁、直达结论"——只保留从题干到最终答案的关键推理步骤与必要过渡，明确省略非必要细化推演和冗余代换（例如不必展开"推出 $f(x_2)\ge f(0)$"这类可跳过中间论证、不必对每一步不等式/恒等式/中间式逐条证明），正确作答前提下步骤尽量精炼（5~8 个关键步骤为宜）；语气正式、可直接呈现给学生；确保返回 JSON 完整不截断可解析。
 - **注意**：reasoning 系模型（qwen3.8-max 默认 enable_thinking 即使显式 false）配 `response_format:json_object` 在多图/长上下文中容易触发该 400；普通文本对话也可能偶发。凡调用 qwen3.8-max 且需要 JSON 结构化的场景，倾向用 prompt 强约束而非 response_format。
 
 ## 新增功能：录题判分（recording-grading，填空/词块/变形/翻译等逐空卷）

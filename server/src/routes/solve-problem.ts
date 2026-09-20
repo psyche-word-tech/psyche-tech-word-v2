@@ -236,7 +236,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 
 **数学公式格式（重要）：question、analysis、solution、answer、tips 中出现的任何数学公式、符号、表达式，都必须用 LaTeX 语法并用美元符号包裹——行内公式用 $...$，独立成行的公式用 $$...$$。例如：$x^2+1=0$、$$\\frac{1}{2}$$、$D(-1)=\\boxed{\\left(0,\\frac{3}{2}\\right)}$。不要输出未被 $ 包裹的裸 LaTeX。**
 
-**输出要求：solution/analysis 抓住关键步骤、表述简洁，不要冗长铺陈，确保返回的 JSON 完整、不被截断、可被直接解析。**
+**输出要求（重要）：solution/analysis 必须"正式、简洁、直达结论"——只保留从题干到最终答案的关键推理步骤与必要的过渡，明确省略非必要的细化推演和冗余代换（例如不必展开"推出 $f(x_2)\\ge f(0)$"这类可跳过的中间论证，不必对每一步不等式、恒等式或中间式逐条证明），正确作答的前提下步骤尽量精炼（5~8 个关键步骤为宜）；语气正式、可直接呈现给学生，确保返回的 JSON 完整、不被截断、可被直接解析。**
 
 **答题风格（极其重要）：这是面向学生的严肃数学解答。solution/analysis 必须是严谨、完整、可直接呈现给学生的最终解答——直接给出推理与结论，语气肯定、逻辑连贯。严禁出现任何自我怀疑、自我纠正、口语化思考碎念（如"不对""哦""我写错了""所以不满足？""重新整理"等），严禁暴露思考过程或反复改口。若某一步需要分类讨论，直接清晰地列出各类并给出结论，不要犹豫或否定自己。**
 
@@ -321,7 +321,6 @@ router.post("/", upload.single("image"), async (req, res) => {
           messages,
           temperature: 0.3,
           enable_thinking: false,
-          response_format: { type: 'json_object' },
         }),
         signal: controller.signal,
       });
