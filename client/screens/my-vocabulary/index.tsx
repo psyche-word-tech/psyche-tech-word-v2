@@ -230,7 +230,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     marginTop: 150,
-    marginLeft: 80,
     alignSelf: 'center',
   },
   vocabTestButton: {
@@ -239,7 +238,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     marginTop: 150,
-    marginLeft: 40,
     alignSelf: 'center',
   },
   vocabTestText: {
@@ -255,15 +253,15 @@ const styles = StyleSheet.create({
   },
   gridContainer: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'flex-start',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingTop: 60,
     paddingHorizontal: 16,
-    gap: 8,
+    gap: 14,
   },
   bookItem: {
-    flex: 1,
+    width: 220,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 0,
