@@ -281,6 +281,12 @@ router.post("/", upload.single("image"), async (req, res) => {
 
 **解答必须是严谨、肯定、可直接给学生的最终版本，禁止"不对/哦/我写错了/重新整理"等自我纠正或思考碎念。**
 
+**JSON 格式硬约束（极其重要，必须遵守）**：
+1. 直接返回合法 JSON，不要用 markdown 代码块包裹，也不要加任何前后缀文字。
+2. 所有字符串值内的换行/分段必须用 "\\\\n" 转义，严禁在 JSON 里出现真实的换行字符；每个键值对、数组元素之间用逗号分隔，引号严格配对。
+3. 不要在字符串结束处多加反斜杠或转义引号——只有确实需要在内容里显示引号时才用 "\\\\\\""，且必须与闭合引号区分清楚。
+4. 若某字段无内容，用空字符串 ""，不要省略引号或输出 undefined/null。
+
 如果图片中有多道题，请在 questions 数组中包含所有题目。`,
           },
         ],
@@ -315,6 +321,7 @@ router.post("/", upload.single("image"), async (req, res) => {
           messages,
           temperature: 0.3,
           enable_thinking: false,
+          response_format: { type: 'json_object' },
         }),
         signal: controller.signal,
       });
@@ -406,30 +413,30 @@ router.post("/", upload.single("image"), async (req, res) => {
               }
 
               if (!result) {
-              // 尝试更激进的修复：移除所有换行符和制表符
-              let aggressiveFixed = jsonStr
-                .replace(/\r\n/g, '\\n')
-                .replace(/\n/g, '\\n')
-                .replace(/\r/g, '\\n')
-                .replace(/\t/g, '\\t')
-                .replace(/[\x00-\x1f\x7f-\x9f]/g, '');
-              try {
-                result = JSON.parse(aggressiveFixed);
-              } catch (e4) {
-                console.error("[SolveProblem] Aggressive fix also failed:", (e4 as Error).message);
-                result = {
-                  questions: [
-                    {
-                      subject: "未知",
-                      question: "图片内容无法识别",
-                      analysis: "解析失败，可能原因：图片模糊、光线不足、题目不完整",
-                      solution: "",
-                      answer: "",
-                      tips: "建议：1.确保光线充足 2.对焦清晰 3.题目完整 4.避免反光",
-                    }
-                  ]
-                };
-              }
+                // 尝试更激进的修复：移除所有换行符和制表符
+                let aggressiveFixed = jsonStr
+                  .replace(/\r\n/g, '\\n')
+                  .replace(/\n/g, '\\n')
+                  .replace(/\r/g, '\\n')
+                  .replace(/\t/g, '\\t')
+                  .replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+                try {
+                  result = JSON.parse(aggressiveFixed);
+                } catch (e4) {
+                  console.error("[SolveProblem] Aggressive fix also failed:", (e4 as Error).message);
+                  result = {
+                    questions: [
+                      {
+                        subject: "未知",
+                        question: "图片内容无法识别",
+                        analysis: "解析失败，可能原因：图片模糊、光线不足、题目不完整",
+                        solution: "",
+                        answer: "",
+                        tips: "建议：1.确保光线充足 2.对焦清晰 3.题目完整 4.避免反光",
+                      }
+                    ]
+                  };
+                }
               }
             }
           }
