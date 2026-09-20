@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator, TextInput, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -9,7 +9,7 @@ import { getApiBaseUrl } from '@/utils/apiConfig';
 
 interface ImageItem {
   uri: string;
-  base64?: string;
+  base64?: string | null;
 }
 
 interface GradingResult {
@@ -173,6 +173,52 @@ export default function BatchGradingScreen() {
     return names[type] || type;
   };
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleDownload = async () => {
+    const graded = results.filter(r => r.result && !r.error);
+    if (graded.length === 0) {
+      Alert.alert('提示', '还没有可导出的批改结果');
+      return;
+    }
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      Alert.alert('提示', '导出功能请在网页预览中使用');
+      return;
+    }
+    setExporting(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (user?.token) headers['Authorization'] = `Bearer ${user.token}`;
+      const resp = await fetch(`${getApiBaseUrl()}/api/v1/essay-grading/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          results: graded.map(r => r.result),
+          title: '作文批量批改结果',
+        }),
+      });
+      if (!resp.ok) {
+        const j = await resp.json().catch(() => null);
+        Alert.alert('导出失败', j?.error || `导出接口返回 ${resp.status}`);
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `作文批改结果_${Date.now()}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      Alert.alert('导出成功', `已生成 Word 文档，共 ${graded.length} 篇`);
+    } catch (e: any) {
+      Alert.alert('导出失败', e?.message || '网络错误');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Screen>
       <ScrollView style={styles.container}>
@@ -254,6 +300,21 @@ export default function BatchGradingScreen() {
         {results.length > 0 && (
           <View style={styles.resultSection}>
             <Text style={styles.sectionTitle}>3. 批改结果</Text>
+
+            <TouchableOpacity
+              style={[styles.downloadButton, exporting && styles.gradeButtonDisabled]}
+              onPress={handleDownload}
+              disabled={exporting || batchLoading}
+            >
+              {exporting ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.gradeButtonText}>正在导出…</Text>
+                </View>
+              ) : (
+                <Text style={styles.gradeButtonText}>下载批改结果（Word）</Text>
+              )}
+            </TouchableOpacity>
 
             {results.map((item, index) => (
               <View key={index} style={styles.resultCard}>
@@ -443,6 +504,13 @@ const styles = StyleSheet.create({
   },
   gradeButtonDisabled: {
     backgroundColor: '#ccc',
+  },
+  downloadButton: {
+    backgroundColor: '#2196F3',
+    marginBottom: 12,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
   },
   gradeButtonText: {
     color: '#fff',

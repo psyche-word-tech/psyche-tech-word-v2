@@ -9,6 +9,7 @@ import type { AuthRequest } from '../middleware/auth';
 import { callPaddleOCR } from '../services/paddleocr';
 import type { WordBox } from '../services/paddleocr';
 import { callTencentOcr } from '../services/tencent-ocr';
+import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 
 // 加载环境变量 - 使用 process.cwd() 获取当前工作目录
 dotenv.config({ path: path.join(process.cwd(), '.env') });
@@ -1723,6 +1724,105 @@ router.post('/recording-grade', optionalAuthMiddleware, async (req: AuthRequest,
   } catch (error: any) {
     console.error('[recording-grade] 录题判分失败:', error);
     res.status(500).json({ success: false, error: error.message || '录题判分失败' });
+  }
+});
+
+// 导出批改结果为 Word(.docx)：整理每篇的评分、维度、评语、错误订正与建议
+function exportErrorTypeName(type?: string, errorType?: string): string {
+  if (errorType === 'missing') return '缺词';
+  if (errorType === 'wrong') return '改词';
+  if (errorType === 'extra') return '多词';
+  if (errorType === 'incomplete') return '句错';
+  const names: Record<string, string> = {
+    grammar: '语法', spelling: '拼写', punctuation: '标点',
+    word_choice: '用词', sentence_structure: '句式',
+  };
+  return (type && names[type]) || '错误';
+}
+
+function buildExportDocx(results: any[], title: string): any {
+  const paragraphs: any[] = [];
+  const H1 = (t: string) => new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: t })] });
+  const H2 = (t: string) => new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: t })] });
+  const P = (t: string, bold = false) => new Paragraph({
+    children: [new TextRun({ text: t, bold, size: 22 })],
+    spacing: { after: 120 },
+  });
+
+  paragraphs.push(H1(title));
+  paragraphs.push(P(`导出时间：${new Date().toLocaleString('zh-CN')}`));
+  paragraphs.push(P(`共 ${results.length} 篇`));
+  paragraphs.push(P(''));
+
+  results.forEach((r, idx) => {
+    paragraphs.push(H2(`作文 ${idx + 1}`));
+    paragraphs.push(P(`总分：${r.total_score ?? 0}/${r.max_score ?? ''}`, true));
+
+    const pts = Array.isArray(r.points) ? r.points.filter((p: any) => p) : [];
+    if (pts.length > 0) {
+      paragraphs.push(P('得分维度：'));
+      pts.forEach((p: any) => {
+        paragraphs.push(P(`  ${p.point || p.name || '维度'}：${p.score ?? 0}/${p.max ?? ''}${p.comment ? '　' + p.comment : ''}`));
+      });
+    } else if (r.scores) {
+      const s = r.scores;
+      const dims: [string, number | undefined][] = [['内容', s.content], ['语言', s.language], ['结构', s.structure], ['书写', s.handwriting]];
+      paragraphs.push(P('得分维度：'));
+      dims.forEach(([k, v]) => paragraphs.push(P(`  ${k}：${v ?? 0}`)));
+    }
+
+    if (r.comments) {
+      paragraphs.push(H2('评语'));
+      paragraphs.push(P(r.comments));
+    }
+
+    if (Array.isArray(r.errors) && r.errors.length > 0) {
+      paragraphs.push(H2('错误与订正'));
+      r.errors.forEach((e: any, ei: number) => {
+        const type = exportErrorTypeName(e.type, e.errorType);
+        let line = `${ei + 1}. [${type}]`;
+        if (e.original) line += ` 原文：${e.original}`;
+        if (e.correction) line += `  订正：${e.correction}`;
+        paragraphs.push(P(line));
+        if (e.explanation) paragraphs.push(P(`  说明：${e.explanation}`));
+      });
+    }
+
+    const st = Array.isArray(r.strengths) ? r.strengths : [];
+    if (st.length > 0) {
+      paragraphs.push(H2('亮点'));
+      st.forEach((t: string) => paragraphs.push(P(`  ${t}`)));
+    }
+
+    const imp = Array.isArray(r.improvements) ? r.improvements : [];
+    if (imp.length > 0) {
+      paragraphs.push(H2('改进建议'));
+      imp.forEach((t: string) => paragraphs.push(P(`  ${t}`)));
+    }
+
+    paragraphs.push(P(''));
+  });
+
+  return new Document({
+    styles: { default: { document: { run: { font: 'SimSun', size: 22 } } } },
+    sections: [{ children: paragraphs }],
+  });
+}
+
+router.post('/export', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  const { results = [], title = '作文批改结果', format = 'docx' } = (req.body as any) || {};
+  if (!Array.isArray(results) || results.length === 0) {
+    return res.status(400).json({ success: false, error: '没有可导出的批改结果' });
+  }
+  try {
+    const doc = buildExportDocx(results, String(title));
+    const buffer = await Packer.toBuffer(doc);
+    const filename = `作文批改结果_${new Date().toISOString().slice(0, 10)}.docx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.send(Buffer.from(buffer));
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: '生成 Word 失败：' + String(e?.message || e) });
   }
 });
 

@@ -24,6 +24,7 @@
     "cors": "^2.8.5",
     "coze-coding-dev-sdk": "^0.7.21",
     "dayjs": "^1.11.19",
+    "docx": "^9.7.1",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
