@@ -152,6 +152,12 @@ export default function MyVocabularyPage() {
                   </View>
                 </Pressable>
                 
+                {index === 0 && (
+                  <TouchableOpacity style={styles.vocabTestButton} onPress={() => router.push('/vocab-test')}>
+                    <Text style={styles.vocabTestText} numberOfLines={1}>词汇量测试</Text>
+                  </TouchableOpacity>
+                )}
+
                 {index === 1 && (
                   <TouchableOpacity style={styles.oldSchoolButton} onPress={() => router.push('/tree-diagram')}>
                     <Text style={styles.oldSchoolText} numberOfLines={1}>old-school</Text>
@@ -226,6 +232,20 @@ const styles = StyleSheet.create({
     marginTop: 150,
     marginLeft: 80,
     alignSelf: 'center',
+  },
+  vocabTestButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 150,
+    marginLeft: 40,
+    alignSelf: 'center',
+  },
+  vocabTestText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   oldSchoolText: {
     fontSize: 12,

@@ -25,6 +25,7 @@ import irisRouter from "./routes/iris";
 import accountRouter from "./routes/account";
 import settingsRouter from "./routes/settings";
 import essayGradingRouter from "./routes/essay-grading";
+import gkVocabRouter from "./routes/gk-vocab";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -263,6 +264,7 @@ app.use('/api/v1/iris', irisRouter);
 app.use('/api/v1/user', accountRouter);
 app.use('/api/v1/settings', settingsRouter);
 app.use('/api/v1/essay-grading', essayGradingRouter);
+app.use('/api/v1/gk-vocab', gkVocabRouter);
 app.use('/api/submissions', submissionsRouter);
 app.use('/api/iris', irisRouter);
 

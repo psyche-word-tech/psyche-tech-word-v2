@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { problems, favorites, usersInAuth, userProfiles, essayGradingResults } from "./schema";
+import { problems, favorites, users, userProfiles, essayGradingResults } from "./schema";
 
 export const favoritesRelations = relations(favorites, ({one}) => ({
 	problem: one(problems, {
@@ -13,20 +13,20 @@ export const problemsRelations = relations(problems, ({many}) => ({
 }));
 
 export const userProfilesRelations = relations(userProfiles, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [userProfiles.id],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
-export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
+export const usersRelations = relations(users, ({many}) => ({
 	userProfiles: many(userProfiles),
 	essayGradingResults: many(essayGradingResults),
 }));
 
 export const essayGradingResultsRelations = relations(essayGradingResults, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [essayGradingResults.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
