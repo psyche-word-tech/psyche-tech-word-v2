@@ -138,6 +138,8 @@ interface GradingResult {
   improvements: string[];
   // 主观题/作文：按评分标准维度或采分点逐项评分
   points?: { name?: string; point?: string; max: number; score: number; comment?: string }[];
+  // 定档信息：若定性分档，给出档次名与区间，服务端据此钳制总分
+  tier?: { name?: string; min?: number; max?: number };
 }
 
 /**
@@ -234,7 +236,35 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       gradingResult.max_score = max_score;
     }
     if (gradingResult.total_score > max_score) gradingResult.total_score = max_score;
-    console.log('[grade] 模型返回 total=', gradingResult.total_score, '/', gradingResult.max_score, 'scores=', JSON.stringify(gradingResult.scores), '评语=', (gradingResult.comments || '').slice(0, 200));
+
+    // 强制定档与分数一致：模型在 tier 里给了档次区间，则把总分钳到档内，并把各维度/得分点缩放到与总分一致
+    const tier = gradingResult.tier;
+    if (tier && Number.isFinite(tier.min) && Number.isFinite(tier.max)) {
+      const tMin = Math.max(0, Math.min(max_score, Math.round(tier.min as number)));
+      const tMax = Math.max(tMin, Math.min(max_score, Math.round(tier.max as number)));
+      const total = Math.max(tMin, Math.min(tMax, gradingResult.total_score));
+      const pts = gradingResult.points;
+      if (pts && pts.length > 0) {
+        const s = pts.reduce((a, p) => a + (p.score || 0), 0);
+        const ratio = s > 0 ? total / s : 0;
+        let acc = 0;
+        pts.forEach((p, i) => {
+          p.score = i === pts.length - 1 ? Math.max(0, total - acc) : Math.round((p.score || 0) * ratio);
+          acc += p.score;
+        });
+      } else {
+        const keys = ['content', 'language', 'structure', 'handwriting'] as const;
+        const s = keys.reduce((a, k) => a + gradingResult.scores[k], 0);
+        const ratio = s > 0 ? total / s : 0;
+        let acc = 0;
+        keys.forEach((k, i) => {
+          gradingResult.scores[k] = i === keys.length - 1 ? Math.max(0, total - acc) : Math.round(gradingResult.scores[k] * ratio);
+          acc += gradingResult.scores[k];
+        });
+      }
+      gradingResult.total_score = total;
+    }
+    console.log('[grade] 模型返回 total=', gradingResult.total_score, '/', gradingResult.max_score, '定档=', tier ? `${tier.name || ''}[${tier.min}-${tier.max}]` : '无', 'scores=', JSON.stringify(gradingResult.scores), '评语=', (gradingResult.comments || '').slice(0, 200));
 
     // 4. 标注：作文按错误词级定位画红笔标记图；其他学科主观题无词级错误，直接返回原压缩图
     const markedImages: string[] = [];
@@ -530,7 +560,12 @@ ${gradingStandard || '（未提供，按常见作文评分惯例先定档再估�
 ${task}
 
 ## 输出格式（JSON）
-{"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"points":[{"point":"维度名","max":0,"score":0,"comment":"理由"}],"errors":[{"type":"${typeEnum}","errorType":"missing/wrong/extra/incomplete","wordIdx":0,"original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
+{"transcription":"原文","max_score":${maxScore},"tier":{"name":"档次名","min":档下限,"max":档上限},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"points":[{"point":"维度名","max":0,"score":0,"comment":"理由"}],"errors":[{"type":"${typeEnum}","errorType":"missing/wrong/extra/incomplete","wordIdx":0,"original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
+
+【定档与分数强一致——务必遵守】
+- 只要定量了分档，就必须在 tier 里给出 {name: 档名, min: 该档下限, max: 该档上限}。
+- total_score 必须落在 [tier.min, tier.max] 区间内；各维度分之和（或各得分点之和）必须精确等于 total_score。
+- 只有未分档时才可省略 tier（不省略就填实际档区间）。
 
 ## errorType（决定批改标记类型，务必准确）
 - extra: 多了一个词（可直接删掉）。original=多余的那个词，correction 填空字符串 ""
@@ -672,6 +707,9 @@ ${noteLine}
     ? { content: g.scores.content || 0, language: g.scores.language || 0, structure: g.scores.structure || 0, handwriting: g.scores.handwriting || 0 }
     : { content: 0, language: 0, structure: 0, handwriting: 0 };
   g.points = (Array.isArray(g.points) ? g.points : []).map((p: { name?: string; point?: string; max: number; score: number; comment?: string }) => ({ ...p, point: p.point || p.name || '' }));
+  g.tier = g.tier && typeof g.tier === 'object'
+    ? { name: String(g.tier.name || ''), min: Number(g.tier.min), max: Number(g.tier.max) }
+    : undefined;
 
   return gradingResult!;
 }
