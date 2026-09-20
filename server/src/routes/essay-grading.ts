@@ -136,8 +136,8 @@ interface GradingResult {
   comments: string;
   strengths: string[];
   improvements: string[];
-  // 其他学科主观题：按打分标准逐点评分
-  points?: { name: string; max: number; score: number; comment: string }[];
+  // 主观题/作文：按评分标准维度或采分点逐项评分
+  points?: { name?: string; point?: string; max: number; score: number; comment?: string }[];
 }
 
 /**
@@ -218,6 +218,10 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       const points = gradingResult.points || [];
       gradingResult.total_score = points.reduce((sum, p) => sum + (p.score || 0), 0);
       gradingResult.max_score = max_score;
+    } else if (gradingResult.points && gradingResult.points.length > 0) {
+      // 评分标准自带维度：按各维度得分点求和
+      gradingResult.total_score = gradingResult.points.reduce((s, p) => s + (p.score || 0), 0);
+      gradingResult.max_score = max_score;
     } else {
       const scoreKeys = ['content', 'language', 'structure', 'handwriting'] as const;
       const weights = { content: 0.4, language: 0.3, structure: 0.2, handwriting: 0.1 } as const;
@@ -229,6 +233,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
       gradingResult.max_score = max_score;
     }
+    if (gradingResult.total_score > max_score) gradingResult.total_score = max_score;
     console.log('[grade] 模型返回 total=', gradingResult.total_score, '/', gradingResult.max_score, 'scores=', JSON.stringify(gradingResult.scores), '评语=', (gradingResult.comments || '').slice(0, 200));
 
     // 4. 标注：作文按错误词级定位画红笔标记图；其他学科主观题无词级错误，直接返回原压缩图
@@ -517,14 +522,15 @@ ${gradingStandard || '（未提供，按常见作文评分惯例先定档再估�
 
 【如何使用上面的标准——至关重要】
 - 若给出了"档次/分档"描述（如 第一档13-15 / 第二档9-12 / …，或 一类文/二类文/三类文），先逐档对照作文判定它属于哪一档，**总分必须落在所定档的区间内**，并在 comments 里写明定档理由。
-- 若给出了扣分规则（如 一个语法错误扣1分、一个句型错误扣1分、跑题扣5分），按规则逐项扣分，把扣分落实到对应维度分。
-- 两者可同时存在：先定档确定总分区间，再用扣分规则在档内微调。
+- 若给出了"评分维度及分值"（如 内容5分/语言5分/结构3分，或任何自定义维度），必须按这些维度**逐项单独打分**：points 数组每个维度一条 {point:维度名, max:该维度满分, score:实得分, comment:理由}，且 total_score=各 point 的 score 之和；此时 scores 四维填 0。未给维度时才用默认四维（内容/语言/结构/书写）并把 points 留空。
+- 若给出了扣分规则（如 一个语法错误扣1分、一个句型错误扣1分、跑题扣5分），按规则逐项扣分，把扣分落实到对应维度分/得分点。
+- 以上可同时存在：先定档定区间，再按维度或扣分规则给分。
 - 未提供时才按常见作文评分惯例自行定档估分。
 
 ${task}
 
 ## 输出格式（JSON）
-{"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"errors":[{"type":"${typeEnum}","errorType":"missing/wrong/extra/incomplete","wordIdx":0,"original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
+{"transcription":"原文","max_score":${maxScore},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"points":[{"point":"维度名","max":0,"score":0,"comment":"理由"}],"errors":[{"type":"${typeEnum}","errorType":"missing/wrong/extra/incomplete","wordIdx":0,"original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
 
 ## errorType（决定批改标记类型，务必准确）
 - extra: 多了一个词（可直接删掉）。original=多余的那个词，correction 填空字符串 ""
@@ -665,7 +671,7 @@ ${noteLine}
   g.scores = g.scores && typeof g.scores === 'object'
     ? { content: g.scores.content || 0, language: g.scores.language || 0, structure: g.scores.structure || 0, handwriting: g.scores.handwriting || 0 }
     : { content: 0, language: 0, structure: 0, handwriting: 0 };
-  g.points = Array.isArray(g.points) ? g.points : [];
+  g.points = (Array.isArray(g.points) ? g.points : []).map((p: { name?: string; point?: string; max: number; score: number; comment?: string }) => ({ ...p, point: p.point || p.name || '' }));
 
   return gradingResult!;
 }

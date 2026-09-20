@@ -495,49 +495,37 @@ export default function EssayGradingScreen() {
               </View>
             )}
 
-            {/* 分数卡片 / 其他学科得分点 */}
-            {subject === 'other' ? (
-              <View style={styles.scoreCard}>
-                <View style={styles.totalScoreContainer}>
-                  <Text style={styles.totalScoreLabel}>总分</Text>
-                  <Text style={styles.totalScoreValue}>
-                    {gradingResult.total_score}
-                    <Text style={styles.totalScoreMax}>/{gradingResult.max_score}</Text>
-                  </Text>
-                </View>
-
-                {gradingResult.points && gradingResult.points.length > 0 && (
-                  <View style={styles.pointsContainer}>
-                    {gradingResult.points.map((point, index) => (
-                      <View key={index} style={styles.pointItem}>
-                        <View style={styles.pointHeader}>
-                          <View style={styles.pointBadge}>
-                            <Text style={styles.pointBadgeText}>{index + 1}</Text>
-                          </View>
-                          <Text style={styles.pointTitle}>{point.point}</Text>
-                          <Text style={styles.pointScore}>
-                            <Text style={styles.pointScoreValue}>{point.score}</Text>
-                            <Text style={styles.pointScoreMax}>/{point.max}</Text>
-                          </Text>
-                        </View>
-                        {point.comment ? (
-                          <Text style={styles.pointComment}>{point.comment}</Text>
-                        ) : null}
-                      </View>
-                    ))}
-                  </View>
-                )}
+            {/* 分数卡片：有按标准维度的得分点则逐项展示，否则作文显示固定四维 */}
+            <View style={styles.scoreCard}>
+              <View style={styles.totalScoreContainer}>
+                <Text style={styles.totalScoreLabel}>总分</Text>
+                <Text style={styles.totalScoreValue}>
+                  {gradingResult.total_score}
+                  <Text style={styles.totalScoreMax}>/{gradingResult.max_score}</Text>
+                </Text>
               </View>
-            ) : (
-              <View style={styles.scoreCard}>
-                <View style={styles.totalScoreContainer}>
-                  <Text style={styles.totalScoreLabel}>总分</Text>
-                  <Text style={styles.totalScoreValue}>
-                    {gradingResult.total_score}
-                    <Text style={styles.totalScoreMax}>/{gradingResult.max_score}</Text>
-                  </Text>
-                </View>
 
+              {gradingResult.points && gradingResult.points.length > 0 ? (
+                <View style={styles.pointsContainer}>
+                  {gradingResult.points.map((point, index) => (
+                    <View key={index} style={styles.pointItem}>
+                      <View style={styles.pointHeader}>
+                        <View style={styles.pointBadge}>
+                          <Text style={styles.pointBadgeText}>{index + 1}</Text>
+                        </View>
+                        <Text style={styles.pointTitle}>{point.point}</Text>
+                        <Text style={styles.pointScore}>
+                          <Text style={styles.pointScoreValue}>{point.score}</Text>
+                          <Text style={styles.pointScoreMax}>/{point.max}</Text>
+                        </Text>
+                      </View>
+                      {point.comment ? (
+                        <Text style={styles.pointComment}>{point.comment}</Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              ) : subject !== 'other' ? (
                 <View style={styles.scoreDetails}>
                   <View style={styles.scoreItem}>
                     <Text style={styles.scoreItemLabel}>内容</Text>
@@ -556,8 +544,8 @@ export default function EssayGradingScreen() {
                     <Text style={styles.scoreItemValue}>{gradingResult.scores?.handwriting}</Text>
                   </View>
                 </View>
-              </View>
-            )}
+              ) : null}
+            </View>
 
             {/* 标注图片（多页左右滑）——仅作文有红笔标注 */}
             {subject !== 'other' && markedImages.length > 0 && (
