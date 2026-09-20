@@ -148,6 +148,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
     const { images, image, reference_answer, grading_standard = '', max_score = 15, subject = 'english' } = req.body;
+    console.log('[grade] 收到请求 subject=', subject, 'max_score=', max_score, 'grading_standard=', (grading_standard || '(空)').slice(0, 200));
 
     // 兼容单图（image）与多张（images[]）入参
     let imageList: string[] = [];
@@ -228,6 +229,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
       gradingResult.max_score = max_score;
     }
+    console.log('[grade] 模型返回 total=', gradingResult.total_score, '/', gradingResult.max_score, 'scores=', JSON.stringify(gradingResult.scores), '评语=', (gradingResult.comments || '').slice(0, 200));
 
     // 4. 标注：作文按错误词级定位画红笔标记图；其他学科主观题无词级错误，直接返回原压缩图
     const markedImages: string[] = [];
