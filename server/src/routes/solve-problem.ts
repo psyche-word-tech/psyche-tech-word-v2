@@ -2,7 +2,6 @@ import { Router } from "express";
 import multer from "multer";
 import { createHash } from "crypto";
 import { writeFileSync } from "fs";
-import { LLMClient, Config } from "coze-coding-dev-sdk";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 
 const router = Router();
@@ -209,12 +208,6 @@ router.post("/", upload.single("image"), async (req, res) => {
     const imageBase64 = imageBuffer.toString("base64");
     const mimeType = req.file.mimetype;
 
-    const config = new Config({
-      apiKey: process.env.COZE_API_KEY || "",
-    });
-
-    const llmClient = new LLMClient(config);
-
     const messages = [
       {
         role: "system" as const,
@@ -294,11 +287,55 @@ router.post("/", upload.single("image"), async (req, res) => {
       },
     ];
 
+    // 复用作文批改的千问配置，直连千问 VL 模型完成题目识别与解答
+    const qwenApiUrl = process.env.QWEN_API_URL
+      || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
+    const qwenApiKey = process.env.QWEN_API_KEY || '';
+    const qwenModel = process.env.QWEN_MODEL || 'qwen3.8-max';
+    const chatUrl = qwenApiUrl.includes('/chat/completions')
+      ? qwenApiUrl
+      : `${qwenApiUrl.replace(/\/+$/, '')}/chat/completions`;
+
+    console.log(`[SolveProblem] 调用千问 VL 模型: ${qwenModel}, URL: ${chatUrl}, keyLen=${qwenApiKey.length}`);
+
     const startTime = Date.now();
-    const llmResponse = await llmClient.invoke(messages, {
-      model: "doubao-seed-2-0-lite-260215",
-      temperature: 0.3,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+    let llmResponse: { content: string };
+    try {
+      const resp = await fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${qwenApiKey}`,
+        },
+        body: JSON.stringify({
+          model: qwenModel,
+          messages,
+          temperature: 0.3,
+          enable_thinking: false,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        throw new Error(`千问 API 调用失败: ${resp.status} - ${errorText}`);
+      }
+      const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
+      const content = data.choices?.[0]?.message?.content || '';
+      if (!content) {
+        throw new Error('千问 API 返回内容为空');
+      }
+      llmResponse = { content };
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error('千问 API 调用超时（300秒）');
+      }
+      throw err;
+    }
 
     console.log(`[SolveProblem] LLM done in ${Date.now() - startTime}ms`);
     console.log(`[SolveProblem] LLM response length: ${llmResponse.content.length}`);
