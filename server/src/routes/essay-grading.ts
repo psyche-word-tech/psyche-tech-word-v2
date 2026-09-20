@@ -215,15 +215,21 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       fs.appendFileSync('/tmp/grade-debug.log', '\n[' + new Date().toISOString() + ']\nPAGES:' + imageList.length + '\nERRORS:' + JSON.stringify(gradingResult.errors) + '\n');
     } catch {}
 
-    // 计算总分：对作文按配权对每个分项硬性封顶；其他学科主观题则按各采分点得分直接求和
+    // 计算总分：对作文按配权对每个分项硬性封顶；其他学科主观题则按各采分点得分直接求和。评分步长为 0.5 分。
     const isOtherSubject = subject === 'other';
+    const roundToStep = (n: number, step = 0.5) => Math.round((n + Number.EPSILON) / step) * step;
+    const sumPoints = (pts: Array<{ score?: number }>) => {
+      let s = 0;
+      for (const p of pts) { p.score = Math.max(0, roundToStep(p.score || 0)); s += p.score; }
+      return s;
+    };
     if (isOtherSubject) {
       const points = gradingResult.points || [];
-      gradingResult.total_score = points.reduce((sum, p) => sum + (p.score || 0), 0);
+      gradingResult.total_score = sumPoints(points);
       gradingResult.max_score = max_score;
     } else if (gradingResult.points && gradingResult.points.length > 0) {
-      // 评分标准自带维度：按各维度得分点求和
-      gradingResult.total_score = gradingResult.points.reduce((s, p) => s + (p.score || 0), 0);
+      // 评分标准自带维度：按各维度得分点求和（0.5 步长）
+      gradingResult.total_score = sumPoints(gradingResult.points);
       gradingResult.max_score = max_score;
     } else {
       const scoreKeys = ['content', 'language', 'structure', 'handwriting'] as const;
@@ -232,38 +238,22 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       let capSum = 0;
       for (const k of scoreKeys) { caps[k] = Math.round(max_score * weights[k]); capSum += caps[k]; }
       if (capSum !== max_score) caps[scoreKeys[0]] += max_score - capSum; // 修正每维度舍入误差，使各上限求和恰为 max_score
-      for (const k of scoreKeys) gradingResult.scores[k] = Math.max(0, Math.min(caps[k], Math.round(gradingResult.scores[k])));
+      for (const k of scoreKeys) gradingResult.scores[k] = Math.max(0, Math.min(caps[k], roundToStep(gradingResult.scores[k])));
       gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
       gradingResult.max_score = max_score;
     }
-    if (gradingResult.total_score > max_score) gradingResult.total_score = max_score;
+    gradingResult.total_score = Math.max(0, Math.min(max_score, roundToStep(gradingResult.total_score)));
 
-    // 强制定档与分数一致：模型在 tier 里给了档次区间，则把总分钳到档内，并把各维度/得分点缩放到与总分一致
+    // 定档与分数：总分以各维度/得分点自然加和为准（上面已算 total_score），不再把总分硬压进模型所标档位。
+    // 若总分超出所标档位上限则适当升档（档位上移到加和总分）；低于下限则相应下移。总分与各维度分天然一致，不做缩放。
     const tier = gradingResult.tier;
     if (tier && Number.isFinite(tier.min) && Number.isFinite(tier.max)) {
-      const tMin = Math.max(0, Math.min(max_score, Math.round(tier.min as number)));
-      const tMax = Math.max(tMin, Math.min(max_score, Math.round(tier.max as number)));
-      const total = Math.max(tMin, Math.min(tMax, gradingResult.total_score));
-      const pts = gradingResult.points;
-      if (pts && pts.length > 0) {
-        const s = pts.reduce((a, p) => a + (p.score || 0), 0);
-        const ratio = s > 0 ? total / s : 0;
-        let acc = 0;
-        pts.forEach((p, i) => {
-          p.score = i === pts.length - 1 ? Math.max(0, total - acc) : Math.round((p.score || 0) * ratio);
-          acc += p.score;
-        });
-      } else {
-        const keys = ['content', 'language', 'structure', 'handwriting'] as const;
-        const s = keys.reduce((a, k) => a + gradingResult.scores[k], 0);
-        const ratio = s > 0 ? total / s : 0;
-        let acc = 0;
-        keys.forEach((k, i) => {
-          gradingResult.scores[k] = i === keys.length - 1 ? Math.max(0, total - acc) : Math.round(gradingResult.scores[k] * ratio);
-          acc += gradingResult.scores[k];
-        });
-      }
-      gradingResult.total_score = total;
+      const tMin = Math.round(tier.min as number);
+      const tMax = Math.round(tier.max as number);
+      const total = gradingResult.total_score;
+      if (total > tMax) tier.max = total;
+      if (total < tMin) tier.min = total;
+      gradingResult.tier = tier;
     }
     console.log('[grade] 模型返回 total=', gradingResult.total_score, '/', gradingResult.max_score, '定档=', tier ? `${tier.name || ''}[${tier.min}-${tier.max}]` : '无', 'scores=', JSON.stringify(gradingResult.scores), '评语=', (gradingResult.comments || '').slice(0, 200));
 
@@ -460,13 +450,13 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
     ? `## 要求
 1. 识别作文原文（transcription，中文）
 2. 找出所有错误：错别字、病句、标点、用词不当、表达不畅
-3. 打分（满分${maxScore}分）：内容 40%、语言表达 30%、结构 20%、卷面书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、卷面书写${Math.round(maxScore * 0.1)}，请在各自满分内估分）
+3. 打分（满分${maxScore}分）：内容 40%、语言表达 30%、结构 20%、卷面书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、卷面书写${Math.round(maxScore * 0.1)}，请在各自满分内估分，评分步长为 0.5 分（例如 5、4.5、3、2.5，各维度打分实际值需为 0.5 的倍数））
 4. 若提供了【评分标准/档次/扣分规则】，先按档次逐档对照定档、总分落在所定档区间内，再按扣分规则在档内扣分，把结果落实到各维度分，并在评语中说明定档与扣分依据
 5. 给出评语和建议`
     : `## 要求
 1. 识别作文原文（transcription）
 2. 找出所有错误（语法、拼写、标点、用词、句式）
-3. 打分（满分${maxScore}分）：内容 40%、语言 30%、结构 20%、书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、书写${Math.round(maxScore * 0.1)}，请在各自满分内估分）
+3. 打分（满分${maxScore}分）：内容 40%、语言 30%、结构 20%、书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、书写${Math.round(maxScore * 0.1)}，请在各自满分内估分，评分步长为 0.5 分（例如 5、4.5、3、2.5，各维度打分实际值需为 0.5 的倍数））
 4. 若提供了【评分标准/档次/扣分规则】，先按档次逐档对照定档、总分落在所定档区间内，再按扣分规则在档内扣分，把结果落实到各维度分，并在评语中说明定档与扣分依据
 5. 给出评语和建议`;
 
@@ -565,7 +555,7 @@ ${task}
 
 【定档与分数强一致——务必遵守】
 - 只要定量了分档，就必须在 tier 里给出 {name: 档名, min: 该档下限, max: 该档上限}。
-- total_score 必须落在 [tier.min, tier.max] 区间内；各维度分之和（或各得分点之和）必须精确等于 total_score。
+- total_score 必须落在 [tier.min, tier.max] 区间内；各维度分之和（或各得分点之和）必须精确等于 total_score。若按维度加和的总分略超过所标档位上限，可适当上调档位上限以容纳该总分（升档），不要为了压进原档位而刻意调低维度分。
 - 只有未分档时才可省略 tier（不省略就填实际档区间）。
 【评语·错误·档位/分数三角一致——违反即重评】
 - 先按错误的多少与严重程度定档：错误越多/越基础（拼写、主谓一致、缺失谓语、情态误用等）、越影响理解，档位必须越靠下并**取该档下限附近的分**；错误少且不影响理解才给中高档。
