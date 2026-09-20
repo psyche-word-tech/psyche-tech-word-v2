@@ -122,6 +122,16 @@ export default function MyVocabularyPage() {
           <View style={{ width: 60 }} />
         </View>
 
+        {/* 功能按钮（上下排列） */}
+        <View style={styles.functionButtons}>
+          <TouchableOpacity style={styles.vocabTestButton} onPress={() => router.push('/vocab-test')}>
+            <Text style={styles.vocabTestText} numberOfLines={1}>词汇量测试</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.oldSchoolButton} onPress={() => router.push('/tree-diagram')}>
+            <Text style={styles.oldSchoolText} numberOfLines={1}>old-school</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Word Books Grid */}
         <View style={styles.gridContainer}>
           {isLoading ? (
@@ -151,18 +161,6 @@ export default function MyVocabularyPage() {
                     <Text style={styles.learnText}>习</Text>
                   </View>
                 </Pressable>
-                
-                {index === 0 && (
-                  <TouchableOpacity style={styles.vocabTestButton} onPress={() => router.push('/vocab-test')}>
-                    <Text style={styles.vocabTestText} numberOfLines={1}>词汇量测试</Text>
-                  </TouchableOpacity>
-                )}
-
-                {index === 1 && (
-                  <TouchableOpacity style={styles.oldSchoolButton} onPress={() => router.push('/tree-diagram')}>
-                    <Text style={styles.oldSchoolText} numberOfLines={1}>old-school</Text>
-                  </TouchableOpacity>
-                )}
 
               </View>
             ))
@@ -226,19 +224,15 @@ const styles = StyleSheet.create({
   },
   oldSchoolButton: {
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 8,
     borderRadius: 16,
-    marginTop: 150,
-    alignSelf: 'center',
   },
   vocabTestButton: {
     backgroundColor: '#2196F3',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 8,
     borderRadius: 16,
-    marginTop: 150,
-    alignSelf: 'center',
   },
   vocabTestText: {
     fontSize: 12,
@@ -251,17 +245,24 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     fontWeight: '600',
   },
+  functionButtons: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 12,
+    paddingTop: 28,
+  },
   gridContainer: {
     flex: 1,
-    flexDirection: 'column',
+    flexDirection: 'row',
     justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: 60,
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    paddingTop: 20,
     paddingHorizontal: 16,
-    gap: 14,
+    gap: 8,
   },
   bookItem: {
-    width: 220,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 0,
