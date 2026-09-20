@@ -491,6 +491,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **中文标注**：`estimateTextWidth` 对汉字按全角计宽；SVG 字体 `DejaVu Sans, WenQuanYi Micro Hei` 支持中文；annotateImage 的标点跳过判断 `/[A-Za-z\u4e00-\u9fa5]/` 已兼容汉字。无需额外改动。
 - **定档与分数强一致（服务器端强制，essay-grading.ts total 计算后）**：模型会在输出 JSON 返回 `tier:{name,min,max}`（刻度区间）。为避免"评语写第三档(7-9)但实际打 10 分"的评语/分数脱节，服务器把 `total_score` 钳到 `[tier.min,tier.max]`∩`[0,max_score]`，再把各维度(scores.content/language/structure/handwriting)或得分点(points)按比例缩放到与该钳制后的 total 之和精确相等（最后一项=total-已累加，保证和一致）。`tier` 归一化在读取 `g.tier` 时完成（`g.tier && Number.isFinite(min)&&Number.isFinite(max)` 才保留）。改后端需 `node build.js` + pkill 重启生效；查评分证据看日志 `[grade] 模型返回 total=… 定档=…`。
 - **自定义维度优先显示（essay-grading.ts 作文 prompt"如何使用上面的标准"）**：只要评分标准里出现**并列的维度清单**（如 内容要点/词汇语法/篇章连贯，**无论是否附分值**），就按这些维度逐项打分输出 `points`（point=维度名），前端 `index.tsx` 对任意科目 `points.length>0` 即优先渲染该列表，固定四维卡仅兜底；标准未给各维满分时由模型把 max_score 分配到各维 max（总和=max_score）。别误判"没给分值=不走维度"，维度名才是触发点。
+- **评语·错误·分数三角一致（essay-grading.ts 作文 prompt"定档与分数强一致"段）**：模型会先按错误多少/严重度定档（错误越多越基础越影响理解→档位越靠下并取档内下限附近分），且评语对缺点的定性措辞必须与所给档位/分数严格匹配——评语写了"大量拼写错误、严重语法错误、严重影响理解"就只能落在偏低档（高考五档=第二档 4-6 及以下）；给中高分则评语只能表述为"有若干不足但基本完成任务、基本不影响理解"。禁止"评语严厉批评却给中高档"或"淡淡批评却给低分"。触发背景：用户反馈"评语里说大量严重错误怎么还有9分"（第三档上限9与其严重评语脱节）。
 
 ## 新增功能：AI 主观题批改 + 其他学科（按参考答案+打分标准逐点评分）
 
