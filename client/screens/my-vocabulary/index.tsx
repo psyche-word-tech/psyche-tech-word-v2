@@ -122,16 +122,6 @@ export default function MyVocabularyPage() {
           <View style={{ width: 60 }} />
         </View>
 
-        {/* 功能按钮（上下排列） */}
-        <View style={styles.functionButtons}>
-          <TouchableOpacity style={styles.vocabTestButton} onPress={() => router.push('/vocab-test')}>
-            <Text style={styles.vocabTestText} numberOfLines={1}>词汇量测试</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.oldSchoolButton} onPress={() => router.push('/tree-diagram')}>
-            <Text style={styles.oldSchoolText} numberOfLines={1}>old-school</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Word Books Grid */}
         <View style={styles.gridContainer}>
           {isLoading ? (
@@ -170,6 +160,16 @@ export default function MyVocabularyPage() {
               <Text style={styles.emptyHint}>请先购买词汇书</Text>
             </View>
           )}
+
+          {/* 功能按钮（上下排列，置于词书网格下方） */}
+          <View style={styles.functionButtons}>
+            <TouchableOpacity style={styles.vocabTestButton} onPress={() => router.push('/vocab-test')}>
+              <Text style={styles.vocabTestText} numberOfLines={1}>词汇量测试</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.oldSchoolButton} onPress={() => router.push('/tree-diagram')}>
+              <Text style={styles.oldSchoolText} numberOfLines={1}>old-school</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Alert Modal */}
@@ -249,7 +249,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     gap: 12,
-    paddingTop: 28,
+    paddingTop: 20,
+    flexBasis: '100%',
   },
   gridContainer: {
     flex: 1,
