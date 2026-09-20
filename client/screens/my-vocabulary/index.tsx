@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
     flexWrap: 'wrap',
-    paddingTop: 20,
+    paddingTop: 70,
     paddingHorizontal: 16,
     gap: 8,
   },
