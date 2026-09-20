@@ -596,3 +596,11 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **注意**：`bbox` 是相对压缩后图片的坐标（千问看到的就是压缩图），标注与放大图同源坐标一致；千问未给 bbox 时估算到左列排布，定位会不准——真实卷建议让千问给准 bbox。**已作答+手机暗拍卷上不要依赖纯像素横线检测，应强化 `callRecordingQwenVL` 的 prompt 让千问为每个空返回精确 2 点像素 box（覆盖横线区域），横线检测仅用于千问无 bbox 或明显偏差时的兜底精调。**
 - **⚠️ 标注图在 Web 预览/鸿蒙 WebView 显示空白窄条的根因（已修复）**：录题标注图 `<Image>` 之前用 Tailwind 任意高度类 `h-[520px]`，在 Uniwind Web 下未生成实际高度 → Image 高度塌陷成窄条、看起来"没有标注图"。**必须用 `StyleSheet.create` 数值 `height`（如 `markedImage:{height:520}`）+ `style={styles.markedImage}` + `resizeMode="contain"`**，与作文页 `essay-grading` 完全一致（作文页一直正常）。后端 `annotateRecordingImage` 输出为 `.png()`（JPEG 在部分 WebView 渲染更不可靠）。前端加"卷面标注"标题 + 空时"暂未生成标注图"提示。
   - **⚠️ 标注图显示后无法滚动（已修复）**：录题页布局须与作文页一致——外层 `<View className="flex-1">` 内 `<ScrollView className="flex-1" contentContainerStyle={{padding:16,paddingBottom:40}}>`（**ScrollView 必须加 `flex-1`**，否则 web 端高度坍缩无法下滚）；标注图 `height:340`（勿用 520 占满整屏把下方评语/列表挤出可视区）。录题页可不用 `Screen` 组件（手动 ScrollView 即可），但 flex-1 不能少。
+
+## 词汇量测试 · 五选一改造（120 题客观题）
+- **背景**：`gk_vocab` 课标词表原本不带中文释义（meaning 为空）。词汇量测试从"认识/模糊/不认识"主观自评改为**客观五选一**（每题 5 个中文意思，1 正确 + 4 干扰，选对才算对）。
+- **释义填充脚本** `server/scripts/build-meanings.mjs`：用千问（沿用 `QWEN_API_KEY`/`QWEN_API_URL`/`QWEN_MODEL`，qwen3.8-max，prompt 强 JSON，**不强加 json_object**）为 `meaning` 为空的词批量生成中文释义写回 `gk_vocab.meaning`。幂等（按 meaning null/空 分页取）、BATCH=100、断点续传、`<batchLimit>` 参数走试跑不写库。注意 `__root = path.resolve(__this,'..')`（server/，不要指向 scripts/）。后台全量跑：`cd server && (nohup node scripts/build-meanings.mjs > /tmp/build-meanings.log 2>&1 &)`，日志 `[批 N] 完成 x/y` 表示推进。
+- **后端 `/api/v1/gk-vocab/test`（GET，`limit` 默认 120，clamp [10,200]）**：出题池=**有释义词**，抽样取 1 正确 + 4 随机不同干扰释义，`options` 乱序且**响应不暴露正确项**。返回 `{total(出题池), sampleCount, questions:[{id,word,level,variant,options}]}`。#{total} 会低于全表 3175（只统计已有释义的词）。
+- **`/test/submit`（POST `{answers:[{id,chosen}]}`）**：`.in('id',ids)` 批量取正确释义，`chosen===firstMeaning(corr)` 才算对；`estimated = round(correct/sample * 出题池)`。返回 `{correct_count,sample_count,total,estimated_vocab}`。
+- **前端 `client/screens/vocab-test/index.tsx`**：五选一答题（读 `/test?limit=120`→逐题展示 `word`+5 个 `options`、可上一题/下一题、未选禁下一题、全部答完才能提交→POST submit→结果页正确数+估算词汇量）。字段是 `questions`（**不是旧版 `words`**）。
+- **前端接口验证**：test_run 全绿（lint:all + 探活 + stats + test 五选一 + submit 判分：对2错1→correct_count=2）。新指针的 bundle 存于 `server/public`（Express 静态实时读盘，改前端只需重跑 export+cp，不用重启后端）。

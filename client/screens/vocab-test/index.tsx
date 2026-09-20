@@ -4,24 +4,28 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { fetchWithRetry } from '@/utils/apiClient';
 
-interface TestWord {
+const TEST_LIMIT = 120;
+
+interface Question {
   id: number;
   word: string;
   level: string;
+  variant: string | null;
+  options: string[];
 }
 
 interface Answer {
-  word: string;
-  known: boolean;
+  id: number;
+  chosen: string;
 }
 
 export default function VocabTestPage() {
   const router = useSafeRouter();
   const [phase, setPhase] = useState<'idle' | 'loading' | 'testing' | 'submitting' | 'done'>('idle');
-  const [words, setWords] = useState<TestWord[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [total, setTotal] = useState(0);
   const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<Answer[]>([]);
+  const [chosen, setChosen] = useState<Record<number, string>>({});
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const reqRef = useRef<AbortController | null>(null);
@@ -33,17 +37,13 @@ export default function VocabTestPage() {
     reqRef.current = controller;
     setPhase('loading');
     try {
-      const [statsRes, testRes] = await Promise.all([
-        fetchWithRetry(`/api/v1/gk-vocab/stats`, { signal: controller.signal }),
-        fetchWithRetry(`/api/v1/gk-vocab/test?limit=30`, { signal: controller.signal }),
-      ]);
-      if (!statsRes.ok || !testRes.ok) throw new Error(`HTTP ${statsRes.status || testRes.status}`);
-      const stats = await statsRes.json();
-      const test = await testRes.json();
-      if (!test.words || test.words.length === 0) throw new Error('词库为空');
-      setTotal(stats.total || test.total || 0);
-      setWords(test.words);
-      setAnswers([]);
+      const res = await fetchWithRetry(`/api/v1/gk-vocab/test?limit=${TEST_LIMIT}`, { signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const test = await res.json();
+      if (!test.questions || test.questions.length === 0) throw new Error('词库为空');
+      setTotal(test.total || 0);
+      setQuestions(test.questions);
+      setChosen({});
       setIndex(0);
       setPhase('testing');
     } catch (e: any) {
@@ -53,24 +53,24 @@ export default function VocabTestPage() {
     }
   };
 
-  const choose = useCallback((known: boolean) => {
-    if (phase !== 'testing' || index >= words.length) return;
-    const w = words[index];
-    setAnswers((prev) => [...prev, { word: w.word, known }]);
-    if (index + 1 >= words.length) {
-      submitTest([...answers, { word: w.word, known }]);
-    } else {
-      setIndex(index + 1);
-    }
-  }, [phase, index, words, answers]);
+  const pick = useCallback((q: Question, option: string) => {
+    setChosen((prev) => ({ ...prev, [q.id]: option }));
+  }, []);
 
-  const submitTest = async (ans: Answer[]) => {
+  const submitTest = async () => {
+    const unanswered = questions.filter((q) => !chosen[q.id]);
+    if (unanswered.length > 0) {
+      setError(`还有 ${unanswered.length} 题未作答`);
+      return;
+    }
+    setError('');
+    const answers: Answer[] = questions.map((q) => ({ id: q.id, chosen: chosen[q.id] }));
     setPhase('submitting');
     try {
       const res = await fetchWithRetry(`/api/v1/gk-vocab/test/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: ans }),
+        body: JSON.stringify({ answers }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setResult(await res.json());
@@ -84,8 +84,9 @@ export default function VocabTestPage() {
   const renderIdle = () => (
     <View style={styles.center}>
       <Text style={styles.introTitle}>高中英语 · 词汇量测试</Text>
-      <Text style={styles.introText}>随机抽 30 个高中英语课程标准的单词，</Text>
-      <Text style={styles.introText}>如实勾选你是否认识，即可估算你的词汇量。</Text>
+      <Text style={styles.introText}>随机抽取 {TEST_LIMIT} 个高中课标英语单词，</Text>
+      <Text style={styles.introText}>每题从 5 个中文意思中选出正确的一个，</Text>
+      <Text style={styles.introText}>选对才算对，据此估算你的词汇量。</Text>
       <Text style={styles.introText}>（词表共 {total || '--'} 词）</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <TouchableOpacity style={styles.primaryBtn} onPress={startTest}>
@@ -101,26 +102,61 @@ export default function VocabTestPage() {
     </View>
   );
 
-  const w = words[index];
+  const q = questions[index];
+  const myChoice = q ? chosen[q.id] : undefined;
+
   const renderTesting = () => (
-    <View style={styles.testWrap}>
-      <Text style={styles.progress}>{index + 1} / {words.length}</Text>
+    <ScrollView style={styles.testScroll} contentContainerStyle={styles.testWrap}>
+      <Text style={styles.progress}>第 {index + 1} / {questions.length} 题</Text>
+      <Text style={styles.levelBadge}>{q?.level === 'elective' ? '选择性必修' : q?.level === 'required' ? '必修' : '基础'}</Text>
       <View style={styles.wordCard}>
-        <Text style={styles.wordText}>{w?.word}</Text>
-        <Text style={styles.hintText}>你认识这个单词吗？</Text>
+        <Text style={styles.wordText}>{q?.word}</Text>
       </View>
+      <Text style={styles.hintText}>选出与单词相符的中文意思</Text>
       <View style={styles.choices}>
-        <TouchableOpacity style={[styles.choice, { backgroundColor: '#4CAF50' }]} onPress={() => choose(true)}>
-          <Text style={styles.choiceText}>认识</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.choice, { backgroundColor: '#FFB300' }]} onPress={() => choose(false)}>
-          <Text style={styles.choiceText}>模糊</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.choice, { backgroundColor: '#F44336' }]} onPress={() => choose(false)}>
-          <Text style={styles.choiceText}>不认识</Text>
-        </TouchableOpacity>
+        {q?.options.map((opt) => {
+          const selected = myChoice === opt;
+          return (
+            <TouchableOpacity
+              key={opt}
+              style={[styles.option, selected && styles.optionSelected]}
+              onPress={() => pick(q, opt)}
+            >
+              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
+                {opt}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
-    </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={styles.nav}>
+        <TouchableOpacity
+          style={[styles.navBtn, index === 0 && styles.navBtnDisabled]}
+          disabled={index === 0}
+          onPress={() => setIndex(index - 1)}
+        >
+          <Text style={styles.navBtnText}>上一题</Text>
+        </TouchableOpacity>
+        {index + 1 < questions.length ? (
+          <TouchableOpacity
+            style={[styles.navBtn, !myChoice && styles.navBtnDisabled]}
+            disabled={!myChoice}
+            onPress={() => setIndex(index + 1)}
+          >
+            <Text style={styles.navBtnText}>下一题</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.navBtn, styles.navBtnDone, !myChoice && styles.navBtnDisabled]}
+            disabled={!myChoice}
+            onPress={submitTest}
+          >
+            <Text style={styles.navBtnText}>提交测试</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </ScrollView>
   );
 
   const renderSubmitting = () => (
@@ -141,9 +177,9 @@ export default function VocabTestPage() {
         <Text style={styles.resultRowText}>词库总量：{result?.total ?? total} 词</Text>
       </View>
       <View style={styles.resultRow}>
-        <Text style={styles.resultRowText}>抽样 {result?.sample_count ?? 0} 词，认识 {result?.known_count ?? 0} 词</Text>
+        <Text style={styles.resultRowText}>抽样 {result?.sample_count ?? 0} 词，答对 {result?.correct_count ?? 0} 词</Text>
       </View>
-      <Text style={styles.resultTip}>认识率 {result?.sample_count ? Math.round((result.known_count / result.sample_count) * 100) : 0}%，按比例估算全部词库。</Text>
+      <Text style={styles.resultTip}>正确率 {result?.sample_count ? Math.round((result.correct_count / result.sample_count) * 100) : 0}%，按比例估算全部词库。</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <TouchableOpacity style={styles.primaryBtn} onPress={startTest}>
         <Text style={styles.primaryBtnText}>再测一次</Text>
@@ -185,28 +221,41 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   introTitle: { fontSize: 18, color: '#333333', fontFamily: 'serif', fontWeight: '600', marginBottom: 16 },
   introText: { fontSize: 14, color: '#666666', fontFamily: 'serif', lineHeight: 22, textAlign: 'center' },
-  error: { fontSize: 12, color: '#F44336', fontFamily: 'monospace', marginTop: 12, textAlign: 'center' },
-  primaryBtn: {
-    backgroundColor: '#4CAF50', paddingHorizontal: 32, paddingVertical: 12,
-    borderRadius: 24, marginTop: 24,
-  },
+  error: { fontSize: 12, color: '#F44336', fontFamily: 'monospace', marginTop: 10, textAlign: 'center' },
+  primaryBtn: { backgroundColor: '#4CAF50', paddingHorizontal: 32, paddingVertical: 12, borderRadius: 24, marginTop: 24 },
   primaryBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'serif', fontWeight: '600' },
   secondaryBtn: { marginTop: 12, paddingHorizontal: 24, paddingVertical: 10 },
   secondaryBtnText: { fontSize: 14, color: '#4CAF50', fontFamily: 'serif' },
   loadingText: { fontSize: 14, color: '#999999', fontFamily: 'serif', marginTop: 12 },
-  testWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  progress: { fontSize: 13, color: '#999999', fontFamily: 'serif', marginBottom: 32 },
+  testScroll: { flex: 1 },
+  testWrap: { padding: 20, alignItems: 'center' },
+  progress: { fontSize: 13, color: '#999999', fontFamily: 'serif', marginBottom: 12 },
+  levelBadge: {
+    fontSize: 12, color: '#FFFFFF', fontFamily: 'serif', backgroundColor: '#81C784',
+    paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, marginBottom: 16, overflow: 'hidden',
+  },
   wordCard: {
-    backgroundColor: '#F5F5F5', borderRadius: 12, paddingHorizontal: 40, paddingVertical: 48,
-    alignItems: 'center', minWidth: '100%',
+    backgroundColor: '#F5F5F5', borderRadius: 12, paddingHorizontal: 40, paddingVertical: 40,
+    alignItems: 'center', alignSelf: 'stretch',
   },
-  wordText: { fontSize: 40, color: '#333333', fontFamily: 'serif', fontWeight: '700' },
-  hintText: { fontSize: 13, color: '#999999', fontFamily: 'serif', marginTop: 16 },
-  choices: { marginTop: 40, width: '100%' },
-  choice: {
-    borderRadius: 24, paddingVertical: 14, alignItems: 'center', marginBottom: 14,
+  wordText: { fontSize: 38, color: '#333333', fontFamily: 'serif', fontWeight: '700' },
+  hintText: { fontSize: 13, color: '#999999', fontFamily: 'serif', marginTop: 20, marginBottom: 12 },
+  choices: { width: '100%' },
+  option: {
+    borderRadius: 12, borderWidth: 1.5, borderColor: '#DDDDDD', paddingVertical: 13,
+    paddingHorizontal: 14, marginBottom: 10, alignItems: 'center', backgroundColor: '#FFFFFF',
   },
-  choiceText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'serif', fontWeight: '600' },
+  optionSelected: { borderColor: '#4CAF50', backgroundColor: '#E8F5E9' },
+  optionText: { fontSize: 14, color: '#333333', fontFamily: 'serif', textAlign: 'center' },
+  optionTextSelected: { color: '#2E7D32', fontWeight: '600' },
+  nav: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, width: '100%' },
+  navBtn: {
+    backgroundColor: '#4CAF50', paddingHorizontal: 26, paddingVertical: 11,
+    borderRadius: 22, marginHorizontal: 8, flex: 1, alignItems: 'center',
+  },
+  navBtnDone: { backgroundColor: '#2E7D32' },
+  navBtnDisabled: { opacity: 0.4 },
+  navBtnText: { fontSize: 14, color: '#FFFFFF', fontFamily: 'serif', fontWeight: '600' },
   resultWrap: { flex: 1, padding: 24 },
   resultTitle: { fontSize: 18, color: '#333333', fontFamily: 'serif', fontWeight: '600', textAlign: 'center', marginBottom: 20 },
   resultCard: {
