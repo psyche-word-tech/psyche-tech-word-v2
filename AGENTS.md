@@ -490,6 +490,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **中文 OCR**（`server/src/services/paddleocr.ts`）：`lang === 'ch'` 时**跳过本地**、直接走云端 PP-OCRv5（其模型原生支持中英混排；本地 `.venv` 的 lang='en' 模型不认中文，且本地中文模型在沙箱下载不稳定）。英语保持"本地词级框优先 → 云端回退"。语文作文标注因此是**行级框**（云端返回整行，按字符比例切分多词场景有限），错字/病词定位到整行区域，具体哪个字由批注列表说明。
 - **中文标注**：`estimateTextWidth` 对汉字按全角计宽；SVG 字体 `DejaVu Sans, WenQuanYi Micro Hei` 支持中文；annotateImage 的标点跳过判断 `/[A-Za-z\u4e00-\u9fa5]/` 已兼容汉字。无需额外改动。
 - **定档与分数强一致（服务器端强制，essay-grading.ts total 计算后）**：模型会在输出 JSON 返回 `tier:{name,min,max}`（刻度区间）。为避免"评语写第三档(7-9)但实际打 10 分"的评语/分数脱节，服务器把 `total_score` 钳到 `[tier.min,tier.max]`∩`[0,max_score]`，再把各维度(scores.content/language/structure/handwriting)或得分点(points)按比例缩放到与该钳制后的 total 之和精确相等（最后一项=total-已累加，保证和一致）。`tier` 归一化在读取 `g.tier` 时完成（`g.tier && Number.isFinite(min)&&Number.isFinite(max)` 才保留）。改后端需 `node build.js` + pkill 重启生效；查评分证据看日志 `[grade] 模型返回 total=… 定档=…`。
+- **自定义维度优先显示（essay-grading.ts 作文 prompt"如何使用上面的标准"）**：只要评分标准里出现**并列的维度清单**（如 内容要点/词汇语法/篇章连贯，**无论是否附分值**），就按这些维度逐项打分输出 `points`（point=维度名），前端 `index.tsx` 对任意科目 `points.length>0` 即优先渲染该列表，固定四维卡仅兜底；标准未给各维满分时由模型把 max_score 分配到各维 max（总和=max_score）。别误判"没给分值=不走维度"，维度名才是触发点。
 
 ## 新增功能：AI 主观题批改 + 其他学科（按参考答案+打分标准逐点评分）
 
