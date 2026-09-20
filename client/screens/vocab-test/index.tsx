@@ -53,18 +53,22 @@ export default function VocabTestPage() {
     }
   };
 
-  const pick = useCallback((q: Question, option: string) => {
-    setChosen((prev) => ({ ...prev, [q.id]: option }));
-  }, []);
+  const pick = useCallback(
+    (q: Question, option: string) => {
+      const next = { ...chosen, [q.id]: option };
+      setChosen(next);
+      if (index + 1 < questions.length) {
+        setTimeout(() => setIndex(index + 1), 160);
+      } else {
+        const answers: Answer[] = questions.map((qq) => ({ id: qq.id, chosen: next[qq.id] }));
+        setTimeout(() => submitTest(answers), 160);
+      }
+    },
+    [chosen, index, questions],
+  );
 
-  const submitTest = async () => {
-    const unanswered = questions.filter((q) => !chosen[q.id]);
-    if (unanswered.length > 0) {
-      setError(`还有 ${unanswered.length} 题未作答`);
-      return;
-    }
+  const submitTest = async (answers: Answer[]) => {
     setError('');
-    const answers: Answer[] = questions.map((q) => ({ id: q.id, chosen: chosen[q.id] }));
     setPhase('submitting');
     try {
       const res = await fetchWithRetry(`/api/v1/gk-vocab/test/submit`, {
@@ -112,7 +116,7 @@ export default function VocabTestPage() {
       <View style={styles.wordCard}>
         <Text style={styles.wordText}>{q?.word}</Text>
       </View>
-      <Text style={styles.hintText}>选出与单词相符的中文意思</Text>
+      <Text style={styles.hintText}>点选中文意思，选后自动进入下一题</Text>
       <View style={styles.choices}>
         {q?.options.map((opt) => {
           const selected = myChoice === opt;
@@ -138,23 +142,6 @@ export default function VocabTestPage() {
         >
           <Text style={styles.navBtnText}>上一题</Text>
         </TouchableOpacity>
-        {index + 1 < questions.length ? (
-          <TouchableOpacity
-            style={[styles.navBtn, !myChoice && styles.navBtnDisabled]}
-            disabled={!myChoice}
-            onPress={() => setIndex(index + 1)}
-          >
-            <Text style={styles.navBtnText}>下一题</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.navBtn, styles.navBtnDone, !myChoice && styles.navBtnDisabled]}
-            disabled={!myChoice}
-            onPress={submitTest}
-          >
-            <Text style={styles.navBtnText}>提交测试</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </ScrollView>
   );
@@ -253,7 +240,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50', paddingHorizontal: 26, paddingVertical: 11,
     borderRadius: 22, marginHorizontal: 8, flex: 1, alignItems: 'center',
   },
-  navBtnDone: { backgroundColor: '#2E7D32' },
   navBtnDisabled: { opacity: 0.4 },
   navBtnText: { fontSize: 14, color: '#FFFFFF', fontFamily: 'serif', fontWeight: '600' },
   resultWrap: { flex: 1, padding: 24 },
