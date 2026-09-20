@@ -15,14 +15,18 @@ interface ImageItem {
 interface GradingResult {
   total_score: number;
   max_score: number;
+  transcription?: string;
   scores: {
     content: number;
     language: number;
     structure: number;
     handwriting: number;
   };
+  points?: Array<{ point?: string; name?: string; max: number; score: number; comment?: string }>;
+  tier?: { name?: string; min?: number; max?: number };
   errors: Array<{
     type: string;
+    errorType?: string;
     original: string;
     correction: string;
     explanation: string;
@@ -326,32 +330,54 @@ export default function BatchGradingScreen() {
 
                 {item.result && (
                   <>
+                    {/* 原文转录（若有） */}
+                    {item.result.transcription ? (
+                      <View style={styles.commentsContainer}>
+                        <Text style={styles.commentsTitle}>原文转录</Text>
+                        <Text style={styles.commentsText}>{item.result.transcription}</Text>
+                      </View>
+                    ) : null}
+
                     {/* 分数 */}
                     <View style={styles.scoreRow}>
                       <Text style={styles.scoreLabel}>总分</Text>
                       <Text style={styles.scoreValue}>
                         {item.result.total_score}/{item.result.max_score}
                       </Text>
+                      {item.result.tier?.name ? (
+                        <Text style={styles.scoreTier}>{item.result.tier.name}</Text>
+                      ) : null}
                     </View>
 
-                    <View style={styles.scoreDetails}>
-                      <View style={styles.scoreItem}>
-                        <Text style={styles.scoreItemLabel}>内容</Text>
-                        <Text style={styles.scoreItemValue}>{item.result.scores.content}</Text>
+                    {item.result.points && item.result.points.length > 0 ? (
+                      <View style={styles.scoreDetails}>
+                        {item.result.points.map((p, pi) => (
+                          <View key={pi} style={styles.scoreItem}>
+                            <Text style={styles.scoreItemLabel}>{p.point || p.name || '维度'}</Text>
+                            <Text style={styles.scoreItemValue}>{p.score ?? 0}</Text>
+                          </View>
+                        ))}
                       </View>
-                      <View style={styles.scoreItem}>
-                        <Text style={styles.scoreItemLabel}>语言</Text>
-                        <Text style={styles.scoreItemValue}>{item.result.scores.language}</Text>
+                    ) : (
+                      <View style={styles.scoreDetails}>
+                        <View style={styles.scoreItem}>
+                          <Text style={styles.scoreItemLabel}>内容</Text>
+                          <Text style={styles.scoreItemValue}>{item.result.scores.content}</Text>
+                        </View>
+                        <View style={styles.scoreItem}>
+                          <Text style={styles.scoreItemLabel}>语言</Text>
+                          <Text style={styles.scoreItemValue}>{item.result.scores.language}</Text>
+                        </View>
+                        <View style={styles.scoreItem}>
+                          <Text style={styles.scoreItemLabel}>结构</Text>
+                          <Text style={styles.scoreItemValue}>{item.result.scores.structure}</Text>
+                        </View>
+                        <View style={styles.scoreItem}>
+                          <Text style={styles.scoreItemLabel}>书写</Text>
+                          <Text style={styles.scoreItemValue}>{item.result.scores.handwriting}</Text>
+                        </View>
                       </View>
-                      <View style={styles.scoreItem}>
-                        <Text style={styles.scoreItemLabel}>结构</Text>
-                        <Text style={styles.scoreItemValue}>{item.result.scores.structure}</Text>
-                      </View>
-                      <View style={styles.scoreItem}>
-                        <Text style={styles.scoreItemLabel}>书写</Text>
-                        <Text style={styles.scoreItemValue}>{item.result.scores.handwriting}</Text>
-                      </View>
-                    </View>
+                    )}
 
                     {/* 标注图 */}
                     {item.markedImage && (
@@ -365,11 +391,50 @@ export default function BatchGradingScreen() {
                       </View>
                     )}
 
+                    {/* 错误详情 */}
+                    {(item.result.errors ?? []).length > 0 && (
+                      <View style={styles.commentsContainer}>
+                        <Text style={styles.commentsTitle}>错误详情 ({(item.result.errors ?? []).length}处)</Text>
+                        {(item.result.errors ?? []).map((error, ei) => (
+                          <View key={ei} style={styles.errorItem}>
+                            <View style={styles.errorHeader}>
+                              <View style={[styles.errorBadge, { backgroundColor: getErrorTypeColor(error.type) }]}>
+                                <Text style={styles.errorBadgeText}>{getErrorTypeName(error.type)}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.errorOriginal}> {error.original}</Text>
+                            <Text style={styles.errorCorrection}> {error.correction}</Text>
+                            {error.explanation ? <Text style={styles.errorExplanation}> {error.explanation}</Text> : null}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
                     {/* 评语 */}
                     {item.result.comments && (
                       <View style={styles.commentsContainer}>
                         <Text style={styles.commentsTitle}>评语</Text>
                         <Text style={styles.commentsText}>{item.result.comments}</Text>
+                      </View>
+                    )}
+
+                    {/* 优点 */}
+                    {(item.result.strengths ?? []).length > 0 && (
+                      <View style={styles.commentsContainer}>
+                        <Text style={styles.commentsTitle}>优点</Text>
+                        {(item.result.strengths ?? []).map((s, si) => (
+                          <Text key={si} style={styles.bulletText}> {s}</Text>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* 改进建议 */}
+                    {(item.result.improvements ?? []).length > 0 && (
+                      <View style={styles.commentsContainer}>
+                        <Text style={styles.commentsTitle}>改进建议</Text>
+                        {(item.result.improvements ?? []).map((imp, ii) => (
+                          <Text key={ii} style={styles.bulletText}> {imp}</Text>
+                        ))}
                       </View>
                     )}
                   </>
@@ -619,6 +684,50 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   commentsText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  scoreTier: {
+    fontSize: 13,
+    color: '#E65100',
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  errorItem: {
+    marginTop: 10,
+  },
+  errorHeader: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  errorBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  errorBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  errorOriginal: {
+    fontSize: 14,
+    color: '#c00',
+    lineHeight: 20,
+  },
+  errorCorrection: {
+    fontSize: 14,
+    color: '#0a7d2c',
+    lineHeight: 20,
+  },
+  errorExplanation: {
+    fontSize: 13,
+    color: '#777',
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  bulletText: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
