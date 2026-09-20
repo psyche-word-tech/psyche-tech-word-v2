@@ -54,6 +54,15 @@ cd "$ROOT_DIR/client"
 EXPO_PUBLIC_BACKEND_BASE_URL="${EXPO_PUBLIC_BACKEND_BASE_URL:-}" npx expo export --platform all || error "Expo 构建失败"
 info "==================== Expo 构建完成！===================="
 
+info "==================== 复制前端到 server/public ===================="
+# Express 统一从 server/public 提供前端页面与 API，必须把 Expo web 产物同步过去
+rm -rf "$ROOT_DIR/server/public"
+cp -r "$ROOT_DIR/client/dist" "$ROOT_DIR/server/public"
+# 复制 KaTeX 字体（渲染数学公式需要）
+mkdir -p "$ROOT_DIR/server/public/_expo/static/css/fonts"
+cp "$ROOT_DIR"/node_modules/.pnpm/katex@*/node_modules/katex/dist/fonts/* "$ROOT_DIR/server/public/_expo/static/css/fonts/" 2>/dev/null || true
+info "==================== 前端复制完成！===================="
+
 info "==================== dist打包 ===================="
 info "开始执行：pnpm run build (server)"
 (pushd "$ROOT_DIR/server" > /dev/null && pnpm run build; popd > /dev/null) || error "dist打包失败"
