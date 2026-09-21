@@ -255,6 +255,8 @@ router.post("/", upload.single("image"), async (req, res) => {
 
 **输出要求（重要）：solution/analysis 必须"正式、简洁、直达结论"——只保留从题干到最终答案的关键推理步骤与必要的过渡，明确省略非必要的细化推演和冗余代换（例如不必展开"推出 $f(x_2)\\ge f(0)$"这类可跳过的中间论证，不必对每一步不等式、恒等式或中间式逐条证明），正确作答的前提下步骤尽量精炼（5~8 个关键步骤为宜）；语气正式、可直接呈现给学生，确保返回的 JSON 完整、不被截断、可被直接解析。**
 
+**长度硬上限（极其重要）：单题时整个 JSON 输出总长度不得超过 4000 字符；多小题（如 3 个以上小问）也不得超过 6000 字符。多小问证明题每题 solution 只写关键证明思路与结论，用简洁条目，不要展开为论文式长文；sub-question 细化推演（具体不等式放缩、逐条代换代入、重复的同类推理）一律省略或不逐条证明。宁可精简也不可写超长导致截断。**
+
 **答题风格（极其重要）：这是面向学生的严肃数学解答。solution/analysis 必须是严谨、完整、可直接呈现给学生的最终解答——直接给出推理与结论，语气肯定、逻辑连贯。严禁出现任何自我怀疑、自我纠正、口语化思考碎念（如"不对""哦""我写错了""所以不满足？""重新整理"等），严禁出现畏难或方案讨论式措辞（如"不好直接求""直接求比较麻烦""此处不易求出""考虑到计算较繁"等）——需要更换方法时直接肯定地陈述"采用 XX 方法即可"，把方法作为解题步骤确定给出，不要用"不好直接求"这类话铺垫。严禁暴露思考过程或反复改口。若某一步需要分类讨论，直接清晰地列出各类并给出结论，不要犹豫或否定自己。**
 
 **答案与题干一致性（极其重要）：若题目图片中自带参考答案/小结（如"总结：(1)…；(2)(i)…；(2)(ii)…"之类），则 answer 字段必须与该标准答案逐项严格一致（同一数学表达式、同一形式），且 analysis/solution 必须推导出并收敛到这个答案，不得与它冲突；若题目未附答案，则自行正确作答。"answer" 必须把每个小题（(1)/(2)(i)/(2)(ii) 等）的最终结论都写全，不能只写其中一个。analysis（题目分析）与 solution（详细解答过程）都必须给出实质、可读的内容，缺一不可，禁止留空或只写标题。**
@@ -374,6 +376,9 @@ router.post("/", upload.single("image"), async (req, res) => {
     const qwenModel = mode === "concise"
       ? "qwen3.8-flash"
       : (process.env.QWEN_MODEL || 'qwen3.8-max');
+    // 输出长度硬上限：防止 max 模型对复杂题输出失控膨胀到接近 token 上限被截断、
+    // JSON 损坏无法修复（详见 AGENTS.md）。concise 已精简，给足即可。
+    const maxTokens = mode === "concise" ? 4096 : 6000;
     const chatUrl = qwenApiUrl.includes('/chat/completions')
       ? qwenApiUrl
       : `${qwenApiUrl.replace(/\/+$/, '')}/chat/completions`;
@@ -397,6 +402,7 @@ router.post("/", upload.single("image"), async (req, res) => {
           messages,
           temperature: 0.3,
           enable_thinking: false,
+          max_tokens: maxTokens,
         }),
         signal: controller.signal,
       });
