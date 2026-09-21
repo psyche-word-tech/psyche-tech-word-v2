@@ -372,13 +372,12 @@ router.post("/", upload.single("image"), async (req, res) => {
     const qwenApiUrl = process.env.QWEN_API_URL
       || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
     const qwenApiKey = process.env.QWEN_API_KEY || '';
-    // concise 模式用 flash 提速；detail 模式用配置模型（默认 max）
-    const qwenModel = mode === "concise"
-      ? "qwen3.8-flash"
-      : (process.env.QWEN_MODEL || 'qwen3.8-max');
+    // 所有解析模式统一用 max 解题（flash 对高计算量难题不稳定，详见 AGENTS.md）
+    // 可用 QWEN_MODEL 环境变量覆盖。
+    const qwenModel = (process.env.QWEN_MODEL || 'qwen3.8-max');
     // 输出长度硬上限：防止 max 模型对复杂题输出失控膨胀到接近 token 上限被截断、
-    // JSON 损坏无法修复（详见 AGENTS.md）。concise 已精简，给足即可。
-    const maxTokens = mode === "concise" ? 4096 : 6000;
+    // JSON 损坏无法修复（详见 AGENTS.md）。所有模式统一 6000。
+    const maxTokens = 6000;
     const chatUrl = qwenApiUrl.includes('/chat/completions')
       ? qwenApiUrl
       : `${qwenApiUrl.replace(/\/+$/, '')}/chat/completions`;
