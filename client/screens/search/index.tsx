@@ -332,6 +332,12 @@ export default function SearchScreen() {
                     <Text numberOfLines={1} style={styles.fileName}>{f.name}</Text>
                   </View>
                 ))}
+                <TouchableOpacity style={styles.fileAddWrap} onPress={() => setShowImagePicker(true)}>
+                  <View style={styles.fileAddCard}>
+                    <Ionicons name="add" size={30} color="#4A90E2" />
+                    <Text style={styles.fileAddText}>继续添加</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -623,7 +629,28 @@ const styles = {
     fontSize: 11,
     color: '#666',
     marginTop: 4,
+    width: 100,
     textAlign: 'center',
+  },
+  fileAddWrap: {
+    width: 100,
+    marginBottom: 6,
+  },
+  fileAddCard: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#4A90E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F8FE',
+  },
+  fileAddText: {
+    fontSize: 11,
+    color: '#4A90E2',
+    marginTop: 4,
   },
   questionImages: {
     gap: 10,
