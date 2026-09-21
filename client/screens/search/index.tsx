@@ -2,7 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, ActivityInd
 import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MathText } from '@/components/MathText';
 import { MathView } from '@/components/MathView';
 import * as ImagePicker from 'expo-image-picker';
@@ -44,10 +44,15 @@ export default function SearchScreen() {
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
 
+  const didAutoSolve = useRef(false);
   useEffect(() => {
-    // 模式切换时不自动重发（避免重复请求），交由用户切换文件或触发
+    // 从首页带入图片进入本页时，自动触发一次解析（仅首次挂载）
+    if (files.length > 0 && !didAutoSolve.current) {
+      didAutoSolve.current = true;
+      solveProblem(files);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailedMode]);
+  }, []);
 
   const solveProblem = async (uploads: SearchFile[]) => {
     setLoading(true);
