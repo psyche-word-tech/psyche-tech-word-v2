@@ -25,11 +25,18 @@ interface SolveResult {
   error?: string;
 }
 
+interface SearchFile {
+  uri: string;
+  name: string;
+  type: string;
+  isImage: boolean;
+}
+
 export default function SearchScreen() {
   const router = useSafeRouter();
   const params = useSafeSearchParams<{ imageUri?: string }>();
   const [query, setQuery] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(params.imageUri || null);
+  const [files, setFiles] = useState<SearchFile[]>(params.imageUri ? [{ uri: params.imageUri, name: '题目图片.jpg', type: 'image/jpeg', isImage: true }] : []);
   const [result, setResult] = useState<SolveResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailedMode, setDetailedMode] = useState(false);
@@ -38,71 +45,52 @@ export default function SearchScreen() {
   const [uploadingFile, setUploadingFile] = useState(false);
 
   useEffect(() => {
-    if (imageUri !== null) {
-      solveProblem(imageUri);
-    }
-    // detailedMode 变化时用同一张图重新解析
-  }, [imageUri, detailedMode]);
+    // 模式切换时不自动重发（避免重复请求），交由用户切换文件或触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailedMode]);
 
-  const solveProblem = async (uri: string) => {
+  const solveProblem = async (uploads: SearchFile[]) => {
     setLoading(true);
     setResult(null);
 
     try {
-      let blob: Blob;
-      
-      if (uri.startsWith('data:')) {
-        // Data URL (base64) - convert directly to blob without fetch
-        try {
-          const arr = uri.split(',');
-          const mimeMatch = arr[0].match(/:(.*?);/);
-          const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-          const base64 = arr[1];
-          
-          if (!base64) {
-            throw new Error('Invalid data URL: no base64 data');
-          }
-          
-          const bstr = atob(base64);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
-          }
-          blob = new Blob([u8arr], { type: mime });
-          console.log('[Search] Data URL converted to blob, size:', blob.size);
-        } catch (e) {
-          console.error('[Search] Failed to convert data URL:', e);
-          // Fallback: try fetch
-          const response = await fetch(uri);
-          blob = await response.blob();
-        }
-      } else {
-        // Regular URL - fetch it
-        const response = await fetch(uri);
-        blob = await response.blob();
-      }
-
-      console.log('[Search] Image blob size:', blob.size, 'type:', blob.type);
-
       // Create FormData - use browser native FormData on web
       const formData = new FormData();
-      
-      if (Platform.OS === 'web') {
-        // Web: append blob directly
-        formData.append('image', blob, 'problem.jpg');
-      } else {
-        // Native: use React Native FormData format
-        formData.append('image', {
-          uri: uri,
-          name: 'problem.jpg',
-          type: blob.type || 'image/jpeg',
-        } as any);
+
+      for (const f of uploads) {
+        if (Platform.OS === 'web') {
+          let blob: Blob;
+          if (f.uri.startsWith('data:')) {
+            try {
+              const arr = f.uri.split(',');
+              const mimeMatch = arr[0].match(/:(.*?);/);
+              const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+              const bstr = atob(arr[1]);
+              const u8 = new Uint8Array(bstr.length);
+              for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+              blob = new Blob([u8], { type: mime || f.type });
+            } catch (e) {
+              const response = await fetch(f.uri);
+              blob = await response.blob();
+            }
+          } else {
+            const response = await fetch(f.uri);
+            blob = await response.blob();
+          }
+          formData.append('files', blob, f.name);
+        } else {
+          // Native: use React Native FormData format
+          formData.append('files', {
+            uri: f.uri,
+            name: f.name,
+            type: f.type || 'application/octet-stream',
+          } as any);
+        }
       }
       // mode: detail=详细解析(较慢)，默认 concise=精炼解答(快)
       formData.append('mode', detailedMode ? 'detail' : 'concise');
 
-      console.log('[Search] Sending request to /api/v1/solve-problem');
+      console.log('[Search] Sending request to /api/v1/solve-problem, files:', uploads.length);
 
       const res = await fetch('/api/v1/solve-problem', {
         method: 'POST',
@@ -134,11 +122,12 @@ export default function SearchScreen() {
       // 收藏时把原图传给后端，由后端后台把图片转成文字题干后入库
       const formData = new FormData();
 
+      const firstFile = files.find((f) => f.isImage) || files[0];
       // 图片转 blob（与 solveProblem 一致的处理）
       let blob: Blob;
       try {
-        if (imageUri.startsWith('data:')) {
-          const arr = imageUri.split(',');
+        if (firstFile.uri.startsWith('data:')) {
+          const arr = firstFile.uri.split(',');
           const base64 = arr[1];
           const mimeMatch = arr[0].match(/:(.*?);/);
           const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
@@ -147,7 +136,7 @@ export default function SearchScreen() {
           for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
           blob = new Blob([u8], { type: mime });
         } else {
-          const response = await fetch(imageUri);
+          const response = await fetch(firstFile.uri);
           blob = await response.blob();
         }
       } catch (e) {
@@ -156,12 +145,12 @@ export default function SearchScreen() {
       }
 
       if (Platform.OS === 'web') {
-        formData.append('image', blob, 'problem.jpg');
+        formData.append('image', blob, firstFile.name || 'problem.jpg');
       } else {
         formData.append('image', {
-          uri: imageUri,
-          name: 'problem.jpg',
-          type: blob.type || 'image/jpeg',
+          uri: firstFile.uri,
+          name: firstFile.name || 'problem.jpg',
+          type: firstFile.type || blob.type || 'image/jpeg',
         } as any);
       }
 
@@ -185,10 +174,6 @@ export default function SearchScreen() {
     }
   };
 
-  const handleReselect = () => {
-    setShowImagePicker(true);
-  };
-
   const handleTakePhoto = async () => {
     setShowImagePicker(false);
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -205,11 +190,11 @@ export default function SearchScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        setImageUri(uri);
+        const newFiles = result.assets.map((a) => ({ uri: a.uri, name: `拍照_${Date.now()}.jpg`, type: 'image/jpeg', isImage: true }));
+        const all = [...files, ...newFiles];
+        setFiles(all);
         setResult(null);
-        setLoading(true);
-        await solveProblem(uri);
+        await solveProblem(all);
       }
     } catch (err) {
       console.error('Camera error:', err);
@@ -229,15 +214,16 @@ export default function SearchScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
+        allowsMultipleSelection: true,
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        setImageUri(uri);
+        const newFiles = result.assets.map((a, idx) => ({ uri: a.uri, name: `相册图片_${Date.now()}_${idx}.jpg`, type: 'image/jpeg', isImage: true }));
+        const all = [...files, ...newFiles];
+        setFiles(all);
         setResult(null);
-        setLoading(true);
-        await solveProblem(uri);
+        await solveProblem(all);
       }
     } catch (err) {
       console.error('Image picker error:', err);
@@ -249,20 +235,46 @@ export default function SearchScreen() {
     setShowImagePicker(false);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.wps-office.doc', 'application/vnd.wps-office.docx'],
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.wps-office.doc', 'application/vnd.wps-office.docx', 'image/*'],
         copyToCacheDirectory: true,
+        multiple: true,
       });
 
       if (result.canceled) {
         return;
       }
 
-      const file = result.assets[0];
-      console.log('[Search] Selected file:', file.name, file.uri);
-      alert(`已选择文件：${file.name}\n\n注意：当前版本仅支持图片搜题，文档解析功能开发中。`);
+      const newFiles = result.assets.map((f) => {
+        const lower = (f.name || '').toLowerCase();
+        const isImage = /\.(png|jpe?g|gif|webp|heic)$/.test(lower);
+        const type = isImage ? 'image/jpeg' : 'application/octet-stream';
+        return { uri: f.uri, name: f.name || '文件', type, isImage };
+      });
+      const all = [...files, ...newFiles];
+      setFiles(all);
+      setResult(null);
+      await solveProblem(all);
     } catch (err) {
       console.error('Document picker error:', err);
       alert('选择文件失败，请重试');
+    }
+  };
+
+  const handleReselect = () => {
+    // 清空当前文件，重新选择
+    setFiles([]);
+    setResult(null);
+    setShowImagePicker(true);
+  };
+
+  const handleRemoveFile = (idx: number) => {
+    const next = files.filter((_, i) => i !== idx);
+    setFiles(next);
+    setResult(null);
+    if (next.length > 0) {
+      solveProblem(next);
+    } else {
+      setResult(null);
     }
   };
 
@@ -290,20 +302,37 @@ export default function SearchScreen() {
         </View>
 
         <ScrollView style={styles.content}>
-          {/* Show selected image if available */}
-          {imageUri.length > 0 && (
+          {/* Show selected files (images + docs) if available */}
+          {files.length > 0 && (
             <View style={styles.imageSection}>
-              <Text style={styles.sectionTitle}>题目图片</Text>
-              <Image source={{ uri: imageUri }} style={styles.selectedImage} resizeMode="contain" />
-              <TouchableOpacity style={styles.retakeButton} onPress={handleReselect}>
-                <Ionicons name="refresh" size={18} color="#666" />
-                <Text style={styles.retakeText}>重新选择</Text>
-              </TouchableOpacity>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>已选文件（{files.length}）</Text>
+                <TouchableOpacity onPress={handleReselect}>
+                  <Text style={styles.reselectText}>清除重选</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.fileGrid}>
+                {files.map((f, idx) => (
+                  <View key={idx} style={styles.fileThumbWrap}>
+                    {f.isImage ? (
+                      <Image source={{ uri: f.uri }} style={styles.fileThumb} resizeMode="contain" />
+                    ) : (
+                      <View style={[styles.fileThumb, styles.docThumb]}>
+                        <Ionicons name="document-text" size={28} color="#4A90E2" />
+                      </View>
+                    )}
+                    <TouchableOpacity style={styles.fileRemoveBtn} onPress={() => handleRemoveFile(idx)}>
+                      <Ionicons name="close-circle" size={18} color="#FF6B6B" />
+                    </TouchableOpacity>
+                    <Text numberOfLines={1} style={styles.fileName}>{f.name}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
 
           {/* 解析模式切换：默认精炼(快)，可切详细 */}
-          {imageUri.length > 0 && (
+          {files.length > 0 && (
             <View style={styles.modeBar}>
               <Text style={styles.modeLabel}>解析模式</Text>
               <TouchableOpacity
@@ -395,14 +424,18 @@ export default function SearchScreen() {
                         </View>
                       )}
 
-                      {(q.question || imageUri) && (
+                      {(q.question || files.length > 0) && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>题目</Text>
                           {q.question ? (
                             <MathText text={q.question} style={styles.blockContent} />
-                          ) : (
-                            <Image source={{ uri: imageUri }} style={styles.questionImage} resizeMode="contain" />
-                          )}
+                          ) : files.length > 0 ? (
+                            <View style={styles.questionImages}>
+                              {files.filter((f) => f.isImage).map((f, fi) => (
+                                <Image key={fi} source={{ uri: f.uri }} style={styles.questionImage} resizeMode="contain" />
+                              ))}
+                            </View>
+                          ) : null}
                         </View>
                       )}
 
@@ -486,7 +519,7 @@ export default function SearchScreen() {
           )}
 
           {/* Empty State */}
-          {!imageUri && !loading && !result && (
+          {files.length === 0 && !loading && !result && (
             <View style={styles.resultsPlaceholder}>
               <Ionicons name="search-outline" size={48} color="#DDD" />
               <Text style={styles.hintText}>输入单词或拍照搜索</Text>
@@ -543,6 +576,52 @@ const styles = {
     height: 200,
     borderRadius: 8,
     backgroundColor: '#F5F5F5',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  reselectText: {
+    fontSize: 13,
+    color: '#4A90E2',
+  },
+  fileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  fileThumbWrap: {
+    width: 100,
+    marginBottom: 6,
+  },
+  fileThumb: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+  },
+  docThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF3FB',
+  },
+  fileRemoveBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#fff',
+    borderRadius: 9,
+  },
+  fileName: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  questionImages: {
+    gap: 10,
   },
   retakeButton: {
     flexDirection: 'row',

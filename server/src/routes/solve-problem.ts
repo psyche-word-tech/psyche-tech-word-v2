@@ -2,8 +2,11 @@ import { Router } from "express";
 import multer from "multer";
 import { createHash } from "crypto";
 import { writeFileSync } from "fs";
+import { createRequire } from "module";
 import sharp from "sharp";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
+
+const require = createRequire(import.meta.url);
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -194,23 +197,90 @@ function imageHash(buffer: Buffer): string {
 }
 
 /**
- * 搜题接口 - 接收图片，先查缓存，未命中则调用大模型解析
- * POST /api/v1/solve-problem
- * Body: FormData with 'image' field (image file)
+ * 从 PDF / Word 文档中提取纯文本，用于填空、作文题等纯文字类题目搜题。
+ * 返回 null 表示该格式不受支持或解析失败。
  */
-router.post("/", upload.single("image"), async (req, res) => {
+async function parseDocText(buffer: Buffer, mime: string, filename?: string): Promise<string | null> {
+  const name = (filename || "").toLowerCase();
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "请上传图片" });
+    // PDF
+    if (mime === "application/pdf" || name.endsWith(".pdf")) {
+      const { PDFParse } = require("pdf-parse") as { PDFParse: new (opt: { data: Buffer }) => { getText(): Promise<{ text: string }> } };
+      const parser = new PDFParse({ data: buffer });
+      const out = await parser.getText();
+      const text = (out?.text || "").trim();
+      return text ? `[PDF 内容]\n${text}` : null;
     }
+    // .docx (OOXML)
+    if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || name.endsWith(".docx")) {
+      const mammoth = require("mammoth") as { extractRawText(opts: { buffer: Buffer }): Promise<{ value: string }> };
+      const out = await mammoth.extractRawText({ buffer });
+      const text = (out?.value || "").trim();
+      return text ? `[Word 内容]\n${text}` : null;
+    }
+    // 旧版 .doc 二进制无法直接解析，暂不支持
+    return null;
+  } catch (e) {
+    console.warn("[SolveProblem] 文档解析失败:", (e as Error).message);
+    return null;
+  }
+}
 
-    const imageBuffer = req.file.buffer;
-    const hash = imageHash(imageBuffer);
+/**
+ * 判断是否为图片类型
+ */
+function isImageMime(mime: string): boolean {
+  return /^image\//.test(mime || "");
+}
+
+/**
+ * 搜题接口 - 接收图片/PDF/Word 文件，先查缓存，未命中则调用大模型解析
+ * POST /api/v1/solve-problem
+ * Body: FormData with 'files' field（可多个，图片/PDF/Word），兼容旧版单个 'image' 字段
+ */
+router.post("/", upload.any(), async (req, res) => {
+  try {
+    // 收集所有上传文件（兼容旧前端单字段 'image' 与新前端多字段 'files'）
+    const reqFiles = (req.files as Express.Multer.File[] | undefined) || [];
+    const files = reqFiles;
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: "请上传图片或文档" });
+    }
 
     const supabase = getSupabaseClient();
 
-    // 1. 先查缓存：通过图片 hash 或文本相似度
-    // 同一张图可能因历史坏答案累积了多行，必须按 created_at DESC 取最新，
+    // 收集所有图片（压缩后 feed 模型）与文档文本
+    const imageParts: { base64: string; mime: string }[] = [];
+    const docTexts: string[] = [];
+    for (const f of files) {
+      if (isImageMime(f.mimetype)) {
+        // 压缩图片提速（单图过大会产生大量视觉 token）
+        try {
+          const compressed = await sharp(f.buffer)
+            .resize(900, 900, { fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 65 })
+            .toBuffer();
+          imageParts.push({ base64: compressed.toString("base64"), mime: "image/jpeg" });
+        } catch (e) {
+          imageParts.push({ base64: f.buffer.toString("base64"), mime: f.mimetype });
+        }
+      } else {
+        const text = await parseDocText(f.buffer, f.mimetype, f.originalname);
+        if (text) docTexts.push(text);
+      }
+    }
+
+    if (imageParts.length === 0 && docTexts.length === 0) {
+      return res.status(400).json({ error: "未识别到有效的图片或文档内容，请检查文件格式" });
+    }
+
+    // 聚合 hash（多文件按顺序拼接），兼作缓存键
+    const hashParts = files.map((f) => f.buffer);
+    const hash = imageHash(Buffer.concat(hashParts));
+
+    // 1. 先查缓存：通过文件 hash 或文本相似度
+    // 同一批文件可能因历史坏答案累积了多行，必须按 created_at DESC 取最新，
     // 否则 limit(1) 无排序会随机命中不同行，导致"同一题每次答案都不一样"。
     const { data: cachedProblems, error: cacheError } = await supabase
       .from("problems")
@@ -246,28 +316,14 @@ router.post("/", upload.single("image"), async (req, res) => {
     }
 
     // 2. 缓存未命中，调用大模型解析。
-    // 先把图片压缩后再发给千问 VL：原图直发会生成大量视觉 token，
-    // 是单次解析耗时（~30s）的头号来源。压缩到 900px 内 + q65 显著提速，识别质量不受影响。
-    let imageBase64 = imageBuffer.toString("base64");
-    let mimeType = req.file.mimetype;
-    try {
-      const compressed = await sharp(imageBuffer)
-        .resize(900, 900, { fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality: 65 })
-        .toBuffer();
-      imageBase64 = compressed.toString("base64");
-      mimeType = "image/jpeg";
-      console.log(`[SolveProblem] 图片压缩: ${Math.round(imageBuffer.length / 1024)}KB -> ${Math.round(compressed.length / 1024)}KB`);
-    } catch (compressErr) {
-      console.warn("[SolveProblem] 图片压缩失败，使用原图:", (compressErr as Error).message);
-    }
+    // 图片压缩已在上面多文件循环中完成；此处把多图片与文档文本拼成 messages 内容。
 
     // mode=detail 输出详细解析；默认 concise 输出精炼解答（大幅提速，实测约 10 倍）。
     const mode = req.body?.mode === "detail" ? "detail" : "concise";
 
-    const systemPrompt = `你是专业的题目解析老师。请仔细看图解题，直接给出完整解答。
+    const systemPrompt = `你是专业的题目解析老师。请仔细阅读上传的图片与文档内容，逐一解答其中包含的题目，并输出完整解答。
 要求：
-1. 逐一解出每个小问（如 (1)、(2)(i)、(2)(ii)），写出最终答案与推导过程，严谨完整、逐步推导、不跳步、结论肯定。
+1. 逐一解出每个小问（如 (1)、(2)(i)、(2)(ii)），写出最终答案与推导过程，严谨完整、逐步推导、不跳步、结论肯定。若同时有多张图片或文档，按实际内容分别作答。
 2. 数学公式一律用 LaTeX 并用美元符号包裹：行内用 $...$（如 $\\dfrac{1}{2}$、$\\sqrt{3}$），独立成行用 $$...$$。不要输出未被 $ 包裹的裸公式。
 
 在完整解答写完后，请另起一行输出一块"解析摘要"，严格按以下格式（每行一个字段，字段名与冒号为英文标点恒定）：
@@ -278,16 +334,21 @@ router.post("/", upload.single("image"), async (req, res) => {
 素养：<该题考查的学科核心素养，如数学抽象、逻辑推理、数学建模、直观想象、数学运算等>
 难度：L<1到6的一个数字>
 ====摘要结束====`;
-    const userPrompt = `请完整解答图片中的题目，给出每个小问的最终答案与严谨推导过程，并在文末按格式输出"解析摘要"（含结论/点拨/素养/难度）。`;
+    const userPrompt = `请完整解答上传图片/文档中的题目，给出每个小问的最终答案与严谨推导过程，并在文末按格式输出"解析摘要"（含结论/点拨/素养/难度）。
+${docTexts.length > 0 ? "以下是文档中的文字内容：\n" + docTexts.join("\n\n") : ""}`;
+
+    // 把所有图片以 image_url 形式 + 文档文本一起发给模型
+    const userContent: any[] = [];
+    for (const part of imageParts) {
+      userContent.push({ type: "image_url" as const, image_url: { url: `data:${part.mime};base64,${part.base64}` } });
+    }
+    userContent.push({ type: "text" as const, text: userPrompt });
 
     const messages = [
       { role: "system" as const, content: systemPrompt },
       {
         role: "user" as const,
-        content: [
-          { type: "image_url" as const, image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-          { type: "text" as const, text: userPrompt },
-        ],
+        content: userContent,
       },
     ];
 
