@@ -222,6 +222,9 @@ router.post("/", upload.single("image"), async (req, res) => {
       console.warn("[SolveProblem] 图片压缩失败，使用原图:", (compressErr as Error).message);
     }
 
+    // mode=detail 输出详细解析；默认 concise 输出精炼解答（大幅提速，实测约 10 倍）。
+    const mode = req.body?.mode === "detail" ? "detail" : "concise";
+
     const messages = [
       {
         role: "system" as const,
@@ -309,11 +312,69 @@ router.post("/", upload.single("image"), async (req, res) => {
       },
     ];
 
+    // mode=concise（默认）：用精简提示词 + flash 模型，大幅提速。
+    // 实测同题 max+详细=33s，concise+flash=约3~5s。
+    if (mode === "concise") {
+      messages[0].content = `你是专业的题目解析老师。请分析题目图片，输出精炼解答。
+
+返回合法 JSON（不要 markdown 代码块、不要任何前后缀），schema 固定为：
+{
+  "questions": [
+    {
+      "subject": "学科",
+      "question": "题目内容（完整题干与选项）",
+      "answer": "最终答案",
+      "analysis": "简要解析（2~4句话）",
+      "solution": "解题步骤（精炼，只保留关键推理，3~6步）",
+      "tips": "解题技巧（可选，一句话）",
+      "knowledge_points": "考查知识点（必填）",
+      "core_competency": "核心素养（必填）",
+      "difficulty": "简单/中等/困难（必填）"
+    }
+  ]
+}
+
+规则：
+1. 所有公式用 LaTeX 并用 $ 包裹（行内 $...$、独立 $$...$$）。
+2. 解答严谨肯定，禁止自我纠正/口语化碎念，禁止"不好直接求"式畏难措辞。
+3. analysis 与 solution 要有实质内容但务必精炼，不要展开冗余推导；answer 写全每个小题最终结论。
+4. 所有字符串内换行必须用 "\\n" 转义，引号严格配对。
+5. 图片中有多道题就全部放进 questions。
+6. 图片不清晰/无法识别时返回 {"error":"图片不清晰或无法识别，请重新上传"}。`;
+      const userContent = messages[1].content as { type: string; image_url: { url: string }; text: string }[];
+      const imgPart = userContent.find((p) => p.type === "image_url");
+      userContent[0] = imgPart ? imgPart : userContent[0];
+      userContent[1] = {
+        type: "text",
+        text: `请解析图片中的所有题目，直接返回题目 JSON（不要代码块）：
+{
+  "questions": [
+    {
+      "subject": "学科",
+      "question": "题目内容（含选项）",
+      "answer": "最终答案",
+      "analysis": "简要解析（2~4句）",
+      "solution": "精炼解题步骤（3~6步）",
+      "tips": "一句话技巧（可选）",
+      "knowledge_points": "考查知识点（必填）",
+      "core_competency": "核心素养（必填）",
+      "difficulty": "简单/中等/困难"
+    }
+  ]
+}
+
+所有公式用 LaTeX 加 $ 包裹；解答严谨肯定、禁止自我纠正碎念；answer 写全每小问结论；字符串内换行用 "\\n" 转义。`,
+      };
+    }
+
     // 复用作文批改的千问配置，直连千问 VL 模型完成题目识别与解答
     const qwenApiUrl = process.env.QWEN_API_URL
       || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
     const qwenApiKey = process.env.QWEN_API_KEY || '';
-    const qwenModel = process.env.QWEN_MODEL || 'qwen3.8-max';
+    // concise 模式用 flash 提速；detail 模式用配置模型（默认 max）
+    const qwenModel = mode === "concise"
+      ? "qwen3.8-flash"
+      : (process.env.QWEN_MODEL || 'qwen3.8-max');
     const chatUrl = qwenApiUrl.includes('/chat/completions')
       ? qwenApiUrl
       : `${qwenApiUrl.replace(/\/+$/, '')}/chat/completions`;

@@ -32,6 +32,7 @@ export default function SearchScreen() {
   const [imageUri, setImageUri] = useState<string | null>(params.imageUri || null);
   const [result, setResult] = useState<SolveResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [detailedMode, setDetailedMode] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -40,7 +41,8 @@ export default function SearchScreen() {
     if (imageUri !== null) {
       solveProblem(imageUri);
     }
-  }, [imageUri]);
+    // detailedMode 变化时用同一张图重新解析
+  }, [imageUri, detailedMode]);
 
   const solveProblem = async (uri: string) => {
     setLoading(true);
@@ -97,6 +99,8 @@ export default function SearchScreen() {
           type: blob.type || 'image/jpeg',
         } as any);
       }
+      // mode: detail=详细解析(较慢)，默认 concise=精炼解答(快)
+      formData.append('mode', detailedMode ? 'detail' : 'concise');
 
       console.log('[Search] Sending request to /api/v1/solve-problem');
 
@@ -268,6 +272,25 @@ export default function SearchScreen() {
               <TouchableOpacity style={styles.retakeButton} onPress={handleReselect}>
                 <Ionicons name="refresh" size={18} color="#666" />
                 <Text style={styles.retakeText}>重新选择</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* 解析模式切换：默认精炼(快)，可切详细 */}
+          {imageUri.length > 0 && (
+            <View style={styles.modeBar}>
+              <Text style={styles.modeLabel}>解析模式</Text>
+              <TouchableOpacity
+                style={[styles.modeBtn, !detailedMode && styles.modeBtnActive]}
+                onPress={() => setDetailedMode(false)}
+              >
+                <Text style={[styles.modeBtnText, !detailedMode && styles.modeBtnTextActive]}>精炼</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeBtn, detailedMode && styles.modeBtnActive]}
+                onPress={() => setDetailedMode(true)}
+              >
+                <Text style={[styles.modeBtnText, detailedMode && styles.modeBtnTextActive]}>详细</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -517,6 +540,37 @@ const styles = {
   retakeText: {
     fontSize: 14,
     color: '#666',
+  },
+  modeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 10,
+  },
+  modeLabel: {
+    fontSize: 13,
+    color: '#888',
+    marginRight: 2,
+  },
+  modeBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DDD',
+    backgroundColor: '#FFF',
+  },
+  modeBtnActive: {
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
+  },
+  modeBtnText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  modeBtnTextActive: {
+    color: '#FFF',
   },
   loadingSection: {
     padding: 40,
