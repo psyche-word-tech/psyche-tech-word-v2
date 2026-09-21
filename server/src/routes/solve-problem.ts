@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { createHash } from "crypto";
 import { writeFileSync } from "fs";
+import sharp from "sharp";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 
 const router = Router();
@@ -204,9 +205,22 @@ router.post("/", upload.single("image"), async (req, res) => {
       }
     }
 
-    // 2. 缓存未命中，调用大模型解析
-    const imageBase64 = imageBuffer.toString("base64");
-    const mimeType = req.file.mimetype;
+    // 2. 缓存未命中，调用大模型解析。
+    // 先把图片压缩后再发给千问 VL：原图直发会生成大量视觉 token，
+    // 是单次解析耗时（~30s）的头号来源。压缩到 900px 内 + q65 显著提速，识别质量不受影响。
+    let imageBase64 = imageBuffer.toString("base64");
+    let mimeType = req.file.mimetype;
+    try {
+      const compressed = await sharp(imageBuffer)
+        .resize(900, 900, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 65 })
+        .toBuffer();
+      imageBase64 = compressed.toString("base64");
+      mimeType = "image/jpeg";
+      console.log(`[SolveProblem] 图片压缩: ${Math.round(imageBuffer.length / 1024)}KB -> ${Math.round(compressed.length / 1024)}KB`);
+    } catch (compressErr) {
+      console.warn("[SolveProblem] 图片压缩失败，使用原图:", (compressErr as Error).message);
+    }
 
     const messages = [
       {
