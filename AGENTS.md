@@ -371,6 +371,10 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 18. **搜题结构化输出约束（已实现，不牺牲解题正确性）**：基于问题 17 的"干净 prompt"结论，在保持自然解题的前提下让模型在解答末尾输出"解析摘要"块：`====解析摘要==== / 结论：… / 点拨：… / 素养：… / 难度：L<1-6> /`（结束标记 `====摘要结束====` 可被模型省略）。**确保只加这段末尾摘要、不加其他干扰规则**，否则会重新劣化解题正确性。后端 `applySummary(q)`（`solve-problem.ts`）：从 solution+answer 中正则提取摘要（结束标记可选，`/...?(?:====摘要结束====|$)/`），把 `结论→answer`（**只含最终答案、无推导**）、`点拨→analysis`、`素养→core_competency`、`难度→difficulty`（格式化为 `L n`），并**反向剥掉 solution/answer 中的摘要块**（用 `/====解析摘要====[\s\S]*?(?:====摘要结束====|$)/`），保证返回给学生的是纯净字段（answer 只显示最终答案、answer 与 solution 计算一致）。**摘要块在非 JSON 兜底路径下依然存在**（模型按 system 要求输出），applySummary 在返回前统一对每个 q 执行。**难度体系由"简单/中等/困难"改为 L1-L6**：前端细目表改单独"学科核心素养 + 难度"区块（metaBlock/metaRow/metaLabel/metaValue/difficultyTextL 样式），移除原 specTable/difficultyEasy/Medium/Hard；`answer` 用 `MathView`（WebView+KaTeX）渲染、天然自适应屏宽。前端渲染顺序：题目→答案(仅最终结论)→解题思路点拨→解答→学科知识点+学科核心素养+难度→技巧→收藏。摘要块含"知识点"字段，解析回填 `knowledge_points`，与"素养"一起在素养区块（metaBlock）展示（`结论→answer / 点拨→analysis / 知识点→knowledge_points / 素养→core_competency / 难度→difficulty`）。验证（q18 椭圆 tan∠PQR 题，defer 缓存）：answer=`(1) x²/4+y²/3=1；(2)(i) √5x−2y+√5=0；(2)(ii) 4√3`，analysis=思路点拨，core_competency=数学运算/逻辑推理/直观想象，difficulty=L5，solution 无摘要残留，2/2 稳定。改前端后需 `cd client && npx expo export --platform web && rm -rf ../server/public && cp -r dist ../server/public` 才有新 UI。
 19. **搜题支持多文件上传（已实现）：图片多张 + PDF + Word(.docx)**：搜题不再限单图。后端 `solve-problem.ts` 路由从 `upload.single("image")` 改为 `upload.array("files", 20)`（同时兼容旧 `image` 单字段），新增 `parseDocText(buffer, mime, filename)`：PDF 用 `pdf-parse@2` 的 `PDFParse` 类（`require("pdf-parse")` 取具名导出，`new PDFParse({data})` + `getText()`，注意 v2 非默认导出、非旧 v1 函数式 API）、DOCX 用 `mammoth.extractRawText({buffer})`；新增 `isImageMime()`。多文件按 mimetype 分流：图片 → sharp 压缩 900/q65 后以 `image_url` 数组全部喂模型（多图拼接）；PDF/DOCX → 提取文本拼入 userPrompt 的"[PDF/Word 内容]"块。**聚合 hash**（多文件 buffer 拼接）作缓存键。前端 `search/index.tsx`：`imageUri` 单图 state 重构为 `files: SearchFile[]`（`{uri,name,type,isImage}`），相册支持多选、文档选择支持多文件（图片/PDF/DOCX），FormData 追加多个 `files` 字段；多文件网格预览（图缩略图/文档图标 + 单个删除 `handleRemoveFile` + 清除重选 `handleReselect`）。**收藏仍只传** `files` 中第一张图片（`getDocumentAsync` 的返回 `DocumentPickerAsset` 无 `.type` 属性，isImage 用文件名扩展名正则判断，不能读 `.type`）。验证：多图（上半+下半两张拼成题目）稳定算出完整正确 `(2)(i)/(2)(ii)`；图片+DOCX 混合正确。注意 `docx` 依赖用于**后端生成测试 docx**（`Document/Packer`），不是解析（解析用 mammoth）。
 
+20. **搜题多文件继续优化（已实现）**：
+   - **上传后不自动搜题，改"开始搜题"确认按钮**：前端选中文件后仅进入待命态（可继续"添加文件"、可删除单个文件），点"开始搜题"按钮才按当前精炼/详细模式发起解析；有结果或加载中时隐藏按钮。避免误触、便于一次性集齐多文件再搜。
+   - **缓存元字段兼容**：旧版本缓存的 `analysis`/`knowledge_points`/`core_competency`/`difficulty` 可能为空（前端条件渲染导致"解题思路点拨/解答/素养/难度"等区块消失）。后端缓存命中时先构造 q 并 `applySummary` 尝试从缓存 solution 补齐；若 `answer` 缺失或三元字段全空（`!metaComplete`）则判定为脏缓存，忽略并重新走 LLM 拿完整结构化结果、覆盖重建缓存。前端区块按字段存在性渲染（`q.analysis &&`、`q.difficulty &&` 等），空字段即隐藏对应区块。
+
 ## 首页（study/index.tsx）简化
 
 - **顶部**：保留大图背景 `iconRock` + 右上角四个功能按钮（搜索/历史/能力地图/添加），按钮与功能不变（`searchButton` 半透明圆底）。
@@ -379,6 +383,22 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **已清理**：不再使用的大图资源 require（`regionAImg/regionBImg/region4Bg/iconMyVocab`）、`engravedText*`/`regionAStyle`/`gridImageFull` 等样式、`useSafeSearchParams`。
 - **补齐历史缺失样式**：modal 弹窗引用的 `modalHeader`/`modalBody`/`modalCloseBtn` 在 HEAD 即缺失（运行时仅样式缺省不崩、但 tsc 报错），已补定义。
 - **type 修复**：`emotionDistribution`/`gazeDistribution` 的 `Object.entries(...)` 在新版 TS 推断 `count` 为 `unknown`，改为 `as [string, number][]`。
+
+## 首页（study/index.tsx）简化
+
+- **顶部**：保留大图背景 `iconRock` + 右上角四个功能按钮（搜索/历史/能力地图/添加），按钮与功能不变（`searchButton` 半透明圆底）。
+- **去掉了刻字（engrave）功能**：不再渲染 `iconRock` 上的刻字文字展示，也不再点击跳 `/engrave`。
+- **下半区**：由 2×2 图片网格（regionA/regionB/region4Bg/my-vocab 图片图标）改为简洁文字卡片（词汇学习/学习日历/个人中心/我的词汇书），保留全部跳转与登录判断。
+- **已清理**：不再使用的大图资源 require（`regionAImg/regionBImg/region4Bg/iconMyVocab`）、`engravedText*`/`regionAStyle`/`gridImageFull` 等样式、`useSafeSearchParams`。
+- **补齐历史缺失样式**：modal 弹窗引用的 `modalHeader`/`modalBody`/`modalCloseBtn` 在 HEAD 即缺失（运行时仅样式缺省不崩、但 tsc 报错），已补定义。
+- **type 修复**：`emotionDistribution`/`gazeDistribution` 的 `Object.entries(...)` 在新版 TS 推断 `count` 为 `unknown`，改为 `as [string, number][]`。
+
+## 搜题多图归并 + 结果左右滑动分页（search 页）
+
+- **需求**：多张照片有时是同一道题的上下/连续两半（需合并成一道完整作答），有时是完全不同的多道题（需分开，各自一"页"）；结果区要支持左右滑动（右划下一题/左划上一题）。
+- **后端**（`solve-problem.ts`）：多文件循环已把图片压缩为多个 `image_url`、文档提取文本拼入 userPrompt；prompt 引导模型先判断多图是"同题连续/下半"（合并进同一个 `question` 元素、含各小问）还是"不同大题"（拆成多个 `question` 元素，一个元素只含一道题）。多文档/图片的聚合 hash 作缓存键。
+  - **已知局限**：干净 prompt 下，模型对"完全无关的两张不同科目图"仍可能合并成单个 `question`（answer 里写"第一题…第二题…"）。这是"少约束保正确性 vs 强制结构化"的固有 trade-off，前端单页也能完整展示，不丢内容。
+- **前端**（`search/index.tsx`）：多题结果（`result.questions.length > 1`）改为**横向分页**——`ScrollView horizontal pagingEnabled`，每页宽度=屏宽-32，一页一道题卡片；顶部 `pagerHeader` 显示"第 N / M 题" + 左右箭头，配合 `onMomentumScrollEnd` 根据 `contentOffset.x / winWidth` 更新 `activePage`。单题保持竖向列表。耗时：用 `useWindowDimensions().width` 取屏宽；卡片逻辑抽为 `renderQuestionCard(q, index)` 复用。
 
 ## 新增功能：教师批改系统
 

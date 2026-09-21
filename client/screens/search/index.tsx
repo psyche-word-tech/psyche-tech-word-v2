@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Platform, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Platform, Modal, useWindowDimensions } from 'react-native';
 import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
@@ -43,6 +43,8 @@ export default function SearchScreen() {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [activePage, setActivePage] = useState(0);
+  const { width: winWidth } = useWindowDimensions();
 
   useEffect(() => {
     // 模式切换时不自动重发（避免重复请求），交由用户切换文件或触发
@@ -115,6 +117,109 @@ export default function SearchScreen() {
       setLoading(false);
     }
   };
+
+  const renderQuestionCard = (q: QuestionResult, index: number) => (
+    <View key={index} style={styles.questionCard}>
+      {q.from_cache && (
+        <View style={styles.cacheBadge}>
+          <Text style={styles.cacheBadgeText}> 来自缓存</Text>
+        </View>
+      )}
+
+      {q.subject && (
+        <View style={styles.subjectTag}>
+          <Text style={styles.subjectText}>{q.subject}</Text>
+        </View>
+      )}
+
+      {(q.question || files.length > 0) && (
+        <View style={styles.resultBlock}>
+          <Text style={styles.blockTitle}>题目</Text>
+          {q.question ? (
+            <MathText text={q.question} style={styles.blockContent} />
+          ) : files.length > 0 ? (
+            <View style={styles.questionImages}>
+              {files.filter((f) => f.isImage).map((f, fi) => (
+                <Image key={fi} source={{ uri: f.uri }} style={styles.questionImage} resizeMode="contain" />
+              ))}
+            </View>
+          ) : null}
+        </View>
+      )}
+
+      {q.answer && (
+        <View style={styles.answerBlock}>
+          <Text style={styles.answerTitle}>答案</Text>
+          <MathView text={q.answer} style={styles.answerContent} />
+        </View>
+      )}
+
+      {q.analysis && (
+        <View style={styles.resultBlock}>
+          <Text style={styles.blockTitle}>解题思路点拨</Text>
+          <MathText text={q.analysis} style={styles.blockContent} />
+        </View>
+      )}
+
+      {q.solution && (
+        <View style={styles.resultBlock}>
+          <Text style={styles.blockTitle}>解答</Text>
+          <MathView text={q.solution} style={styles.blockContent} />
+        </View>
+      )}
+
+      {(q.knowledge_points || q.core_competency || q.difficulty) && (
+        <View style={styles.metaBlock}>
+          {q.knowledge_points && (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>学科知识点</Text>
+              <Text style={styles.metaValue}>{q.knowledge_points}</Text>
+            </View>
+          )}
+          {q.core_competency && (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>学科核心素养</Text>
+              <Text style={styles.metaValue}>{q.core_competency}</Text>
+            </View>
+          )}
+          {q.difficulty && (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>难度</Text>
+              <View style={styles.difficultyBadge}>
+                <Text style={styles.difficultyTextL}>{q.difficulty}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {q.tips && (
+        <View style={styles.tipsBlock}>
+          <Text style={styles.tipsTitle}>💡 解题技巧</Text>
+          <MathText text={q.tips} style={styles.tipsContent} />
+        </View>
+      )}
+
+      {/* 收藏按钮 */}
+      <TouchableOpacity
+        style={styles.favoriteButton}
+        onPress={() => handleFavorite(q)}
+        disabled={favoriteLoading}
+      >
+        <Ionicons
+          name={q.isFavorite ? 'heart' : 'heart-outline'}
+          size={20}
+          color={q.isFavorite ? '#EF4444' : '#666'}
+        />
+        <Text style={[
+          styles.favoriteText,
+          q.isFavorite && styles.favoriteTextActive
+        ]}>
+          {q.isFavorite ? '已收藏' : '收藏'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const handleFavorite = async (question: QuestionResult) => {
     setFavoriteLoading(true);
@@ -414,116 +519,57 @@ export default function SearchScreen() {
                 </View>
               ) : (
                 <>
-                  {result.questions && result.questions.map((q, index) => (
-                    <View key={index} style={styles.questionCard}>
-                      {result.questions && result.questions.length > 1 && (
-                        <View style={styles.questionNumber}>
-                          <Text style={styles.questionNumberText}>第 {index + 1} 题</Text>
-                        </View>
-                      )}
-
-                      {q.from_cache && (
-                        <View style={styles.cacheBadge}>
-                          <Text style={styles.cacheBadgeText}> 来自缓存</Text>
-                        </View>
-                      )}
-
-                      {q.subject && (
-                        <View style={styles.subjectTag}>
-                          <Text style={styles.subjectText}>{q.subject}</Text>
-                        </View>
-                      )}
-
-                      {(q.question || files.length > 0) && (
-                        <View style={styles.resultBlock}>
-                          <Text style={styles.blockTitle}>题目</Text>
-                          {q.question ? (
-                            <MathText text={q.question} style={styles.blockContent} />
-                          ) : files.length > 0 ? (
-                            <View style={styles.questionImages}>
-                              {files.filter((f) => f.isImage).map((f, fi) => (
-                                <Image key={fi} source={{ uri: f.uri }} style={styles.questionImage} resizeMode="contain" />
-                              ))}
-                            </View>
-                          ) : null}
-                        </View>
-                      )}
-
-                      {q.answer && (
-                        <View style={styles.answerBlock}>
-                          <Text style={styles.answerTitle}>答案</Text>
-                          <MathView text={q.answer} style={styles.answerContent} />
-                        </View>
-                      )}
-
-                      {q.analysis && (
-                        <View style={styles.resultBlock}>
-                          <Text style={styles.blockTitle}>解题思路点拨</Text>
-                          <MathText text={q.analysis} style={styles.blockContent} />
-                        </View>
-                      )}
-
-                      {q.solution && (
-                        <View style={styles.resultBlock}>
-                          <Text style={styles.blockTitle}>解答</Text>
-                          <MathView text={q.solution} style={styles.blockContent} />
-                        </View>
-                      )}
-
-                      {(q.knowledge_points || q.core_competency || q.difficulty) && (
-                        <View style={styles.metaBlock}>
-                          {q.knowledge_points && (
-                            <View style={styles.metaRow}>
-                              <Text style={styles.metaLabel}>学科知识点</Text>
-                              <Text style={styles.metaValue}>{q.knowledge_points}</Text>
-                            </View>
-                          )}
-                          {q.core_competency && (
-                            <View style={styles.metaRow}>
-                              <Text style={styles.metaLabel}>学科核心素养</Text>
-                              <Text style={styles.metaValue}>{q.core_competency}</Text>
-                            </View>
-                          )}
-                          {q.difficulty && (
-                            <View style={styles.metaRow}>
-                              <Text style={styles.metaLabel}>难度</Text>
-                              <View style={styles.difficultyBadge}>
-                                <Text style={styles.difficultyTextL}>{q.difficulty}</Text>
-                              </View>
-                            </View>
-                          )}
-                        </View>
-                      )}
-
-                      {q.tips && (
-                        <View style={styles.tipsBlock}>
-                          <Text style={styles.tipsTitle}>💡 解题技巧</Text>
-                          <MathText text={q.tips} style={styles.tipsContent} />
-                        </View>
-                      )}
-
-                      {/* 收藏按钮 */}
-                      <TouchableOpacity
-                        style={styles.favoriteButton}
-                        onPress={() => handleFavorite(q)}
-                        disabled={favoriteLoading}
-                      >
-                        <Ionicons
-                          name={q.isFavorite ? 'heart' : 'heart-outline'}
-                          size={20}
-                          color={q.isFavorite ? '#EF4444' : '#666'}
-                        />
-                        <Text style={[
-                          styles.favoriteText,
-                          q.isFavorite && styles.favoriteTextActive
-                        ]}>
-                          {q.isFavorite ? '已收藏' : '收藏'}
-                        </Text>
-                      </TouchableOpacity>
-
+                  {result.questions && result.questions.length > 1 ? (
+                    <>
+                      <View style={styles.pagerHeader}>
+                        <TouchableOpacity
+                          style={styles.pagerArrow}
+                          disabled={activePage === 0}
+                          onPress={() => {
+                            const p = document.getElementById(`qpage-${activePage - 1}`);
+                            if (p) p.scrollIntoView({ behavior: 'smooth', inline: 'nearest' });
+                            setActivePage(activePage - 1);
+                          }}
+                        >
+                          <Ionicons name="chevron-back" size={22} color={activePage === 0 ? '#CCC' : '#4A90E2'} />
+                        </TouchableOpacity>
+                        <Text style={styles.pagerIndicator}>第 {activePage + 1} / {result.questions.length} 题</Text>
+                        <TouchableOpacity
+                          style={styles.pagerArrow}
+                          disabled={activePage === result.questions.length - 1}
+                          onPress={() => {
+                            const p = document.getElementById(`qpage-${activePage + 1}`);
+                            if (p) p.scrollIntoView({ behavior: 'smooth', inline: 'nearest' });
+                            setActivePage(activePage + 1);
+                          }}
+                        >
+                          <Ionicons name="chevron-forward" size={22} color={activePage === result.questions.length - 1 ? '#CCC' : '#4A90E2'} />
+                        </TouchableOpacity>
                       </View>
-                  ))}
-                </>
+                      <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        onMomentumScrollEnd={(e) => {
+                          const off = e.nativeEvent.contentOffset.x;
+                          setActivePage(Math.round(off / winWidth));
+                        }}
+                        style={styles.pagerScroll}
+                      >
+                        {result.questions.map((q, index) => (
+                          <View key={index} id={`qpage-${index}`} style={[styles.pagerPage, { width: winWidth - 32 }]}>
+                            {renderQuestionCard(q, index)}
+                          </View>
+                        ))}
+                      </ScrollView>
+                    </>
+                  ) : result.questions ? (
+                    result.questions.map((q, index) => (
+                      renderQuestionCard(q, index)
+                    ))
+                  ) : null}
+
+                      </>
               )}
             </View>
           )}
@@ -732,6 +778,29 @@ const styles = {
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+  },
+  pagerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  pagerIndicator: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  pagerArrow: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#EEF4FC',
+  },
+  pagerScroll: {
+    flexGrow: 0,
+  },
+  pagerPage: {
+    paddingRight: 4,
   },
   questionNumber: {
     backgroundColor: '#4A90E2',

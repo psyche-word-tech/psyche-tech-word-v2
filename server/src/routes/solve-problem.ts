@@ -183,6 +183,15 @@ function applySummary(q: any): void {
   if (zhishi) q.knowledge_points = zhishi;
   if (suyang) q.core_competency = suyang;
   if (diffM) q.difficulty = `L${diffM[1]}`;
+  // 若模型未输出摘要块或无点拨，用 solution 首段点明思路作兜底，保证"解题思路点拨"区块不缺失
+  if (!q.analysis) {
+    const sol = (q.solution || '').trim();
+    const target = (q.answer || '').trim();
+    if (sol && sol !== target) {
+      const first = sol.split(/\n{2,}/)[0]?.replace(/^(解[:：]|解答：?|[一二三四五六七八九十]+[、.．]|\(\d\)\s*)/, '').trim();
+      if (first && first.length > 3) q.analysis = first.slice(0, 160);
+    }
+  }
   // 剥掉摘要块，保持 answer/solution 纯净
   const strip = (s: string) => (s || '').replace(/====解析摘要====[\s\S]*?(?:====摘要结束====|$)/, '').trim();
   if (q.solution) q.solution = strip(q.solution);
@@ -295,23 +304,28 @@ router.post("/", upload.any(), async (req, res) => {
       if (!cached.question_text || cached.question_text === "图片内容无法识别") {
         console.log("[SolveProblem] Cache hit is a failed placeholder, ignore");
       } else {
-      console.log("[SolveProblem] Cache hit by image hash");
-      return res.json({
-        questions: [
-          {
-            subject: cached.subject,
-            question: cached.question_text,
-            analysis: cached.analysis,
-            solution: cached.solution,
-            answer: cached.answer,
-            tips: cached.tips,
-            knowledge_points: cached.knowledge_points || "",
-            core_competency: cached.core_competency || "",
-            difficulty: cached.difficulty || "",
-            from_cache: true,
-          }
-        ]
-      });
+      // 旧版本可能缓存了字段不完整（analysis/素养/难度为空）的结果，此时视为脏缓存忽略，
+      // 重新走 LLM 拿到完整结构化的字段。
+      const cachedQ = {
+        subject: cached.subject,
+        question: cached.question_text,
+        analysis: cached.analysis ?? "",
+        solution: cached.solution ?? "",
+        answer: cached.answer ?? "",
+        tips: cached.tips ?? "",
+        knowledge_points: cached.knowledge_points ?? "",
+        core_competency: cached.core_competency ?? "",
+        difficulty: cached.difficulty ?? "",
+      };
+      // 若缓存 solution 仍带"解析摘要"块，尝试从中补齐元字段
+      applySummary(cachedQ);
+      const metaComplete = (cachedQ.answer && (cachedQ.analysis || cachedQ.core_competency || cachedQ.difficulty));
+      if (!metaComplete) {
+        console.log("[SolveProblem] Cache hit but meta fields incomplete, re-solve via LLM");
+      } else {
+        console.log("[SolveProblem] Cache hit by image hash");
+        return res.json({ questions: [{ ...cachedQ, from_cache: true }] });
+      }
       }
     }
 
@@ -323,10 +337,10 @@ router.post("/", upload.any(), async (req, res) => {
 
     const systemPrompt = `你是专业的题目解析老师。请仔细阅读上传的图片与文档内容，逐一解答其中包含的题目，并输出完整解答。
 要求：
-1. 逐一解出每个小问（如 (1)、(2)(i)、(2)(ii)），写出最终答案与推导过程，严谨完整、逐步推导、不跳步、结论肯定。若同时有多张图片或文档，按实际内容分别作答。
+1. 逐一解出每个小问（如 (1)、(2)(i)、(2)(ii)），写出最终答案与推导过程，严谨完整、逐步推导、不跳步、结论肯定。输出的 questions 数组中，**一个 question 元素只对应一道独立的大题**（一道大题内可含多个小问 (1)(2)…）；若多张图/文档明显是互不相关的多道大题，则分别放入多个 question 元素，绝不要把多道大题强行塞进同一个 question。若多张图显然是同题目的连续/上下部分（第一张是上半、第二张是下半，指向同一道题），则把它们合并进同一个 question 元素作为一道题完整作答。
 2. 数学公式一律用 LaTeX 并用美元符号包裹：行内用 $...$（如 $\\dfrac{1}{2}$、$\\sqrt{3}$），独立成行用 $$...$$。不要输出未被 $ 包裹的裸公式。
 
-在完整解答写完后，请另起一行输出一块"解析摘要"，严格按以下格式（每行一个字段，字段名与冒号为英文标点恒定）：
+在完整解答写完后，你必须另起一行、按以下格式输出"解析摘要"（不得省略任何字段，每行一个字段，字段名与冒号为英文标点恒定）：
 ====解析摘要====
 结论：<仅列出各小问最终答案，例如 (1) …；(2)(i) …；(2)(ii) …；不含推导过程，必须与前面解答计算出的结果一致>
 点拨：<2~4 句解题思路要点/关键突破口>
@@ -335,7 +349,7 @@ router.post("/", upload.any(), async (req, res) => {
 难度：L<1到6的一个数字>
 ====摘要结束====`;
     const userPrompt = `请完整解答上传图片/文档中的题目，给出每个小问的最终答案与严谨推导过程，并在文末按格式输出"解析摘要"（含结论/点拨/素养/难度）。
-${docTexts.length > 0 ? "以下是文档中的文字内容：\n" + docTexts.join("\n\n") : ""}`;
+${imageParts.length > 1 ? "注意：多张图片请先判断它们是不是同一道题的不同部分。如果不是同一道题（例如一张是数学题、另一张是英语题，或两道完全无关的题），务必生成多个 question 对象，**每个 question 只含一道题的作答**，不要让一个 question 里塞进两道题；如果是同一道题的上下/连续两半，则合并进同一个 question。\n" : ""}${docTexts.length > 0 ? "以下是文档中的文字内容：\n" + docTexts.join("\n\n") : ""}`;
 
     // 把所有图片以 image_url 形式 + 文档文本一起发给模型
     const userContent: any[] = [];
