@@ -173,10 +173,13 @@ router.post("/", upload.single("image"), async (req, res) => {
     const supabase = getSupabaseClient();
 
     // 1. 先查缓存：通过图片 hash 或文本相似度
+    // 同一张图可能因历史坏答案累积了多行，必须按 created_at DESC 取最新，
+    // 否则 limit(1) 无排序会随机命中不同行，导致"同一题每次答案都不一样"。
     const { data: cachedProblems, error: cacheError } = await supabase
       .from("problems")
       .select("*")
       .eq("image_hash", hash)
+      .order("created_at", { ascending: false })
       .limit(1);
 
     if (!cacheError && cachedProblems && cachedProblems.length > 0) {
@@ -326,7 +329,7 @@ router.post("/", upload.single("image"), async (req, res) => {
       "subject": "学科",
       "answer": "最终答案",
       "analysis": "简要解析（2~4句话）",
-      "solution": "解题步骤（精炼，只保留关键推理，3~6步）",
+      "solution": "解题步骤（完整严谨推导，不要为求简而跳步；逐步推出每个小问最终结论）",
       "tips": "解题技巧（可选，一句话）",
       "knowledge_points": "考查知识点（必填）",
       "core_competency": "核心素养（必填）",
@@ -339,7 +342,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 1. 不要输出题目文本（题干由图片展示），focus 在答案与解析。
 2. 所有公式用 LaTeX 并用 $ 包裹（行内 $...$、独立 $$...$$）。
 3. 解答严谨肯定，禁止自我纠正/口语化碎念，禁止"不好直接求"式畏难措辞。
-4. analysis 与 solution 要有实质内容但务必精炼，不要展开冗余推导；answer 写全每个小题最终结论。
+4. analysis 要精炼；solution 必须给出完整严谨的推导步骤（不要为求简而跳步，逐步推出每个小问最终结论），answer 写全每个小题最终结论。
 5. 所有字符串内换行必须用 "\\n" 转义，引号严格配对。
 6. 图片中有多道题就全部放进 questions。
 7. 图片不清晰/无法识别时返回 {"error":"图片不清晰或无法识别，请重新上传"}。`;
@@ -355,7 +358,7 @@ router.post("/", upload.single("image"), async (req, res) => {
       "subject": "学科",
       "answer": "最终答案",
       "analysis": "简要解析（2~4句）",
-      "solution": "精炼解题步骤（3~6步）",
+      "solution": "解题步骤（完整严谨推导，逐步推出每个小问最终结论）",
       "tips": "一句话技巧（可选）",
       "knowledge_points": "考查知识点（必填）",
       "core_competency": "核心素养（必填）",
@@ -372,9 +375,10 @@ router.post("/", upload.single("image"), async (req, res) => {
     const qwenApiUrl = process.env.QWEN_API_URL
       || 'https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions';
     const qwenApiKey = process.env.QWEN_API_KEY || '';
-    // 所有解析模式统一用 max 解题（flash 对高计算量难题不稳定，详见 AGENTS.md）
-    // 可用 QWEN_MODEL 环境变量覆盖。
-    const qwenModel = (process.env.QWEN_MODEL || 'qwen3.8-max');
+    // 解题模型：flash 在同图实测能给出正确推导（4√3），且结合缓存修复后结果稳定。
+    // 详细模式的"答案不稳定"根因是缓存多条错值+无排序，而非模型；缓存已按 created_at 排序、同 hash 覆盖。
+    // 可用 QWEN_MODEL 环境变量覆盖切换。
+    const qwenModel = (process.env.QWEN_MODEL || 'qwen3.8-flash');
     // 输出长度硬上限：防止 max 模型对复杂题输出失控膨胀到接近 token 上限被截断、
     // JSON 损坏无法修复（详见 AGENTS.md）。所有模式统一 6000。
     const maxTokens = 6000;
@@ -565,8 +569,14 @@ router.post("/", upload.single("image"), async (req, res) => {
           }
         }
 
-        // 插入新题目
-        await supabase.from("problems").insert({
+        // 同一张图若已有缓存记录，更新覆盖（避免同 hash 累积多条不同答案导致读取不确定性）；
+        // 没有才插入新行。
+        const { data: byHash } = await supabase
+          .from("problems")
+          .select("id")
+          .eq("image_hash", hash)
+          .limit(1);
+        const cacheRow = {
           question_text: q.question || "",
           subject: q.subject || "未知",
           answer: q.answer || "",
@@ -576,8 +586,14 @@ router.post("/", upload.single("image"), async (req, res) => {
           knowledge_points: q.knowledge_points || "",
           core_competency: q.core_competency || "",
           difficulty: q.difficulty || "",
-          image_hash: hash,
-        });
+        };
+        if (byHash && byHash.length > 0) {
+          await supabase.from("problems").update(cacheRow).eq("image_hash", hash);
+          console.log("[SolveProblem] Updated cache row for image_hash");
+        } else {
+          await supabase.from("problems").insert({ ...cacheRow, image_hash: hash });
+          console.log("[SolveProblem] Inserted new cache row");
+        }
       }
       console.log(`[SolveProblem] Cached ${result.questions.length} problems`);
     }
