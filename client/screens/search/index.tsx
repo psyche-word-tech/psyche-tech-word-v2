@@ -2,7 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, ActivityInd
 import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { MathText } from '@/components/MathText';
 import { MathView } from '@/components/MathView';
 import * as ImagePicker from 'expo-image-picker';
@@ -44,15 +44,10 @@ export default function SearchScreen() {
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  const didAutoSolve = useRef(false);
   useEffect(() => {
-    // 从首页带入图片进入本页时，自动触发一次解析（仅首次挂载）
-    if (files.length > 0 && !didAutoSolve.current) {
-      didAutoSolve.current = true;
-      solveProblem(files);
-    }
+    // 模式切换时不自动重发（避免重复请求），交由用户切换文件或触发
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [detailedMode]);
 
   const solveProblem = async (uploads: SearchFile[]) => {
     setLoading(true);
@@ -332,12 +327,6 @@ export default function SearchScreen() {
                     <Text numberOfLines={1} style={styles.fileName}>{f.name}</Text>
                   </View>
                 ))}
-                <TouchableOpacity style={styles.fileAddWrap} onPress={() => setShowImagePicker(true)}>
-                  <View style={styles.fileAddCard}>
-                    <Ionicons name="add" size={30} color="#4A90E2" />
-                    <Text style={styles.fileAddText}>继续添加</Text>
-                  </View>
-                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -629,28 +618,7 @@ const styles = {
     fontSize: 11,
     color: '#666',
     marginTop: 4,
-    width: 100,
     textAlign: 'center',
-  },
-  fileAddWrap: {
-    width: 100,
-    marginBottom: 6,
-  },
-  fileAddCard: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#4A90E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F5F8FE',
-  },
-  fileAddText: {
-    fontSize: 11,
-    color: '#4A90E2',
-    marginTop: 4,
   },
   questionImages: {
     gap: 10,
