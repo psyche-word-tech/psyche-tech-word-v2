@@ -150,6 +150,41 @@ function closeTruncatedJson(s: string): string {
 }
 
 /**
+ * 从"解析摘要"块中提取结构化字段并回填到题目对象。
+ * 模型在完整解答末尾输出：
+ *   ====解析摘要====
+ *   结论：<最终答案>      点拨：<思路>      素养：<核心素养>      难度：L3
+ *   ====摘要结束====
+ * 结论只含最终答案（不含推导），点拨作为解题思路，素养/难度进入细目表。
+ * 同时把 solution 中的摘要块剥掉，避免学生端重复看到。
+ */
+function applySummary(q: any): void {
+  const src = (q.solution || '') + '\n' + (q.answer || '');
+  // 结束标记可能被模型省略，故 "====解析摘要====" … 到文末也算摘要体
+  const m = src.match(/====解析摘要====([\s\S]*?)(?:====摘要结束====|$)/);
+  if (!m) return;
+  const block = m[1] || '';
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const get = (label: string) => {
+    const re = new RegExp(escapeRe(label) + '[:：]\\s*([^\\n]+)');
+    const mm = block.match(re);
+    return mm ? mm[1].trim() : '';
+  };
+  const conclusion = get('结论');
+  const dianbo = get('点拨');
+  const suyang = get('素养');
+  const diffM = block.match(/难度[:：]\s*L?([1-6])/);
+  if (conclusion) q.answer = conclusion;
+  if (dianbo) q.analysis = dianbo;
+  if (suyang) q.core_competency = suyang;
+  if (diffM) q.difficulty = `L${diffM[1]}`;
+  // 剥掉摘要块，保持 answer/solution 纯净
+  const strip = (s: string) => (s || '').replace(/====解析摘要====[\s\S]*?(?:====摘要结束====|$)/, '').trim();
+  if (q.solution) q.solution = strip(q.solution);
+  if (q.answer) q.answer = strip(q.answer);
+}
+
+/**
  * 计算图片 hash
  */
 function imageHash(buffer: Buffer): string {
@@ -231,8 +266,16 @@ router.post("/", upload.single("image"), async (req, res) => {
     const systemPrompt = `你是专业的题目解析老师。请仔细看图解题，直接给出完整解答。
 要求：
 1. 逐一解出每个小问（如 (1)、(2)(i)、(2)(ii)），写出最终答案与推导过程，严谨完整、逐步推导、不跳步、结论肯定。
-2. 数学公式一律用 LaTeX 并用美元符号包裹：行内用 $...$（如 $\\dfrac{1}{2}$、$\\sqrt{3}$），独立成行用 $$...$$。不要输出未被 $ 包裹的裸公式。`;
-    const userPrompt = `请完整解答图片中的题目，给出每个小问的最终答案与严谨推导过程。`;
+2. 数学公式一律用 LaTeX 并用美元符号包裹：行内用 $...$（如 $\\dfrac{1}{2}$、$\\sqrt{3}$），独立成行用 $$...$$。不要输出未被 $ 包裹的裸公式。
+
+在完整解答写完后，请另起一行输出一块"解析摘要"，严格按以下格式（每行一个字段，字段名与冒号为英文标点恒定）：
+====解析摘要====
+结论：<仅列出各小问最终答案，例如 (1) …；(2)(i) …；(2)(ii) …；不含推导过程，必须与前面解答计算出的结果一致>
+点拨：<2~4 句解题思路要点/关键突破口>
+素养：<该题考查的学科核心素养，如数学抽象、逻辑推理、数学建模、直观想象、数学运算等>
+难度：L<1到6的一个数字>
+====摘要结束====`;
+    const userPrompt = `请完整解答图片中的题目，给出每个小问的最终答案与严谨推导过程，并在文末按格式输出"解析摘要"（含结论/点拨/素养/难度）。`;
 
     const messages = [
       { role: "system" as const, content: systemPrompt },
@@ -515,6 +558,11 @@ router.post("/", upload.single("image"), async (req, res) => {
         }
       }
       console.log(`[SolveProblem] Cached ${result.questions.length} problems`);
+    }
+
+    // 提取模型"解析摘要"块：结论→answer、点拨→analysis、素养/难度→细目表，并剥离摘要块
+    if (result.questions && Array.isArray(result.questions)) {
+      result.questions.forEach((q: any) => applySummary(q));
     }
 
     // 标记来源

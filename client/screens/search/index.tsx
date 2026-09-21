@@ -415,8 +415,27 @@ export default function SearchScreen() {
 
                       {q.analysis && (
                         <View style={styles.resultBlock}>
-                          <Text style={styles.blockTitle}>解析</Text>
+                          <Text style={styles.blockTitle}>解题思路点拨</Text>
                           <MathText text={q.analysis} style={styles.blockContent} />
+                        </View>
+                      )}
+
+                      {(q.core_competency || q.difficulty) && (
+                        <View style={styles.metaBlock}>
+                          {q.core_competency && (
+                            <View style={styles.metaRow}>
+                              <Text style={styles.metaLabel}>学科核心素养</Text>
+                              <Text style={styles.metaValue}>{q.core_competency}</Text>
+                            </View>
+                          )}
+                          {q.difficulty && (
+                            <View style={styles.metaRow}>
+                              <Text style={styles.metaLabel}>难度</Text>
+                              <View style={styles.difficultyBadge}>
+                                <Text style={styles.difficultyTextL}>{q.difficulty}</Text>
+                              </View>
+                            </View>
+                          )}
                         </View>
                       )}
 
@@ -453,45 +472,7 @@ export default function SearchScreen() {
                         </Text>
                       </TouchableOpacity>
 
-                      {/* 双向细目表 */}
-                      {(q.knowledge_points || q.core_competency || q.difficulty) && (
-                        <View style={styles.specTable}>
-                          <View style={styles.specTableHeader}>
-                            <Ionicons name="analytics-outline" size={16} color="#6366F1" />
-                            <Text style={styles.specTableTitle}>双向细目表</Text>
-                          </View>
-                          <View style={styles.specTableBody}>
-                            {q.knowledge_points && (
-                              <View style={styles.specRow}>
-                                <Text style={styles.specLabel}>考查知识点</Text>
-                                <Text style={styles.specValue}>{q.knowledge_points}</Text>
-                              </View>
-                            )}
-                            {q.core_competency && (
-                              <View style={styles.specRow}>
-                                <Text style={styles.specLabel}>学科核心素养</Text>
-                                <Text style={styles.specValue}>{q.core_competency}</Text>
-                              </View>
-                            )}
-                            {q.difficulty && (
-                              <View style={styles.specRow}>
-                                <Text style={styles.specLabel}>难度等级</Text>
-                                <View style={styles.difficultyBadge}>
-                                  <Text style={[
-                                    styles.difficultyText,
-                                    q.difficulty === '简单' && styles.difficultyEasy,
-                                    q.difficulty === '中等' && styles.difficultyMedium,
-                                    q.difficulty === '困难' && styles.difficultyHard,
-                                  ]}>
-                                    {q.difficulty}
-                                  </Text>
-                                </View>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      )}
-                    </View>
+                      </View>
                   ))}
                 </>
               )}
@@ -799,6 +780,34 @@ const styles = {
     paddingVertical: 2,
     borderRadius: 10,
     backgroundColor: '#E5E7EB',
+  },
+  difficultyTextL: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4338CA',
+  },
+  metaBlock: {
+    marginBottom: 20,
+    backgroundColor: '#F5F3FF',
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metaLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6D28D9',
+    width: undefined,
+  },
+  metaValue: {
+    fontSize: 13,
+    color: '#4C1D95',
+    flex: 1,
   },
   difficultyText: {
     fontSize: 12,
