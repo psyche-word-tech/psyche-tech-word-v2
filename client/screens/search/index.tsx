@@ -413,6 +413,13 @@ export default function SearchScreen() {
                         </View>
                       )}
 
+                      {q.solution && (
+                        <View style={styles.resultBlock}>
+                          <Text style={styles.blockTitle}>解答</Text>
+                          <MathView text={q.solution} style={styles.blockContent} />
+                        </View>
+                      )}
+
                       {q.analysis && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>解题思路点拨</Text>
@@ -436,13 +443,6 @@ export default function SearchScreen() {
                               </View>
                             </View>
                           )}
-                        </View>
-                      )}
-
-                      {q.solution && (
-                        <View style={styles.resultBlock}>
-                          <Text style={styles.blockTitle}>解答</Text>
-                          <MathView text={q.solution} style={styles.blockContent} />
                         </View>
                       )}
 
