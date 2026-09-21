@@ -1,8 +1,8 @@
-import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Platform, Modal, useWindowDimensions } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Platform, Modal } from 'react-native';
 import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MathText } from '@/components/MathText';
 import { MathView } from '@/components/MathView';
 import * as ImagePicker from 'expo-image-picker';
@@ -44,7 +44,14 @@ export default function SearchScreen() {
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [activePage, setActivePage] = useState(0);
-  const { width: winWidth } = useWindowDimensions();
+  const activeResult = useMemo(() => {
+    if (result?.questions && result.questions.length > 0) {
+      const safe = Math.min(activePage, result.questions.length - 1);
+      return result.questions[safe];
+    }
+    return undefined;
+  }, [result, activePage]);
+  // 多题分页已改为"单卡切换"，不再依赖屏宽；保留 useWindowDimensions 工具备用
 
   useEffect(() => {
     // 模式切换时不自动重发（避免重复请求），交由用户切换文件或触发
@@ -523,45 +530,34 @@ export default function SearchScreen() {
                     <>
                       <View style={styles.pagerHeader}>
                         <TouchableOpacity
-                          style={styles.pagerArrow}
+                          style={[styles.pagerArrow, { opacity: activePage === 0 ? 0.35 : 1 }]}
                           disabled={activePage === 0}
                           onPress={() => {
-                            const p = document.getElementById(`qpage-${activePage - 1}`);
-                            if (p) p.scrollIntoView({ behavior: 'smooth', inline: 'nearest' });
-                            setActivePage(activePage - 1);
+                            if (activePage > 0) {
+                              setActivePage(activePage - 1);
+                            }
                           }}
                         >
-                          <Ionicons name="chevron-back" size={22} color={activePage === 0 ? '#CCC' : '#4A90E2'} />
+                          <Ionicons name="chevron-back" size={22} color="#4A90E2" />
                         </TouchableOpacity>
-                        <Text style={styles.pagerIndicator}>第 {activePage + 1} / {result.questions.length} 题</Text>
+                        <Text style={styles.pagerIndicator}>
+                          第 {activePage + 1} / {result.questions.length} 题
+                        </Text>
                         <TouchableOpacity
-                          style={styles.pagerArrow}
+                          style={[styles.pagerArrow, { opacity: activePage === result.questions.length - 1 ? 0.35 : 1 }]}
                           disabled={activePage === result.questions.length - 1}
                           onPress={() => {
-                            const p = document.getElementById(`qpage-${activePage + 1}`);
-                            if (p) p.scrollIntoView({ behavior: 'smooth', inline: 'nearest' });
-                            setActivePage(activePage + 1);
+                            if (activePage < result.questions.length - 1) {
+                              setActivePage(activePage + 1);
+                            }
                           }}
                         >
-                          <Ionicons name="chevron-forward" size={22} color={activePage === result.questions.length - 1 ? '#CCC' : '#4A90E2'} />
+                          <Ionicons name="chevron-forward" size={22} color="#4A90E2" />
                         </TouchableOpacity>
                       </View>
-                      <ScrollView
-                        horizontal
-                        pagingEnabled
-                        showsHorizontalScrollIndicator={false}
-                        onMomentumScrollEnd={(e) => {
-                          const off = e.nativeEvent.contentOffset.x;
-                          setActivePage(Math.round(off / winWidth));
-                        }}
-                        style={styles.pagerScroll}
-                      >
-                        {result.questions.map((q, index) => (
-                          <View key={index} id={`qpage-${index}`} style={[styles.pagerPage, { width: winWidth - 32 }]}>
-                            {renderQuestionCard(q, index)}
-                          </View>
-                        ))}
-                      </ScrollView>
+                      <View key={`p-${activePage}`}>
+                        {renderQuestionCard(activeResult, activePage)}
+                      </View>
                     </>
                   ) : result.questions ? (
                     result.questions.map((q, index) => (
