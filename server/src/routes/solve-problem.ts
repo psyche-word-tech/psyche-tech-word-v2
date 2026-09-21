@@ -228,148 +228,22 @@ router.post("/", upload.single("image"), async (req, res) => {
     // mode=detail 输出详细解析；默认 concise 输出精炼解答（大幅提速，实测约 10 倍）。
     const mode = req.body?.mode === "detail" ? "detail" : "concise";
 
+    const systemPrompt = `你是专业的题目解析老师。请仔细看图解题，直接给出完整解答。
+要求：
+1. 逐一解出每个小问（如 (1)、(2)(i)、(2)(ii)），写出最终答案与推导过程，严谨完整、逐步推导、不跳步、结论肯定。
+2. 数学公式一律用 LaTeX 并用美元符号包裹：行内用 $...$（如 $\\dfrac{1}{2}$、$\\sqrt{3}$），独立成行用 $$...$$。不要输出未被 $ 包裹的裸公式。`;
+    const userPrompt = `请完整解答图片中的题目，给出每个小问的最终答案与严谨推导过程。`;
+
     const messages = [
-      {
-        role: "system" as const,
-        content: `你是一位专业的题目解析老师。请仔细分析用户提供的题目图片，给出详细的解析。
-
-**重要：图片中可能包含多道题目，请逐一解析所有题目。**
-
-请按以下 JSON 格式返回结果（必须包含所有字段）：
-{
-  "questions": [
-    {
-      "subject": "学科（如数学、物理、化学、英语等）",
-      "question": "题目内容（文字描述）",
-      "answer": "最终答案",
-      "analysis": "题目分析（考查知识点、解题思路）",
-      "solution": "详细解答过程",
-      "tips": "解题技巧或注意事项（可选）",
-      "knowledge_points": "考查的知识点（必填，如：函数、三角函数、概率统计等）",
-      "core_competency": "考察的学科核心素养（必填，如：数学抽象、逻辑推理、数学建模、直观想象、数学运算、数据分析等）",
-      "difficulty": "难度等级（必填，只能是：简单、中等、困难）"
-    }
-  ]
-}
-
-**注意：knowledge_points、core_competency、difficulty 这三个字段是必填的，不能为空！**
-
-**数学公式格式（重要）：question、analysis、solution、answer、tips 中出现的任何数学公式、符号、表达式，都必须用 LaTeX 语法并用美元符号包裹——行内公式用 $...$，独立成行的公式用 $$...$$。例如：$x^2+1=0$、$$\\frac{1}{2}$$、$D(-1)=\\boxed{\\left(0,\\frac{3}{2}\\right)}$。不要输出未被 $ 包裹的裸 LaTeX。**
-
-**输出要求（重要）：solution/analysis 必须"正式、简洁、直达结论"——只保留从题干到最终答案的关键推理步骤与必要的过渡，明确省略非必要的细化推演和冗余代换（例如不必展开"推出 $f(x_2)\\ge f(0)$"这类可跳过的中间论证，不必对每一步不等式、恒等式或中间式逐条证明），正确作答的前提下步骤尽量精炼（5~8 个关键步骤为宜）；语气正式、可直接呈现给学生，确保返回的 JSON 完整、不被截断、可被直接解析。**
-
-**长度硬上限（极其重要）：单题时整个 JSON 输出总长度不得超过 4000 字符；多小题（如 3 个以上小问）也不得超过 6000 字符。多小问证明题每题 solution 只写关键证明思路与结论，用简洁条目，不要展开为论文式长文；sub-question 细化推演（具体不等式放缩、逐条代换代入、重复的同类推理）一律省略或不逐条证明。宁可精简也不可写超长导致截断。**
-
-**答题风格（极其重要）：这是面向学生的严肃数学解答。solution/analysis 必须是严谨、完整、可直接呈现给学生的最终解答——直接给出推理与结论，语气肯定、逻辑连贯。严禁出现任何自我怀疑、自我纠正、口语化思考碎念（如"不对""哦""我写错了""所以不满足？""重新整理"等），严禁出现畏难或方案讨论式措辞（如"不好直接求""直接求比较麻烦""此处不易求出""考虑到计算较繁"等）——需要更换方法时直接肯定地陈述"采用 XX 方法即可"，把方法作为解题步骤确定给出，不要用"不好直接求"这类话铺垫。严禁暴露思考过程或反复改口。若某一步需要分类讨论，直接清晰地列出各类并给出结论，不要犹豫或否定自己。**
-
-**答案与题干一致性（极其重要）：若题目图片中自带参考答案/小结（如"总结：(1)…；(2)(i)…；(2)(ii)…"之类），则 answer 字段必须与该标准答案逐项严格一致（同一数学表达式、同一形式），且 analysis/solution 必须推导出并收敛到这个答案，不得与它冲突；若题目未附答案，则自行正确作答。"answer" 必须把每个小题（(1)/(2)(i)/(2)(ii) 等）的最终结论都写全，不能只写其中一个。analysis（题目分析）与 solution（详细解答过程）都必须给出实质、可读的内容，缺一不可，禁止留空或只写标题。**
-
-如果图片中只有一道题，questions 数组中只有一个元素。
-只返回 JSON，不要有其他解释文字。如果图片不清晰或无法识别，请返回：
-{
-  "error": "图片不清晰或无法识别，请重新上传"
-}`
-      },
+      { role: "system" as const, content: systemPrompt },
       {
         role: "user" as const,
         content: [
-          {
-            type: "image_url" as const,
-            image_url: {
-              url: `data:${mimeType};base64,${imageBase64}`,
-            },
-          },
-          {
-            type: "text" as const,
-            text: `请解析图片中的所有题目，并严格按照以下 JSON 格式返回（不要使用 markdown 代码块，直接返回 JSON）：
-
-{
-  "questions": [
-    {
-      "subject": "学科",
-      "question": "题目内容（包含选项）",
-      "answer": "最终答案",
-      "analysis": "详细解析过程",
-      "solution": "解答步骤",
-      "tips": "解题技巧（可选）",
-      "knowledge_points": "考查的知识点（必填）",
-      "core_competency": "考察的学科核心素养（必填）",
-      "difficulty": "难度等级（必填，只能是：简单/中等/困难）"
-    }
-  ]
-}
-
-**重要：knowledge_points、core_competency、difficulty 三个字段必须填写，不能为空！**
-
-**数学公式必须用 LaTeX 并用美元符号包裹：行内用 $...$，独立成行用 $$...$$（如 $x^2+1$、$$\\frac{1}{2}$$），不要输出裸 LaTeX。**
-
-**解答必须是严谨、肯定、可直接给学生的最终版本，禁止"不对/哦/我写错了/重新整理"等自我纠正或思考碎念，禁止"不好直接求"等畏难、方案讨论式措辞（需要换方法直接说"采用 XX 方法"）。若图片自带参考答案/小结，answer 必须与之逐项一致、解析收敛到该答案；且答案必须写全每个小题的最终结论。analysis 与 solution 都必须给出实质内容，不得为空。**
-
-**JSON 格式硬约束（极其重要，必须遵守）**：
-1. 直接返回合法 JSON，不要用 markdown 代码块包裹，也不要加任何前后缀文字。
-2. 所有字符串值内的换行/分段必须用 "\\\\n" 转义，严禁在 JSON 里出现真实的换行字符；每个键值对、数组元素之间用逗号分隔，引号严格配对。
-3. 不要在字符串结束处多加反斜杠或转义引号——只有确实需要在内容里显示引号时才用 "\\\\\\""，且必须与闭合引号区分清楚。
-4. 若某字段无内容，用空字符串 ""，不要省略引号或输出 undefined/null。
-
-如果图片中有多道题，请在 questions 数组中包含所有题目。`,
-          },
+          { type: "image_url" as const, image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          { type: "text" as const, text: userPrompt },
         ],
       },
     ];
-
-    // mode=concise（默认）：用精简提示词 + flash 模型，大幅提速。
-    // 实测同题 max+详细=33s，concise+flash=约3~5s。
-    if (mode === "concise") {
-      messages[0].content = `你是专业的题目解析老师。请分析题目图片，输出精炼解答。
-
-返回合法 JSON（不要 markdown 代码块、不要任何前后缀），schema 固定为：
-{
-  "questions": [
-    {
-      "subject": "学科",
-      "answer": "最终答案",
-      "analysis": "简要解析（2~4句话）",
-      "solution": "解题步骤（完整严谨推导，不要为求简而跳步；逐步推出每个小问最终结论）",
-      "tips": "解题技巧（可选，一句话）",
-      "knowledge_points": "考查知识点（必填）",
-      "core_competency": "核心素养（必填）",
-      "difficulty": "简单/中等/困难（必填）"
-    }
-  ]
-}
-
-规则：
-1. 不要输出题目文本（题干由图片展示），focus 在答案与解析。
-2. 所有公式用 LaTeX 并用 $ 包裹（行内 $...$、独立 $$...$$）。
-3. 解答严谨肯定，禁止自我纠正/口语化碎念，禁止"不好直接求"式畏难措辞。
-4. analysis 要精炼；solution 必须给出完整严谨的推导步骤（不要为求简而跳步，逐步推出每个小问最终结论），answer 写全每个小题最终结论。
-5. 所有字符串内换行必须用 "\\n" 转义，引号严格配对。
-6. 图片中有多道题就全部放进 questions。
-7. 图片不清晰/无法识别时返回 {"error":"图片不清晰或无法识别，请重新上传"}。`;
-      const userContent = messages[1].content as { type: string; image_url: { url: string }; text: string }[];
-      const imgPart = userContent.find((p) => p.type === "image_url");
-      userContent[0] = imgPart ? imgPart : userContent[0];
-      userContent[1] = {
-        type: "text",
-        text: `请解析图片中的所有题目，直接返回题目 JSON（不要代码块，不要输出题目文本，题干由图片展示）：
-{
-  "questions": [
-    {
-      "subject": "学科",
-      "answer": "最终答案",
-      "analysis": "简要解析（2~4句）",
-      "solution": "解题步骤（完整严谨推导，逐步推出每个小问最终结论）",
-      "tips": "一句话技巧（可选）",
-      "knowledge_points": "考查知识点（必填）",
-      "core_competency": "核心素养（必填）",
-      "difficulty": "简单/中等/困难"
-    }
-  ]
-}
-
-所有公式用 LaTeX 加 $ 包裹；解答严谨肯定、禁止自我纠正碎念；answer 写全每小问结论；字符串内换行用 "\\n" 转义。`,
-      };
-    }
 
     // 复用作文批改的千问配置，直连千问 VL 模型完成题目识别与解答
     const qwenApiUrl = process.env.QWEN_API_URL
@@ -403,7 +277,7 @@ router.post("/", upload.single("image"), async (req, res) => {
         body: JSON.stringify({
           model: qwenModel,
           messages,
-          temperature: 0.3,
+          temperature: 0.1,
           enable_thinking: false,
           max_tokens: maxTokens,
         }),
@@ -466,6 +340,29 @@ router.post("/", upload.single("image"), async (req, res) => {
         jsonStr = jsonMatch ? jsonMatch[0] : null;
       }
 
+      // 模型直接输出自然语言/LaTeX 解答（非 JSON）时，整体作为解答返回
+      if (!jsonStr) {
+        const rawText = llmResponse.content.trim();
+        if (rawText.length > 0) {
+          result = {
+            questions: [
+              {
+                subject: "",
+                question: "",
+                analysis: "",
+                solution: rawText,
+                answer: rawText,
+                tips: "",
+                knowledge_points: "",
+                core_competency: "",
+                difficulty: "",
+              }
+            ]
+          };
+          console.log("[SolveProblem] 使用自然语言解答（非 JSON 兜底）");
+        }
+      }
+
       if (jsonStr) {
         try {
           result = JSON.parse(jsonStr);
@@ -508,18 +405,40 @@ router.post("/", upload.single("image"), async (req, res) => {
                   result = JSON.parse(aggressiveFixed);
                 } catch (e4) {
                   console.error("[SolveProblem] Aggressive fix also failed:", (e4 as Error).message);
-                  result = {
-                    questions: [
-                      {
-                        subject: "未知",
-                        question: "图片内容无法识别",
-                        analysis: "解析失败，可能原因：图片模糊、光线不足、题目不完整",
-                        solution: "",
-                        answer: "",
-                        tips: "建议：1.确保光线充足 2.对焦清晰 3.题目完整 4.避免反光",
-                      }
-                    ]
-                  };
+                  // 模型输出不是 JSON（自然语言/LaTeX 解答）时，整体作为解答返回，
+                  // 避免误报"图片内容无法识别"。
+                  const rawText = llmResponse.content.trim();
+                  if (rawText.length > 0) {
+                    result = {
+                      questions: [
+                        {
+                          subject: "",
+                          question: "",
+                          analysis: "",
+                          solution: rawText,
+                          answer: rawText,
+                          tips: "",
+                          knowledge_points: "",
+                          core_competency: "",
+                          difficulty: "",
+                        }
+                      ]
+                    };
+                    console.log("[SolveProblem] 使用自然语言解答（非 JSON 兜底）");
+                  } else {
+                    result = {
+                      questions: [
+                        {
+                          subject: "未知",
+                          question: "图片内容无法识别",
+                          analysis: "解析失败，可能原因：图片模糊、光线不足、题目不完整",
+                          solution: "",
+                          answer: "",
+                          tips: "建议：1.确保光线充足 2.对焦清晰 3.题目完整 4.避免反光",
+                        }
+                      ]
+                    };
+                  }
                 }
               }
             }
