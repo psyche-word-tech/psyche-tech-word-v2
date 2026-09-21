@@ -194,7 +194,6 @@ export default function SearchScreen() {
         const all = [...files, ...newFiles];
         setFiles(all);
         setResult(null);
-        await solveProblem(all);
       }
     } catch (err) {
       console.error('Camera error:', err);
@@ -223,7 +222,6 @@ export default function SearchScreen() {
         const all = [...files, ...newFiles];
         setFiles(all);
         setResult(null);
-        await solveProblem(all);
       }
     } catch (err) {
       console.error('Image picker error:', err);
@@ -253,7 +251,6 @@ export default function SearchScreen() {
       const all = [...files, ...newFiles];
       setFiles(all);
       setResult(null);
-      await solveProblem(all);
     } catch (err) {
       console.error('Document picker error:', err);
       alert('选择文件失败，请重试');
@@ -267,15 +264,16 @@ export default function SearchScreen() {
     setShowImagePicker(true);
   };
 
+  const handleStartSearch = () => {
+    if (files.length === 0) return;
+    solveProblem(files);
+  };
+
   const handleRemoveFile = (idx: number) => {
     const next = files.filter((_, i) => i !== idx);
     setFiles(next);
     setResult(null);
-    if (next.length > 0) {
-      solveProblem(next);
-    } else {
-      setResult(null);
-    }
+    setShowImagePicker(false);
   };
 
   return (
@@ -327,6 +325,10 @@ export default function SearchScreen() {
                     <Text numberOfLines={1} style={styles.fileName}>{f.name}</Text>
                   </View>
                 ))}
+                <TouchableOpacity style={styles.addFileBtn} onPress={() => setShowImagePicker(true)}>
+                  <Ionicons name="add" size={22} color="#4A90E2" />
+                  <Text style={styles.addFileBtnText}>继续添加</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -348,6 +350,14 @@ export default function SearchScreen() {
                 <Text style={[styles.modeBtnText, detailedMode && styles.modeBtnTextActive]}>详细</Text>
               </TouchableOpacity>
             </View>
+          )}
+
+          {/* 开始搜题确认按钮 */}
+          {files.length > 0 && !result && !loading && (
+            <TouchableOpacity style={[styles.searchBtn, { marginTop: 8 }]} onPress={handleStartSearch}>
+              <Ionicons name="search" size={20} color="#fff" />
+              <Text style={styles.searchBtnText}>开始搜题</Text>
+            </TouchableOpacity>
           )}
 
           {/* Image Picker Modal */}
@@ -591,6 +601,36 @@ const styles = {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  addFileBtn: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#4A90E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F6FF',
+    gap: 4,
+  },
+  addFileBtnText: {
+    color: '#4A90E2',
+    fontSize: 12,
+  },
+  searchBtn: {
+    backgroundColor: '#4A90E2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 10,
+  },
+  searchBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   fileThumbWrap: {
     width: 100,
