@@ -131,23 +131,49 @@ export default function SearchScreen() {
   const handleFavorite = async (question: QuestionResult) => {
     setFavoriteLoading(true);
     try {
+      // 收藏时把原图传给后端，由后端后台把图片转成文字题干后入库
+      const formData = new FormData();
+
+      // 图片转 blob（与 solveProblem 一致的处理）
+      let blob: Blob;
+      try {
+        if (imageUri.startsWith('data:')) {
+          const arr = imageUri.split(',');
+          const base64 = arr[1];
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const bstr = atob(base64);
+          const u8 = new Uint8Array(bstr.length);
+          for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+          blob = new Blob([u8], { type: mime });
+        } else {
+          const response = await fetch(imageUri);
+          blob = await response.blob();
+        }
+      } catch (e) {
+        console.error('[Search] fav image convert failed:', e);
+        blob = new Blob([], { type: 'image/jpeg' });
+      }
+
+      if (Platform.OS === 'web') {
+        formData.append('image', blob, 'problem.jpg');
+      } else {
+        formData.append('image', {
+          uri: imageUri,
+          name: 'problem.jpg',
+          type: blob.type || 'image/jpeg',
+        } as any);
+      }
+
       const res = await fetch('/api/v1/favorites', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question_text: question.question || '',
-          subject: question.subject,
-          answer: question.answer,
-          analysis: question.analysis,
-          solution: question.solution,
-          tips: question.tips,
-          image_url: imageUri,
-        }),
+        body: formData,
       });
 
       const data = await res.json();
       if (data.success) {
-        alert('收藏成功');
+        const warnMsg = data.data && data.data.warn ? '\n（题目文字识别失败，已保存原图）' : '';
+        alert((data.message || '收藏成功') + warnMsg);
       } else {
         alert(data.message || '收藏失败');
       }
@@ -369,10 +395,14 @@ export default function SearchScreen() {
                         </View>
                       )}
 
-                      {q.question && (
+                      {(q.question || imageUri) && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>题目</Text>
-                          <MathText text={q.question} style={styles.blockContent} />
+                          {q.question ? (
+                            <MathText text={q.question} style={styles.blockContent} />
+                          ) : (
+                            <Image source={{ uri: imageUri }} style={styles.questionImage} resizeMode="contain" />
+                          )}
                         </View>
                       )}
 
@@ -571,6 +601,11 @@ const styles = {
   },
   modeBtnTextActive: {
     color: '#FFF',
+  },
+  questionImage: {
+    width: '100%',
+    height: 240,
+    borderRadius: 8,
   },
   loadingSection: {
     padding: 40,

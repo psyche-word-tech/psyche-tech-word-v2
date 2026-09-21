@@ -322,7 +322,6 @@ router.post("/", upload.single("image"), async (req, res) => {
   "questions": [
     {
       "subject": "学科",
-      "question": "题目内容（完整题干与选项）",
       "answer": "最终答案",
       "analysis": "简要解析（2~4句话）",
       "solution": "解题步骤（精炼，只保留关键推理，3~6步）",
@@ -335,23 +334,23 @@ router.post("/", upload.single("image"), async (req, res) => {
 }
 
 规则：
-1. 所有公式用 LaTeX 并用 $ 包裹（行内 $...$、独立 $$...$$）。
-2. 解答严谨肯定，禁止自我纠正/口语化碎念，禁止"不好直接求"式畏难措辞。
-3. analysis 与 solution 要有实质内容但务必精炼，不要展开冗余推导；answer 写全每个小题最终结论。
-4. 所有字符串内换行必须用 "\\n" 转义，引号严格配对。
-5. 图片中有多道题就全部放进 questions。
-6. 图片不清晰/无法识别时返回 {"error":"图片不清晰或无法识别，请重新上传"}。`;
+1. 不要输出题目文本（题干由图片展示），focus 在答案与解析。
+2. 所有公式用 LaTeX 并用 $ 包裹（行内 $...$、独立 $$...$$）。
+3. 解答严谨肯定，禁止自我纠正/口语化碎念，禁止"不好直接求"式畏难措辞。
+4. analysis 与 solution 要有实质内容但务必精炼，不要展开冗余推导；answer 写全每个小题最终结论。
+5. 所有字符串内换行必须用 "\\n" 转义，引号严格配对。
+6. 图片中有多道题就全部放进 questions。
+7. 图片不清晰/无法识别时返回 {"error":"图片不清晰或无法识别，请重新上传"}。`;
       const userContent = messages[1].content as { type: string; image_url: { url: string }; text: string }[];
       const imgPart = userContent.find((p) => p.type === "image_url");
       userContent[0] = imgPart ? imgPart : userContent[0];
       userContent[1] = {
         type: "text",
-        text: `请解析图片中的所有题目，直接返回题目 JSON（不要代码块）：
+        text: `请解析图片中的所有题目，直接返回题目 JSON（不要代码块，不要输出题目文本，题干由图片展示）：
 {
   "questions": [
     {
       "subject": "学科",
-      "question": "题目内容（含选项）",
       "answer": "最终答案",
       "analysis": "简要解析（2~4句）",
       "solution": "精炼解题步骤（3~6步）",
