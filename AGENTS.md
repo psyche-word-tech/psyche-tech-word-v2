@@ -400,6 +400,13 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - **已知局限**：干净 prompt 下，模型对"完全无关的两张不同科目图"仍可能合并成单个 `question`（answer 里写"第一题…第二题…"）。这是"少约束保正确性 vs 强制结构化"的固有 trade-off，前端单页也能完整展示，不丢内容。
 - **前端**（`search/index.tsx`）：多题结果（`result.questions.length > 1`）改为**横向分页**——`ScrollView horizontal pagingEnabled`，每页宽度=屏宽-32，一页一道题卡片；顶部 `pagerHeader` 显示"第 N / M 题" + 左右箭头，配合 `onMomentumScrollEnd` 根据 `contentOffset.x / winWidth` 更新 `activePage`。单题保持竖向列表。耗时：用 `useWindowDimensions().width` 取屏宽；卡片逻辑抽为 `renderQuestionCard(q, index)` 复用。
 
+## 搜题多图"按题号分卡"重构（solve-problem 逐图独立调用）
+
+- **问题**：多图一次调用时模型常把两张不同题号图合并进同一个 `question`，且解答区夹杂"这两张图片分别展示了…"这类无法拆分出干净单题字段的废话；独立题无法可靠分页展示。
+- **修复**（`server/src/routes/solve-problem.ts`）：多图改为**逐张独立调用模型**——`imageParts.length > 1` 时对每张图单独构造一个 `image_url` + `userPrompt` 调 `solveOnce(contentItems)`，各自返回该图内含的所有独立题，累加进 `result.questions`；单图/纯文档仍单次调用。模型调用+JSON 解析（markdown 提取/控制字符/LaTeX 反斜杠/截断自愈兜底）封装进 `solveOnce` 复用，返回 `result`（含 questions 数组）。彻底规避多图合并，天然"一图一题"、每题字段齐全，前端第N/M题的箭头分页可逐题完整展示。
+- **摘要模板占位符**：`systemPrompt` 的"解析摘要"格式模板删掉了尖括号样板（`<2~4 句…>`、`如 L3` 等）——模型常照抄模板样板到"点拨/难度"里，改为纯描述性写法（"用2到4句话写出…"、"以 L 加一位数字取值 L1-L6"）。
+- **验证**：两题两图 → 2 个独立 question（各含 answer/analysis/素养/难度/知识点），无占位符、无"这两张图片"废话；单图 → 1 题正常；空请求 → 400。改后端须 `node build.js` + pkill 重启。
+
 ## 新增功能：教师批改系统
 
 ### 功能概述

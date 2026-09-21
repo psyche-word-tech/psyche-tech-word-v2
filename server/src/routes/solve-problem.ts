@@ -340,31 +340,16 @@ router.post("/", upload.any(), async (req, res) => {
 1. 逐一解出每个小问（如 (1)、(2)(i)、(2)(ii)），写出最终答案与推导过程，严谨完整、逐步推导、不跳步、结论肯定。输出的 questions 数组中，**一个 question 元素只对应一道独立的大题**（一道大题内可含多个小问 (1)(2)…）；若多张图/文档明显是互不相关的多道大题，则分别放入多个 question 元素，绝不要把多道大题强行塞进同一个 question。若多张图显然是同题目的连续/上下部分（第一张是上半、第二张是下半，指向同一道题），则把它们合并进同一个 question 元素作为一道题完整作答。
 2. 数学公式一律用 LaTeX 并用美元符号包裹：行内用 $...$（如 $\\dfrac{1}{2}$、$\\sqrt{3}$），独立成行用 $$...$$。不要输出未被 $ 包裹的裸公式。
 
-在完整解答写完后，你必须另起一行、按以下格式输出"解析摘要"（不得省略任何字段，每行一个字段，字段名与冒号为英文标点恒定）：
+在完整解答写完后，你必须另起一行、按以下格式输出"解析摘要"（不得省略任何字段，每行一个字段，字段名与冒号为英文标点恒定；每个字段值必须是你的实际分析内容，严禁照抄模板）：
 ====解析摘要====
-结论：<仅列出各小问最终答案，例如 (1) …；(2)(i) …；(2)(ii) …；不含推导过程，必须与前面解答计算出的结果一致>
-点拨：<2~4 句解题思路要点/关键突破口>
-知识点：<该题考查的学科知识点，如函数、三角函数、不等式、解析几何等>
-素养：<该题考查的学科核心素养，如数学抽象、逻辑推理、数学建模、直观想象、数学运算等>
-难度：L<1到6的一个数字>
+结论：将每个小问的最终答案依次列出，不含任何推导步骤，且必须与前面解答的计算结果完全一致。
+点拨：用2到4句话写出该题的解题思路与关键突破口。
+知识点：列出该题考查的学科知识点。
+素养：列出该题考查的学科核心素养。
+难度：以 L 加一位数字的形式给出，取值从 L1 到 L6。
 ====摘要结束====`;
     const userPrompt = `请完整解答上传图片/文档中的题目，给出每个小问的最终答案与严谨推导过程，并在文末按格式输出"解析摘要"（含结论/点拨/素养/难度）。
-${imageParts.length > 1 ? "注意：多张图片请先判断它们是不是同一道题的不同部分。如果不是同一道题（例如一张是数学题、另一张是英语题，或两道完全无关的题），务必生成多个 question 对象，**每个 question 只含一道题的作答**，不要让一个 question 里塞进两道题；如果是同一道题的上下/连续两半，则合并进同一个 question。\n" : ""}${docTexts.length > 0 ? "以下是文档中的文字内容：\n" + docTexts.join("\n\n") : ""}`;
-
-    // 把所有图片以 image_url 形式 + 文档文本一起发给模型
-    const userContent: any[] = [];
-    for (const part of imageParts) {
-      userContent.push({ type: "image_url" as const, image_url: { url: `data:${part.mime};base64,${part.base64}` } });
-    }
-    userContent.push({ type: "text" as const, text: userPrompt });
-
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      {
-        role: "user" as const,
-        content: userContent,
-      },
-    ];
+${imageParts.length > 1 ? "注意：判断标准只有一条——按题号分。**不同题号（如 1、2、3… 或不同的小标题）就是不同题目，每个 question 对象只能对应一道题目**（即一个题号），分别作答、互不干扰；只有编号是连续小问（同一题的 (1)(2)(3)）才算同一道题，才合并进同一个 question 作答。绝不要把两个不同题号塞进同一个 question。\n" : ""}${docTexts.length > 0 ? "以下是文档中的文字内容：\n" + docTexts.join("\n\n") : ""}`;
 
     // 复用作文批改的千问配置，直连千问 VL 模型完成题目识别与解答
     const qwenApiUrl = process.env.QWEN_API_URL
@@ -381,55 +366,61 @@ ${imageParts.length > 1 ? "注意：多张图片请先判断它们是不是同�
       ? qwenApiUrl
       : `${qwenApiUrl.replace(/\/+$/, '')}/chat/completions`;
 
-    console.log(`[SolveProblem] 调用千问 VL 模型: ${qwenModel}, URL: ${chatUrl}, keyLen=${qwenApiKey.length}`);
+    // 单次调用模型：把给定 contentItems（图片/文本）发给千问，返回解析后的 questions 数组。
+    // 多图时主流程会对每张图分别调用一次（彻底避免模型把不同题号误合并到同一个 question，
+    // 也让"这两张图片…"这类合并废话无法出现），每次返回该图内含的所有独立题。
+    const solveOnce = async (contentItems: any[]) => {
+      const messages = [
+        { role: "system" as const, content: systemPrompt },
+        { role: "user" as const, content: contentItems },
+      ];
+      console.log(`[SolveProblem][per-call] 调用千问 VL 模型: ${qwenModel}, URL: ${chatUrl}, keyLen=${qwenApiKey.length}, 图片数=${contentItems.filter((c) => c.type === 'image_url').length}`);
 
-    const startTime = Date.now();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 300000);
+      const startTime = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000);
 
-    let llmResponse: { content: string };
-    try {
-      const resp = await fetch(chatUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${qwenApiKey}`,
-        },
-        body: JSON.stringify({
-          model: qwenModel,
-          messages,
-          temperature: 0.1,
-          enable_thinking: false,
-          max_tokens: maxTokens,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        throw new Error(`千问 API 调用失败: ${resp.status} - ${errorText}`);
+      let llmResponse: { content: string };
+      try {
+        const resp = await fetch(chatUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${qwenApiKey}`,
+          },
+          body: JSON.stringify({
+            model: qwenModel,
+            messages,
+            temperature: 0.1,
+            enable_thinking: false,
+            max_tokens: maxTokens,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!resp.ok) {
+          const errorText = await resp.text();
+          throw new Error(`千问 API 调用失败: ${resp.status} - ${errorText}`);
+        }
+        const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
+        const content = data.choices?.[0]?.message?.content || '';
+        if (!content) {
+          throw new Error('千问 API 返回内容为空');
+        }
+        llmResponse = { content };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          throw new Error('千问 API 调用超时（300秒）');
+        }
+        throw err;
       }
-      const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
-      const content = data.choices?.[0]?.message?.content || '';
-      if (!content) {
-        throw new Error('千问 API 返回内容为空');
-      }
-      llmResponse = { content };
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      if (err.name === 'AbortError') {
-        throw new Error('千问 API 调用超时（300秒）');
-      }
-      throw err;
-    }
 
-    console.log(`[SolveProblem] LLM done in ${Date.now() - startTime}ms`);
-    console.log(`[SolveProblem] LLM response length: ${llmResponse.content.length}`);
-    console.log(`[SolveProblem] LLM response preview:`, llmResponse.content.substring(0, 500));
+      console.log(`[SolveProblem][per-call] LLM done in ${Date.now() - startTime}ms, len=${llmResponse.content.length}`);
 
-    let result: any;
-    try {
-      result = JSON.parse(llmResponse.content);
+      let result: any;
+      try {
+        result = JSON.parse(llmResponse.content);
       
       // 检查 LLM 是否返回了错误
       if (result.error) {
@@ -568,20 +559,56 @@ ${imageParts.length > 1 ? "注意：多张图片请先判断它们是不是同�
       }
     }
 
+    return result;
+    };
+
+    // 主流程：先构建各图片的调用内容，再按图执行模型调用并聚合所有 questions。
+    // 多图逐张独立调用（一图一题，天然分卡、字段齐全，避免模型在多图合并时输出
+    // "这两张图片…"这类无法拆分成干净单题字段的废话）；单图/纯文档单次调用。
+    let result: any;
+    if (imageParts.length > 1) {
+      result = { questions: [] };
+      for (const part of imageParts) {
+        const oneContent: any[] = [
+          { type: "image_url" as const, image_url: { url: `data:${part.mime};base64,${part.base64}` } },
+          { type: "text" as const, text: userPrompt },
+        ];
+        const r = await solveOnce(oneContent);
+        if (r && Array.isArray(r.questions)) {
+          result.questions.push(...r.questions);
+        }
+      }
+    } else {
+      const oneContent: any[] = [];
+      for (const part of imageParts) {
+        oneContent.push({ type: "image_url" as const, image_url: { url: `data:${part.mime};base64,${part.base64}` } });
+      }
+      oneContent.push({ type: "text" as const, text: userPrompt });
+      result = await solveOnce(oneContent) || { questions: [] };
+    }
+
+    if (!result.questions || !Array.isArray(result.questions)) {
+      result = { questions: [] };
+    }
+
     // 兼容旧格式：如果返回的是单题格式，转换为数组格式
-    if (result && result.subject && !result.questions) {
-      result = {
-        questions: [
-          {
-            subject: result.subject,
-            question: result.question,
-            analysis: result.analysis,
-            solution: result.solution,
-            answer: result.answer,
-            tips: result.tips,
-          }
-        ]
-      };
+    if (result.questions.length === 0 && result) {
+      const single = result;
+      if (single.subject && !single.questions) {
+        result.questions = [{
+          subject: single.subject,
+          question: single.question,
+          analysis: single.analysis,
+          solution: single.solution,
+          answer: single.answer,
+          tips: single.tips,
+        }];
+      }
+    }
+
+    // 提取模型"解析摘要"块：结论→answer、点拨→analysis、素养/难度→细目表，并剥离摘要块
+    if (Array.isArray(result.questions)) {
+      result.questions.forEach((q: any) => applySummary(q));
     }
 
     // 3. 缓存结果到数据库
@@ -638,11 +665,6 @@ ${imageParts.length > 1 ? "注意：多张图片请先判断它们是不是同�
       console.log(`[SolveProblem] Cached ${result.questions.length} problems`);
     }
 
-    // 提取模型"解析摘要"块：结论→answer、点拨→analysis、素养/难度→细目表，并剥离摘要块
-    if (result.questions && Array.isArray(result.questions)) {
-      result.questions.forEach((q: any) => applySummary(q));
-    }
-
     // 标记来源
     if (result.questions) {
       result.questions.forEach((q: any) => {
@@ -652,6 +674,7 @@ ${imageParts.length > 1 ? "注意：多张图片请先判断它们是不是同�
 
     console.log(`[SolveProblem] Final result questions:`, JSON.stringify(result.questions?.map((q: any) => ({
       subject: q.subject,
+      answer: (q.answer || "").substring(0, 30),
       knowledge_points: q.knowledge_points,
       core_competency: q.core_competency,
       difficulty: q.difficulty
