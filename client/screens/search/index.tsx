@@ -413,13 +413,6 @@ export default function SearchScreen() {
                         </View>
                       )}
 
-                      {q.solution && (
-                        <View style={styles.resultBlock}>
-                          <Text style={styles.blockTitle}>解答</Text>
-                          <MathView text={q.solution} style={styles.blockContent} />
-                        </View>
-                      )}
-
                       {q.analysis && (
                         <View style={styles.resultBlock}>
                           <Text style={styles.blockTitle}>解题思路点拨</Text>
@@ -427,8 +420,21 @@ export default function SearchScreen() {
                         </View>
                       )}
 
-                      {(q.core_competency || q.difficulty) && (
+                      {q.solution && (
+                        <View style={styles.resultBlock}>
+                          <Text style={styles.blockTitle}>解答</Text>
+                          <MathView text={q.solution} style={styles.blockContent} />
+                        </View>
+                      )}
+
+                      {(q.knowledge_points || q.core_competency || q.difficulty) && (
                         <View style={styles.metaBlock}>
+                          {q.knowledge_points && (
+                            <View style={styles.metaRow}>
+                              <Text style={styles.metaLabel}>学科知识点</Text>
+                              <Text style={styles.metaValue}>{q.knowledge_points}</Text>
+                            </View>
+                          )}
                           {q.core_competency && (
                             <View style={styles.metaRow}>
                               <Text style={styles.metaLabel}>学科核心素养</Text>

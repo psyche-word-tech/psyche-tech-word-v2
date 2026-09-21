@@ -172,10 +172,12 @@ function applySummary(q: any): void {
   };
   const conclusion = get('结论');
   const dianbo = get('点拨');
+  const zhishi = get('知识点');
   const suyang = get('素养');
   const diffM = block.match(/难度[:：]\s*L?([1-6])/);
   if (conclusion) q.answer = conclusion;
   if (dianbo) q.analysis = dianbo;
+  if (zhishi) q.knowledge_points = zhishi;
   if (suyang) q.core_competency = suyang;
   if (diffM) q.difficulty = `L${diffM[1]}`;
   // 剥掉摘要块，保持 answer/solution 纯净
@@ -272,6 +274,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 ====解析摘要====
 结论：<仅列出各小问最终答案，例如 (1) …；(2)(i) …；(2)(ii) …；不含推导过程，必须与前面解答计算出的结果一致>
 点拨：<2~4 句解题思路要点/关键突破口>
+知识点：<该题考查的学科知识点，如函数、三角函数、不等式、解析几何等>
 素养：<该题考查的学科核心素养，如数学抽象、逻辑推理、数学建模、直观想象、数学运算等>
 难度：L<1到6的一个数字>
 ====摘要结束====`;
