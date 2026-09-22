@@ -207,7 +207,10 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
 
     // 3. 调用千问 VL 模型整体批改（基于拼接文本 + 各页图片）
     console.log('开始调用千问 VL 模型批改作文...');
-    const gradingResult = await callQwenVL(imageList, joinedTranscription, refAnswer, max_score, ocrBoard, subject, grading_standard, !!continuation);
+    // 读后续写识别：前端显式传 continuation=true，或评分标准文本带读后续写特征（两步法/档位/续写）都视为续写模式，
+    // 保证总分严格沿用模型按两步法判档所得单一 total_score，而不是走"内容/语言/结构/书写"四维加和改写。
+    const isContinuation = !!continuation || /读后续写|续写|两步法|档位|1档|一档/.test(grading_standard);
+    const gradingResult = await callQwenVL(imageList, joinedTranscription, refAnswer, max_score, ocrBoard, subject, grading_standard, isContinuation);
     gradingResult.transcription = joinedTranscription; // 以拼接文本为准，前端展示整篇
     console.log('千问 VL 模型批改完成，错误数量:', gradingResult.errors.length);
     try {
@@ -227,23 +230,24 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       const points = gradingResult.points || [];
       gradingResult.total_score = sumPoints(points);
       gradingResult.max_score = max_score;
-    } else if (continuation) {
-      // 读后续写：不走"内容/语言/结构/书写"四维加和，直接用模型按两步法五档锁定的 single total_score，
-      // 再由下方 tier 钳制到锁定档位区间，保证档内按错误程度扣分的结果不被四维加和改写。
-      // 模型档内给分不可靠（判入第一档却总给档位上限5分），故当锁定最低档时按实际错误数硬钳制到档内低端：
-      // 任务完成度严重缺失 + 错误越多越贴近下沿，绝不默认给档位上限。
-      const t = gradingResult.total ? Number(gradingResult.total_score) : 0;
+    } else if (isContinuation) {
+      // 读后续写：不走"内容/语言/结构/书写"四维加和，直接采用模型按两步法五档判定的单一 total_score，
+      // 保证总分严格等于分析内容所认定的分数，不被四维加和改写。
+      // 仅当模型病态地给出档位上限分（如判"错误很多"却仍给档位上限）时，才按错误数档内扣分，
+      // 体现"错误多→档内靠下"；模型已给出合理档内分则原样保留。
+      const t = Number(gradingResult.total_score);
       gradingResult.total_score = Number.isFinite(t) ? t : 0;
       const tier0 = gradingResult.tier;
       const tierMin = Number.isFinite(tier0?.min) ? Math.round(tier0.min as number) : 0;
       const tierMax = Number.isFinite(tier0?.max) ? Math.round(tier0.max as number) : 5;
-      if (tierMax === 5) {
+      if (gradingResult.total_score >= tierMax && tierMax > tierMin) {
         const errCount = Array.isArray(gradingResult.errors) ? gradingResult.errors.length : 0;
-        let capped = 4;
-        if (errCount >= 12) capped = 1;
-        else if (errCount >= 8) capped = 2;
-        else if (errCount >= 4) capped = 3;
-        gradingResult.total_score = Math.max(tierMin, Math.min(capped, gradingResult.total_score));
+        // 仅当模型给到档位上限分时才按错误数档内扣分（错误多→贴近下沿）。
+        // 档内宽度：窄档（≤5 分）每组错约扣 1-3 分，宽档每组约扣 2-4 分，最多扣到档内最低分。
+        const range = tierMax - tierMin;
+        const perError = range <= 5 ? 1.5 : 3;
+        const deducted = Math.min(Math.round(errCount * perError), range);
+        gradingResult.total_score = Math.max(tierMin, tierMax - deducted);
       }
       gradingResult.max_score = max_score;
     } else if (gradingResult.points && gradingResult.points.length > 0) {
@@ -440,7 +444,7 @@ async function callQwenOCR(imageBase64: string): Promise<OCRWord[]> {
 /**
  * 调用千问 VL 模型
  */
-async function callQwenVL(images: string[], joinedTranscription: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = [], subject: string = 'english', gradingStandard: string = ''): Promise<GradingResult> {
+async function callQwenVL(images: string[], joinedTranscription: string, referenceAnswer: string, maxScore: number, ocrWords: { index: number; text: string }[] = [], subject: string = 'english', gradingStandard: string = '', continuation: boolean = false): Promise<GradingResult> {
   const isChinese = subject === 'chinese';
   const isOther = subject === 'other';
   const ocrBoard = ocrWords.length > 0
@@ -479,6 +483,22 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
 4. 若提供了【评分标准/档次/扣分规则】，先按档次逐档对照定档、总分落在所定档区间内，再按扣分规则在档内扣分，把结果落实到各维度分，并在评语中说明定档与扣分依据
 5. 【读后续写/任务型作文硬性任务完成度判定——必须执行】若这是读后续写或带明确任务要求的作文（如要求两段、约 150 字、与给定开头语/原文衔接、情节完整），必须先逐项核对任务完成度：是否写够了要求的段落数、字数是否达到要求、情节是否完整、是否与所给开头语和原文合理衔接。任何一项严重不达标都必须在内容/结构维度大幅扣分：只写了一段（缺二段）、字数明显不足（如要求 150 字却不足要求）、情节半途而废/未写完整、未衔接所给开头语，内容维度给其满分 40% 的 1/4 以下（如 25 分满时内容≤2.5 分）、结构维度给其满分 20% 的 1/3 以下，总分取低档下限，并在评语中明确点出"情节不完整/字数不足/未写满两段"。**严禁在任务完成度严重缺失时给出中高档或进入较好档位**。
 6. 给出评语和建议`;
+
+  const CONT = continuation
+    ? `## 【读后续写 · 两步法定档 —— 最高优先级，禁止走四维给分】
+本作文是英语读后续写，满分${maxScore}分、分五档。**不要**按"内容/语言/结构/书写"四维直接估分相加，也不要按自定义维度给分；必须严格执行两步法，先判任务完成度、再定档、最后在档内扣分。
+
+【第一步 · 任务完成度硬门】（无任何例外）
+- 必须写**两段**、总字数约 150 词（每段约 80 词）、情节完整、与所给段落开头语合理衔接。
+- 情况一【直接锁低档】：若**只写了一段**，或**总字数明显不足**（少于约 80 词），或**情节仅开头/半途而废、未写完整** → 任务完成度严重缺失，**直接锁入第一档（0-${Math.round(maxScore * 0.2)}分）或第二档（${Math.round(maxScore * 0.2 + 1)}-${Math.round(maxScore * 0.4)}分）**（满分25即第一档0-5、第二档6-10）：语法词汇丰富准确 → 第二档；语法错误多/基础表达差 → 第一档。
+- 情况二【才可进三四五档】：只有情节完整、两段都写满、与开头语/原文融合衔接合理 → 第三档（满分25即11-15）、第四档（16-20）、第五档（21-25）。衔接合理+逻辑严密+词汇语法多样复杂+拼写语法错误≤3-4个 → 第五档；逻辑稍欠严密+错误约8-12个但语法词汇较多样 → 第四档；衔接不太合理+逻辑欠严密+错误12个以上+句间不连贯+用词简单 → 第三档。
+
+【第二步 · 档内给分（在锁定档区间内）】
+- 以锁定档位的**上限**为基准，按实际错误数量与严重程度**逐类向下扣 1-3 分**：错误越多/越基础（情态动词后用过去式、词性误用、中式英语、拼写、标点）越贴近档位下限。
+- **第一档（0-5）除非语法词汇确实丰富准确，否则绝不默认给 5 分**；任务完成度严重缺失 + 错误多 → 给 1-3 分。
+
+【输出要求】tier 填实际锁定档（如 第一档{min:0,max:5}），total_score 落在该档区间内**且等于评语/分析中你能给出的那一档内评分**，不拆四维（scores 可填近似值使四维之和约等于 total，但不作唯一依据）。评语必须先写清"是否只写一段/字数多少/情节是否完整"再定档给分，措辞与分数趋势一致。`
+    : '';;
 
   const typeEnum = isChinese
     ? '"spelling"(错别字)/"grammar"(病句/搭配)/"punctuation"(标点)/"word_choice"(用词不当)/"sentence_structure"(表达行文)'
@@ -569,6 +589,8 @@ ${gradingStandard || '（未提供，按常见作文评分惯例先定档再估�
 - 未提供时才按常见作文评分惯例自行定档估分。
 
 ${task}
+
+${CONT}
 
 ## 输出格式（JSON）
 {"transcription":"原文","max_score":${maxScore},"tier":{"name":"档次名","min":档下限,"max":档上限},"scores":{"content":0,"language":0,"structure":0,"handwriting":0},"points":[{"point":"维度名","max":0,"score":0,"comment":"理由"}],"errors":[{"type":"${typeEnum}","errorType":"missing/wrong/extra/incomplete","wordIdx":0,"original":"错误原文","correction":"正确写法","explanation":"说明"}],"comments":"评语","strengths":[],"improvements":[]}
