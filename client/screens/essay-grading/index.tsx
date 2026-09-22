@@ -187,6 +187,7 @@ export default function EssayGradingScreen() {
           max_score: parseInt(maxScore, 10) || 15,
           subject,
           grading_standard: isContinuation ? (gradingStandard || CONTINUATION_STANDARD) : gradingStandard,
+          continuation: isContinuation,
         }),
         signal: AbortSignal.timeout(180000), // 180 秒超时（千问 API 需要 50-60 秒）
       });

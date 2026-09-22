@@ -150,8 +150,8 @@ interface GradingResult {
 router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
-    const { images, image, reference_answer, grading_standard = '', max_score = 15, subject = 'english' } = req.body;
-    console.log('[grade] 收到请求 subject=', subject, 'max_score=', max_score, 'grading_standard=', (grading_standard || '(空)').slice(0, 200));
+    const { images, image, reference_answer, grading_standard = '', max_score = 15, subject = 'english', continuation = false } = req.body;
+    console.log('[grade] 收到请求 subject=', subject, 'max_score=', max_score, 'continuation=', !!continuation, 'grading_standard=', (grading_standard || '(空)').slice(0, 200));
 
     // 兼容单图（image）与多张（images[]）入参
     let imageList: string[] = [];
@@ -207,7 +207,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
 
     // 3. 调用千问 VL 模型整体批改（基于拼接文本 + 各页图片）
     console.log('开始调用千问 VL 模型批改作文...');
-    const gradingResult = await callQwenVL(imageList, joinedTranscription, refAnswer, max_score, ocrBoard, subject, grading_standard);
+    const gradingResult = await callQwenVL(imageList, joinedTranscription, refAnswer, max_score, ocrBoard, subject, grading_standard, !!continuation);
     gradingResult.transcription = joinedTranscription; // 以拼接文本为准，前端展示整篇
     console.log('千问 VL 模型批改完成，错误数量:', gradingResult.errors.length);
     try {
@@ -226,6 +226,25 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     if (isOtherSubject) {
       const points = gradingResult.points || [];
       gradingResult.total_score = sumPoints(points);
+      gradingResult.max_score = max_score;
+    } else if (continuation) {
+      // 读后续写：不走"内容/语言/结构/书写"四维加和，直接用模型按两步法五档锁定的 single total_score，
+      // 再由下方 tier 钳制到锁定档位区间，保证档内按错误程度扣分的结果不被四维加和改写。
+      // 模型档内给分不可靠（判入第一档却总给档位上限5分），故当锁定最低档时按实际错误数硬钳制到档内低端：
+      // 任务完成度严重缺失 + 错误越多越贴近下沿，绝不默认给档位上限。
+      const t = gradingResult.total ? Number(gradingResult.total_score) : 0;
+      gradingResult.total_score = Number.isFinite(t) ? t : 0;
+      const tier0 = gradingResult.tier;
+      const tierMin = Number.isFinite(tier0?.min) ? Math.round(tier0.min as number) : 0;
+      const tierMax = Number.isFinite(tier0?.max) ? Math.round(tier0.max as number) : 5;
+      if (tierMax === 5) {
+        const errCount = Array.isArray(gradingResult.errors) ? gradingResult.errors.length : 0;
+        let capped = 4;
+        if (errCount >= 12) capped = 1;
+        else if (errCount >= 8) capped = 2;
+        else if (errCount >= 4) capped = 3;
+        gradingResult.total_score = Math.max(tierMin, Math.min(capped, gradingResult.total_score));
+      }
       gradingResult.max_score = max_score;
     } else if (gradingResult.points && gradingResult.points.length > 0) {
       // 评分标准自带维度：按各维度得分点求和（0.5 步长）
