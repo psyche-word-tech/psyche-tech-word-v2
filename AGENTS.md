@@ -636,3 +636,11 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **`/test/submit`（POST `{answers:[{id,chosen}]}`）**：`.in('id',ids)` 批量取正确释义，`chosen===firstMeaning(corr)` 才算对；`estimated = round(correct/sample * 出题池)`。返回 `{correct_count,sample_count,total,estimated_vocab}`。
 - **前端 `client/screens/vocab-test/index.tsx`**：五选一答题（读 `/test?limit=120`→逐题展示 `word`+5 个 `options`、可上一题/下一题、未选禁下一题、全部答完才能提交→POST submit→结果页正确数+估算词汇量）。字段是 `questions`（**不是旧版 `words`**）。
 - **前端接口验证**：test_run 全绿（lint:all + 探活 + stats + test 五选一 + submit 判分：对2错1→correct_count=2）。新指针的 bundle 存于 `server/public`（Express 静态实时读盘，改前端只需重跑 export+cp，不用重启后端）。
+
+## 搜题/批改：读后续写等"任务完成度硬指标"评分（essay-grading 修复）
+- **背景**：用户反馈错误密集、只写一段且字数远不足的读后续写被判 11/25（第四档）"偏高了"。根因：英语作文默认走**通用四维**（内容40/语言30/结构20/书写10），`gradingStandard` 为空时模型把"内容"维度混入任务完成度，甚至评语称"故事情节完整"——**没有"两段/150字/情节完整/与开头衔接"这类续写任务完成度硬判定**，导致低质续写内容维度虚高。
+- **修复（前端给标准 + 后端 prompt 强化）**：
+  - 前端 `essay-grading/index.tsx`：新增**"英语读后续写"快捷开关**（`switchContinuation`）。打开→`subject='english'`、`maxScore='25'`、`gradingStandard=` 预填 `CONTINUATION_STANDARD`（五档标准，把"任务完成度=两段/约150字/情节完整/衔接开头"列为**第一硬指标**：一段且严重缺字/情节残缺→一档0-4；任务完成度不足但情节成形→二档5-8；基本完成→三档9-12；较好→四档13-16；优秀→五档，满分区间按25缩放）。关闭→回满分15+清空标准。切换科目会重置续写开关。
+  - 后端 `essay-grading.ts`（subject 分支/评分 prompt）：当 `gradingStandard` 非空并含任务完成度要求时，模型须把"段落数/字数/情节完整/与开头衔接"作为**硬降档依据**（只写一段+字数不足→content/structure 几乎扣光，落最低档）。
+- **验证**：同一张续写图，标准为空时 11/25（第四档）；带续写标准后 7/25（最低档，content=3/structure=1），评语改为"任务完成度严重缺失、字数仅约70词远低于150、烂尾"。**结论**：读后续写必须引导用户开此开关（或填含任务完成度的评分标准），否则按通用作文四维会判高。
+- **经验**：any 判分给分过高，往往是评分 prompt 的维度里漏了"任务完成度"这类**硬性不达标扣分项**，通通用"合理想象/顺畅/完成"语调兜底。对续写/写作类应把"结构要素是否齐全 + 字数/段落"提升为与语言并列的独立硬指标。

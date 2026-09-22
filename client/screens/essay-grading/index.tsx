@@ -44,11 +44,18 @@ export default function EssayGradingScreen() {
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [referenceAnswer, setReferenceAnswer] = useState('');
   const [subject, setSubject] = useState<'english' | 'chinese' | 'other'>('english');
+  const [isContinuation, setIsContinuation] = useState(false);
   const [maxScore, setMaxScore] = useState('15');
   const [gradingStandard, setGradingStandard] = useState('');
   const [loading, setLoading] = useState(false);
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
   const [markedImages, setMarkedImages] = useState<string[]>([]);
+
+  // 读后续写评分标准（新高考五档，满分 25）：任务完成度（两段/字数/情节/衔接）是硬指标
+  const CONTINUATION_STANDARD = `英语读后续写评分（满分25，五档）：
+任务完成度（第一硬指标）：要求写两段、约150字、情节完整、与所给开头语及原文合理衔接。若只写了一段、字数明显不足、情节未写完整、未衔接开头语，任务完成度严重缺失，直接落入低档（一~二档），内容与结构维度大幅扣分。
+档位建议：一次段且严重缺字/情节残缺 = 一档(0-4)；任务完成度不足但情节开始成形 = 二档(5-8)；基本完成任务但发展不充分 = 三档(9-12)；较好完成 = 四档(13-16)；优秀 = 五档(17-20)对应满分区间按 25 缩放。
+评分维度：内容40%（含任务完成度）、语言30%、结构20%、书写10%。在此按实际情况给各维度分（0.5 步长），总分落在所定档区间内。`;
 
   const switchSubject = (s: 'english' | 'chinese' | 'other') => {
     setSubject(s);
@@ -56,6 +63,20 @@ export default function EssayGradingScreen() {
     if (s === 'chinese') setMaxScore('40');
     else if (s === 'other') setMaxScore('10');
     else setMaxScore('15');
+    setIsContinuation(false);
+    setGradingStandard('');
+  };
+
+  const switchContinuation = (on: boolean) => {
+    setIsContinuation(on);
+    if (on) {
+      setSubject('english');
+      setMaxScore('25');
+      setGradingStandard(CONTINUATION_STANDARD);
+    } else {
+      setMaxScore('15');
+      setGradingStandard('');
+    }
   };
 
   const maxAllowedPages = subject === 'english' ? 1 : MAX_PAGES;
@@ -155,7 +176,7 @@ export default function EssayGradingScreen() {
           reference_answer: referenceAnswer,
           max_score: parseInt(maxScore, 10) || 15,
           subject,
-          grading_standard: gradingStandard,
+          grading_standard: isContinuation ? (gradingStandard || CONTINUATION_STANDARD) : gradingStandard,
         }),
         signal: AbortSignal.timeout(180000), // 180 秒超时（千问 API 需要 50-60 秒）
       });
@@ -422,6 +443,19 @@ export default function EssayGradingScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* 英语读后续写快捷题型（自动 25 分 + 五档评分标准，任务完成度硬指标） */}
+          {subject === 'english' && (
+            <TouchableOpacity
+              style={[styles.continuationToggle, isContinuation && styles.continuationToggleActive]}
+              onPress={() => switchContinuation(!isContinuation)}
+              disabled={loading}
+            >
+              <Text style={[styles.continuationToggleText, isContinuation && styles.continuationToggleTextActive]}>
+                {isContinuation ? '✓ 英语读后续写（25 分 / 五档）' : '英语读后续写（25 分 / 五档）'}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* 满分分值 */}
           <Text style={styles.fieldLabel}>满分分值</Text>
@@ -826,6 +860,28 @@ const styles = StyleSheet.create({
   },
   subjectButtonTextActive: {
     color: '#3B82F6',
+  },
+  continuationToggle: {
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#FAFAFA',
+    alignItems: 'center',
+  },
+  continuationToggleActive: {
+    borderColor: '#22C55E',
+    backgroundColor: '#ECFDF5',
+  },
+  continuationToggleText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  continuationToggleTextActive: {
+    color: '#16A34A',
   },
   scoreInput: {
     borderWidth: 1,
