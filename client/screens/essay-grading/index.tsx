@@ -65,7 +65,7 @@ export default function EssayGradingScreen() {
 - 4档（16-20）：在 5 档基础上，若逻辑不很严密、错误略多（约 8-12 个），但语法现象与词汇仍多样化。
 - 3档（11-15）：衔接不太合理、逻辑不太严密、词汇与语法错误很多（12 个以上）、句间不太连贯、用词多为简单词。
 
-【判分执行】先按上述两步锁定档位区间，再在锁定档的区间内依据严重程度自行细化具体分（0.5 步长）。各维度分（内容/语言/结构/书写）对应档区间合理分配，total_score 必须落在锁定档的区间内。任务完成度不达标的续写，无论语言多好都绝不进入 3档及以上。评语中须写明：分档依据（第一步走到了哪种情况、字数/段落实况、语法词汇丰富度、错误数量）。`;
+【判分执行】先按上述两步锁定档位区间，再在锁定档的区间内依据严重程度自行细化具体分（0.5 步长），只输出 total_score（不输出内容/语言/结构/书写等子维度分），total_score 必须落在锁定档的区间内。任务完成度不达标的续写，无论语言多好都绝不进入 3档及以上。评语中须写明：分档依据（第一步走到了哪种情况、字数/段落实况、语法词汇丰富度、错误数量）。`;
 
   const switchSubject = (s: 'english' | 'chinese' | 'other') => {
     setSubject(s);
@@ -569,7 +569,7 @@ export default function EssayGradingScreen() {
                     </View>
                   ))}
                 </View>
-              ) : subject !== 'other' ? (
+              ) : subject !== 'other' && !isContinuation ? (
                 <View style={styles.scoreDetails}>
                   <View style={styles.scoreItem}>
                     <Text style={styles.scoreItemLabel}>内容</Text>
