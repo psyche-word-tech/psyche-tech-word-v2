@@ -51,6 +51,10 @@ export default function EssayGradingScreen() {
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
   const [markedImages, setMarkedImages] = useState<string[]>([]);
 
+  // 读后续写识别：用户显式开启开关，或评分标准文本带续写特征（两步法/档位/续写），都视为读后续写模式。
+  // 与后端自动识别保持一致：只显示总分，不显示内容/语言/结构/书写四维小分。
+  const isContinuationMode = isContinuation || /读后续写|续写|两步法|档位|五档/.test(gradingStandard);
+
   // 读后续写评分标准（新高考五档，满分 25）：任务完成度（两段/字数/情节/衔接）是硬指标
   const CONTINUATION_STANDARD = `英语读后续写评分（满分25，五档）。必须严格按"两步法"判档：
 
@@ -188,7 +192,7 @@ export default function EssayGradingScreen() {
           max_score: parseInt(maxScore, 10) || 15,
           subject,
           grading_standard: isContinuation ? (gradingStandard || CONTINUATION_STANDARD) : gradingStandard,
-          continuation: isContinuation,
+          continuation: isContinuationMode,
         }),
         signal: AbortSignal.timeout(180000), // 180 秒超时（千问 API 需要 50-60 秒）
       });
@@ -571,7 +575,7 @@ export default function EssayGradingScreen() {
                     </View>
                   ))}
                 </View>
-              ) : subject !== 'other' && !isContinuation ? (
+              ) : subject !== 'other' && !isContinuationMode ? (
                 <View style={styles.scoreDetails}>
                   <View style={styles.scoreItem}>
                     <Text style={styles.scoreItemLabel}>内容</Text>
