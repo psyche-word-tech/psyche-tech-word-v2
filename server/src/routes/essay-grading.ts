@@ -243,13 +243,19 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       if (gradingResult.total_score >= tierMax && tierMax > tierMin) {
         const errCount = Array.isArray(gradingResult.errors) ? gradingResult.errors.length : 0;
         // 仅当模型给到档位上限分时才按错误数档内扣分（错误多→贴近下沿）。
-        // 档内宽度：窄档（≤5 分）每组错约扣 1-3 分，宽档每组约扣 2-4 分，最多扣到档内最低分。
+        // 档内宽度：窄档（≤5 分）每组错约扣 1-3 分，宽档每组约扣 2-4 分。
+        // 读后续写是"写了的作文"，即便任务完成度差也至少给档内最低 1 分，绝不判 0 分。
         const range = tierMax - tierMin;
         const perError = range <= 5 ? 1.5 : 3;
-        const deducted = Math.min(Math.round(errCount * perError), range);
-        gradingResult.total_score = Math.max(tierMin, tierMax - deducted);
+        const deducted = Math.min(Math.round(errCount * perError), Math.max(0, range - 1));
+        gradingResult.total_score = Math.max(tierMin + 1, tierMax - deducted);
       }
       gradingResult.max_score = max_score;
+      // 读后续写为"已书写作文"，任何情况都不应判 0 分：任务完成度差也至少给档内 1 分。
+      if (gradingResult.total_score < 1) {
+        const minTier = Number.isFinite(tier0?.min) ? (Math.round(tier0.min as number) + 1) : 1;
+        gradingResult.total_score = Math.max(1, Math.min(minTier, max_score));
+      }
     } else if (gradingResult.points && gradingResult.points.length > 0) {
       // 评分标准自带维度：按各维度得分点求和（0.5 步长）
       gradingResult.total_score = sumPoints(gradingResult.points);

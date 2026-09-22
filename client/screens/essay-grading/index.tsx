@@ -153,12 +153,13 @@ export default function EssayGradingScreen() {
     setLoading(true);
     try {
       // 逐张压缩 + 读取 base64（支持多页），显著减小上传体积（移动网络稳定）
+      // 手写作文需较高清晰度：压到 1600px 宽 / 0.8 质量，避免因压缩过低导致 OCR 只识别出少量内容
       const images: string[] = [];
       for (const uri of selectedImages) {
         const compressed = await manipulateAsync(
           uri,
-          [{ resize: { width: 1000 } }],
-          { compress: 0.6, format: SaveFormat.JPEG },
+          [{ resize: { width: 1600 } }],
+          { compress: 0.8, format: SaveFormat.JPEG },
         );
         const imageResponse = await fetch(compressed.uri);
         const imageBlob = await imageResponse.blob();
