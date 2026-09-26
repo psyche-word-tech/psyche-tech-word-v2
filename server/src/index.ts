@@ -83,25 +83,36 @@ const KEYBOARD_FIX_SCRIPT = `<script>
   var isMobile = (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
     (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width:768px)').matches);
   if (!isMobile) return;
+  // 键盘弹出时可视视口高度会缩小；用它压平 #root，让 ScrollView 溢出可滚
   function squash() {
     var root = document.getElementById('root');
     if (!root) return;
     var vv = window.visualViewport;
-    // 键盘弹出时可视视口高度会缩小；用它压平 #root，让 ScrollView 溢出可滚
     var target = vv && vv.height && vv.height < window.innerHeight ? vv.height : null;
-    if (target) root.style.height = target + 'px';
+    if (target && root.style.height !== target + 'px') root.style.height = target + 'px';
   }
-  function revealInput() {
+  // 还原被软键盘遮挡的 input：仅当 input 底部超出可视区（确被键盘盖住）才居中滚动；
+  // 若 input 本就在可视区内（如手机号/验证码），不做任何处理，避免页面跳动。
+  function reveal() {
     var el = document.activeElement;
     if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT')) return;
-    try { el.scrollIntoView({block:'center', behavior:'auto'}); } catch (e) { try { el.scrollIntoView(true); } catch(e2){} }
+    var vv = window.visualViewport;
+    var visibleH = vv && vv.height ? vv.height : window.innerHeight;
+    try {
+      var rect = el.getBoundingClientRect();
+      if (rect.bottom > visibleH - 8 || rect.top < 0) {
+        el.scrollIntoView({ block: 'center', behavior: 'auto' });
+      }
+    } catch (e) {
+      try { el.scrollIntoView(true); } catch (e2) {}
+    }
   }
-  var onFocus = function(){ setTimeout(function(){ squash(); revealInput(); }, 60); };
+  var onFocus = function(){ setTimeout(function(){ squash(); reveal(); }, 60); };
   document.addEventListener('focusin', onFocus, true);
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', function(){ squash(); revealInput(); });
+    window.visualViewport.addEventListener('resize', function(){ squash(); reveal(); });
   } else {
-    window.addEventListener('resize', function(){ squash(); revealInput(); });
+    window.addEventListener('resize', function(){ squash(); reveal(); });
   }
 })();
 </script>`;
