@@ -83,36 +83,93 @@ const KEYBOARD_FIX_SCRIPT = `<script>
   var isMobile = (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
     (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width:768px)').matches);
   if (!isMobile) return;
-  // 键盘弹出时可视视口高度会缩小；用它压平 #root，让 ScrollView 溢出可滚
+
+  // ===== diagnostic overlay: show live keyboard-state data when an input is focused =====
+  var diagEl = null;
+  function ensureDiag() {
+    if (diagEl) return diagEl;
+    diagEl = document.createElement('pre');
+    diagEl.id = 'kbDiag';
+    diagEl.style.cssText = 'position:fixed;right:6px;bottom:6px;z-index:2147483647;' +
+      'background:rgba(0,0,0,0.85);color:#7CFC00;font:9px/1.3 ui-monospace,Monaco,monospace;' +
+      'padding:3px 6px;border-radius:6px;max-width:82%;max-height:40%;overflow:auto;' +
+      'white-space:pre-wrap;word-break:break-all;text-align:left;box-shadow:0 0 0 1px rgba(255,255,255,0.35);';
+    diagEl.textContent = '[keyboard-diag] tap to expand; focus an input to see live data';
+    diagEl.addEventListener('click', function(){
+      if (diagEl.classList.contains('kb-open')) {
+        diagEl.classList.remove('kb-open');
+      } else {
+        diagEl.classList.add('kb-open');
+        var full = diagEl.getAttribute('data-full');
+        if (full) diagEl.textContent = full;
+      }
+    });
+    document.documentElement.appendChild(diagEl);
+    return diagEl;
+  }
+  function diag(tag, data) {
+    try {
+      var el = ensureDiag();
+      var lines = ['[' + tag + ']'];
+      for (var k in data) {
+        if (Object.prototype.hasOwnProperty.call(data, k)) lines.push(k + '=' + data[k]);
+      }
+      var full = lines.join(String.fromCharCode(10));
+      el.setAttribute('data-full', full);
+      if (!el.classList.contains('kb-open')) {
+        var tmp = lines.join(' | ');
+        el.textContent = tmp.length > 90 ? tmp.slice(0, 87) + '…' : tmp;
+      }
+    } catch (e) {}
+  }
+
+  // keyboard pops up => visualViewport shrinks; squash #root so RN ScrollView overflows & scrolls
   function squash() {
     var root = document.getElementById('root');
     if (!root) return;
     var vv = window.visualViewport;
     var target = vv && vv.height && vv.height < window.innerHeight ? vv.height : null;
     if (target && root.style.height !== target + 'px') root.style.height = target + 'px';
+    return { target: target, appliedHeight: root.style.height, rootClient: root.clientHeight };
   }
-  // 还原被软键盘遮挡的 input：仅当 input 底部超出可视区（确被键盘盖住）才居中滚动；
-  // 若 input 本就在可视区内（如手机号/验证码），不做任何处理，避免页面跳动。
+  // scroll focused input into view only if it is actually covered by the keyboard
   function reveal() {
     var el = document.activeElement;
-    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT')) return;
+    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT')) return null;
     var vv = window.visualViewport;
     var visibleH = vv && vv.height ? vv.height : window.innerHeight;
     try {
       var rect = el.getBoundingClientRect();
-      if (rect.bottom > visibleH - 8 || rect.top < 0) {
+      var need = (rect.bottom > visibleH - 8 || rect.top < 0);
+      if (need) {
         el.scrollIntoView({ block: 'center', behavior: 'auto' });
       }
+      return { type: el.type || 'text', ph: el.placeholder || el.name || el.tagName, rectTop: Math.round(rect.top), rectBottom: Math.round(rect.bottom), visibleH: Math.round(visibleH), need: need, vvH: vv ? Math.round(vv.height) : null, innerH: window.innerHeight };
     } catch (e) {
-      try { el.scrollIntoView(true); } catch (e2) {}
+      return { err: String(e) };
     }
   }
-  var onFocus = function(){ setTimeout(function(){ squash(); reveal(); }, 60); };
+  var onFocus = function(){
+    var el = document.activeElement;
+    var label = (el && (el.placeholder || el.name || el.type || el.tagName)) || '?';
+    setTimeout(function(){
+      try {
+        var s = squash();
+        var r = reveal();
+        diag('focus:' + label, Object.assign({ rootTarget: s && s.target, rootH: s && s.appliedHeight }, r || {}));
+      } catch (e) { diag('focus:' + label, { err: String(e) }); }
+    }, 80);
+  };
   document.addEventListener('focusin', onFocus, true);
+  function onResize(){
+    if (typeof window === 'undefined' || !document.getElementById('root')) return;
+    var vv = window.visualViewport;
+    diag('resize', { vvH: vv ? Math.round(vv.height) : null, innerH: window.innerHeight, rootH: document.getElementById('root').style.height });
+  }
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', function(){ squash(); reveal(); });
+    window.visualViewport.addEventListener('resize', function(){ squash(); reveal(); onResize(); });
   } else {
-    window.addEventListener('resize', function(){ squash(); reveal(); });
+    window.addEventListener('resize', function(){ squash(); reveal(); onResize(); });
   }
 })();
 </script>`;
