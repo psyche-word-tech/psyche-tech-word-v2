@@ -160,6 +160,44 @@ const RawScreen = ({
     return () => { s1.remove(); s2.remove(); };
   }, []);
 
+  // Web 专属：手机浏览器软键盘弹出后，若聚焦的输入框位于页面下部，会被键盘盖住
+  // （页面 overflow:hidden 无法原生滚动），系统因此判定输入框不可见而收键盘（"键盘闪退"）。
+  // 这里监听 focusin，在移动端把聚焦输入框滚动到可视区内，保证键盘弹出后输入框仍可见。
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    // 仅移动端（触摸屏 / 窄屏）启用，避免影响桌面端输入体验
+    const isMobile = () => {
+      if (typeof window === 'undefined') return false;
+      if ('maxTouchPoints' in navigator && navigator.maxTouchPoints > 0) return true;
+      return window.matchMedia('(max-width: 768px)').matches;
+    };
+    if (!isMobile()) return;
+
+    let raf = 0;
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && target.tagName !== 'SELECT')) return;
+      // 等一帧，让软键盘视口变化完成后再滚动
+      raf = window.requestAnimationFrame(() => {
+        const rect = target.getBoundingClientRect();
+        const vh = window.innerHeight;
+        // 输入框底部超出可视区（被软键盘遮挡）时，滚动到可见
+        if (rect.bottom > vh - 8 || rect.top < 0) {
+          try {
+            target.scrollIntoView({ block: 'center', behavior: 'auto' });
+          } catch {
+            target.scrollIntoView(true);
+          }
+        }
+      });
+    };
+    document.addEventListener('focusin', onFocusIn, true);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      document.removeEventListener('focusin', onFocusIn, true);
+    };
+  }, []);
+
   // 自动检测：若子树中包含 ScrollView/FlatList/SectionList，则认为页面自身处理滚动
   const isNodeScrollable = (node: React.ReactNode): boolean => {
     const isScrollableElement = (el: unknown): boolean => {

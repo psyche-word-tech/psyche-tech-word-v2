@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import path from "path";
-import express from "express";
+import express, { type Response } from "express";
 import cors from "cors";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -41,6 +41,15 @@ app.use(cors());
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 
+// 在 static 中间件之前统一走 serveIndexHtml，保证根路径也注入 interactive-widget
+// （否则 express.static 会直接返回原始 index.html，跳过注入）
+app.use((req, res, next) => {
+  if (req.method === 'GET' && (req.path === '/' || req.path === '/index.html')) {
+    return serveIndexHtml(res);
+  }
+  next();
+});
+
 // Serve frontend static files
 // 禁用缓存：WebView/浏览器可能复用旧 bundle，导致部署成功后仍看不到更新
 app.use(
@@ -51,6 +60,35 @@ app.use(
   })
 );
 
+/**
+ * 读取 public/index.html 并注入 interactive-widget=resizes-content
+ * 解决新版手机浏览器（如鸿蒙/小米）默认 resizes-visual：软键盘悬浮弹出、
+ * 布局视口保持原高，RN 页面永不溢出无法滚动，密码框被键盘盖住（iQOO 老版正常因自动 resizes-content）。
+ * 强制 resizes-content 让键盘弹出时布局视口收缩、RN ScrollView 获得滚动能力。
+ */
+const INTERACTIVE_WIDGET_META =
+  'name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, interactive-widget=resizes-content"';
+let indexHtmlCache: string = '';
+function serveIndexHtml(res: Response) {
+  const indexPath = path.join(__dirname, '../public/index.html');
+  if (!fs.existsSync(indexPath)) {
+    res.status(200).json({ status: 'ok', service: 'word-voyage-api' });
+    return;
+  }
+  if (!indexHtmlCache) {
+    let html = fs.readFileSync(indexPath, 'utf-8');
+    if (html.includes('interactive-widget') === false) {
+      html = html.replace(
+        '<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />',
+        `<meta ${INTERACTIVE_WIDGET_META} />`
+      );
+    }
+    indexHtmlCache = html;
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('html').send(indexHtmlCache);
+}
+
 // Serve face-api.js models from server/models/ (not public/models/)
 // This ensures models are never deleted when public/ is rebuilt
 app.use('/models', express.static(path.join(__dirname, '../models')));
@@ -59,12 +97,7 @@ app.use('/models', express.static(path.join(__dirname, '../models')));
  * 根路径 - 优先 serve 前端 index.html，不存在时返回 API 状态
  */
 app.get('/', (req, res) => {
-  const indexPath = path.join(__dirname, '../public/index.html');
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(200).json({ status: 'ok', service: 'word-voyage-api' });
-  }
+  serveIndexHtml(res);
 });
 
 /**
@@ -274,7 +307,7 @@ app.get('*', (req, res) => {
   if (req.path.startsWith('/models/')) {
     return res.status(404).send('Not found');
   }
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  serveIndexHtml(res);
 });
 
 // 全局未捕获异常处理 - 防止进程崩溃退出
