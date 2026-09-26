@@ -84,130 +84,62 @@ const KEYBOARD_FIX_SCRIPT = `<script>
     (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width:768px)').matches);
   if (!isMobile) return;
 
-  // ===== diagnostic overlay: APPEND keyboard-state events to a persistent, top-anchored log =====
-  // Top-anchored so the soft keyboard never covers it; log keeps every event so even if the
-  // keyboard flashes away and back, the user can scroll the log afterwards to read what happened.
-  var diagEl = null;
-  var diagLog = [];
-  function ensureDiag() {
-    if (diagEl) return diagEl;
-    diagEl = document.createElement('pre');
-    diagEl.id = 'kbDiag';
-    diagEl.style.cssText = 'position:fixed;top:6px;left:6px;right:6px;z-index:2147483647;' +
-      'background:rgba(0,0,0,0.9);color:#7CFC00;font:9px/1.4 ui-monospace,Monaco,monospace;' +
-      'padding:4px 6px;border-radius:6px;max-height:52%;overflow:auto;' +
-      'white-space:pre-wrap;word-break:break-all;text-align:left;box-shadow:0 0 0 1px rgba(255,255,255,0.4);';
-    diagEl.textContent = '[KBFIX-v5-diag] focus an input, then tap here to scroll the log';
-    diagEl.addEventListener('click', function(){
-      diagEl.classList.toggle('kb-open');
-      renderDiag();
-    });
-    document.documentElement.appendChild(diagEl);
-    return diagEl;
-  }
-  function renderDiag() {
-    if (!diagEl) return;
-    if (diagEl.classList.contains('kb-open')) {
-      diagEl.textContent = diagLog.join(String.fromCharCode(10));
-    } else {
-      var show = null;
-      for (var i = diagLog.length - 1; i >= 0; i--) {
-        if (diagLog[i].indexOf('rectTop=') !== -1) { show = diagLog[i]; break; }
-      }
-      if (show === null) {
-        for (var j = diagLog.length - 1; j >= 0; j--) {
-          if (diagLog[j].indexOf('[focus:') === 0 || diagLog[j].indexOf('[reveal:') === 0) { show = diagLog[j]; break; }
-        }
-      }
-      if (show === null) show = diagLog[diagLog.length - 1] || '';
-      diagEl.textContent = show.length > 200 ? show.slice(0, 197) + '...' : show;
-    }
-  }
-  function pushDiag(tag, data) {
-    try {
-      ensureDiag();
-      var lines = ['[' + tag + ']'];
-      for (var k in data) {
-        if (Object.prototype.hasOwnProperty.call(data, k) && data[k] !== undefined && data[k] !== null) {
-          lines.push(k + '=' + data[k]);
-        }
-      }
-      diagLog.push(lines.join(String.fromCharCode(10)));
-      if (diagLog.length > 24) diagLog.shift();
-      renderDiag();
-    } catch (e) {}
-  }
+  // keyboard pops up => visualViewport shrinks; squeeze #root so the RN ScrollView overflows & scrolls,
+  // and restore it when the keyboard is dismissed (otherwise the page stays pinned short with blank space).
   function measure(el) {
     var vv = window.visualViewport;
     var visibleH = vv && vv.height ? vv.height : window.innerHeight;
-    if (!el) return { type: 'none', visibleH: Math.round(visibleH), vvH: vv ? Math.round(vv.height) : null, innerH: window.innerHeight };
+    if (!el) return { type: 'none', visibleH: Math.round(visibleH), innerH: window.innerHeight };
     try {
       var rect = el.getBoundingClientRect();
-      var need = (rect.bottom > visibleH - 8 || rect.top < 0);
-      return { type: el.type || 'text', ph: el.placeholder || el.name || el.tagName, rectTop: Math.round(rect.top), rectBottom: Math.round(rect.bottom), visibleH: Math.round(visibleH), vvH: vv ? Math.round(vv.height) : null, innerH: window.innerHeight, need: need };
+      return { type: el.type || 'text', ph: el.placeholder || el.name || el.tagName, rectTop: Math.round(rect.top), rectBottom: Math.round(rect.bottom), visibleH: Math.round(visibleH), innerH: window.innerHeight, need: (rect.bottom > visibleH - 8 || rect.top < 0) };
     } catch (e) {
       return { err: String(e) };
     }
   }
-  // keyboard pops up => visualViewport shrinks; squeeze #root so RN ScrollView overflows & scrolls.
-  // Aggressive: apply whenever visualViewport.height is known & < innerHeight (covers keyboards that
-  // only resize window/layout viewport without firing visualViewport.resize).
   function squash() {
     var root = document.getElementById('root');
-    if (!root) return { target: null, appliedHeight: null, rootClient: null };
+    if (!root) return;
     var vv = window.visualViewport;
     var visH = vv && vv.height ? vv.height : window.innerHeight;
     var innerH = window.innerHeight;
     var target = null;
     if (typeof visH === 'number' && typeof innerH === 'number' && visH < innerH) {
+      // keyboard visible (resizes-visual): squeeze #root to the visible viewport
       target = visH;
     } else if (typeof visH === 'number' && root.clientHeight > visH) {
+      // resizes-content (vv==inner), or a previously-squeezed #root still taller than visible -> squeeze
       target = visH;
     }
-    if (target && root.style.height !== target + 'px') root.style.height = target + 'px';
-    return { target: target, appliedHeight: root.style.height, rootClient: root.clientHeight };
+    if (target) {
+      if (root.style.height !== target + 'px') root.style.height = target + 'px';
+    } else if (root.style.height) {
+      // keyboard dismissed: restore #root so the page isn't pinned short with blank space below
+      root.style.height = '';
+    }
   }
   // scroll focused input into view only if it is actually covered by the keyboard
-  function reveal() {
-    var el = document.activeElement;
-    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT')) return null;
+  function reveal(el) {
     var vv = window.visualViewport;
     var visibleH = vv && vv.height ? vv.height : window.innerHeight;
     var rect = el.getBoundingClientRect();
-    var need = (rect.bottom > visibleH - 8 || rect.top < 0);
-    if (need) {
+    if (rect.bottom > visibleH - 8 || rect.top < 0) {
       el.scrollIntoView({ block: 'center', behavior: 'auto' });
     }
-    return measure(el);
   }
   function onFocus() {
-    var el = document.activeElement;
-    var label = (el && (el.placeholder || el.name || el.type || el.tagName)) || '?';
-    try {
-      var s = squash();
-      var m = measure(el);
-      pushDiag('focus:' + label, Object.assign({ rootTarget: s && s.target, rootH: s && s.appliedHeight, rootC: s && s.rootClient }, m || {}));
-      setTimeout(function(){
-        try {
-          var s2 = squash();
-          var r = reveal();
-          var rootC2 = document.getElementById('root');
-          pushDiag('reveal:' + label, Object.assign({ rootTarget: s2 && s2.target, rootH: s2 && s2.appliedHeight, rootC: rootC2 ? rootC2.clientHeight : null }, r || {}));
-        } catch (e) { pushDiag('reveal:' + label, { err: String(e) }); }
-      }, 60);
-    } catch (e) { pushDiag('focus:' + label, { err: String(e) }); }
+    squash();
+    setTimeout(function(){ squash(); reveal(document.activeElement); }, 60);
   }
   document.addEventListener('focusin', onFocus, true);
   function onResize() {
-    if (typeof window === 'undefined') return;
-    var root = document.getElementById('root');
-    var vv = window.visualViewport;
-    pushDiag('resize', { vvH: vv ? Math.round(vv.height) : null, innerH: window.innerHeight, rootH: root ? root.style.height : null, rootC: root ? root.clientHeight : null });
+    squash();
+    if (document.activeElement && document.activeElement.tagName) reveal(document.activeElement);
   }
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', function(){ squash(); reveal(); onResize(); });
+    window.visualViewport.addEventListener('resize', onResize);
   } else {
-    window.addEventListener('resize', function(){ squash(); reveal(); onResize(); });
+    window.addEventListener('resize', onResize);
   }
 })();
 </script>`;
