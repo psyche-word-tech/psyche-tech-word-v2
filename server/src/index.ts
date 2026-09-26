@@ -97,7 +97,7 @@ const KEYBOARD_FIX_SCRIPT = `<script>
       'background:rgba(0,0,0,0.9);color:#7CFC00;font:9px/1.4 ui-monospace,Monaco,monospace;' +
       'padding:4px 6px;border-radius:6px;max-height:52%;overflow:auto;' +
       'white-space:pre-wrap;word-break:break-all;text-align:left;box-shadow:0 0 0 1px rgba(255,255,255,0.4);';
-    diagEl.textContent = '[keyboard-diag] focus an input, then tap here to scroll the log';
+    diagEl.textContent = '[KBFIX-v5-diag] focus an input, then tap here to scroll the log';
     diagEl.addEventListener('click', function(){
       diagEl.classList.toggle('kb-open');
       renderDiag();
