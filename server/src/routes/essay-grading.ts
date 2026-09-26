@@ -273,6 +273,24 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     }
     gradingResult.total_score = Math.max(0, Math.min(max_score, roundToStep(gradingResult.total_score)));
 
+    // —— 评语 ↔ 分数 档内位置强一致校验（读后续写专用）——
+    // 模型偶发"评语说一档上沿(约5分,4-6)，实际却给 2 分"这类档内位置矛盾。
+    // 此处按评语关键词把分数钳到评语所声称的位置，坚决消除"评语与分数数字对不上"。
+    if (isContinuation && gradingResult.comments) {
+      const c = gradingResult.comments;
+      const isFirstTier = /一档|1\s*档/.test(c) && !/二档|三档|四档|五档/.test(c);
+      const upStr = /一档上沿|一档高|约\s*5|4-6|4~6|5分上下|\b[45](\.5)?\b\s*分/.test(c);
+      const lowStr = /一档低段|一档下沿|仅.*最差|1-3|1~3|1\s*分/.test(c);
+      if (isFirstTier && upStr && gradingResult.total_score < 4) {
+        gradingResult.total_score = roundToStep(Math.min(5, Math.max(4, gradingResult.total_score))); // 抬到 4-6 区间
+        if (gradingResult.total_score < 4) gradingResult.total_score = 4;
+      }
+      if (isFirstTier && lowStr && gradingResult.total_score > 3) {
+        gradingResult.total_score = roundToStep(Math.min(3, Math.max(1, gradingResult.total_score))); // 压到 1-3 区间
+        if (gradingResult.total_score > 3) gradingResult.total_score = 3;
+      }
+    }
+
     // 定档与分数：总分以各维度/得分点自然加和为准（上面已算 total_score），不再把总分硬压进模型所标档位。
     // 若总分超出所标档位上限则适当升档（档位上移到加和总分）；低于下限则相应下移。总分与各维度分天然一致，不做缩放。
     const tier = gradingResult.tier;
@@ -501,6 +519,13 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
 - 语言能且只能把"情节完整"的作文在**三档以上**的区间内微调，**永远不能把它压到三档以下**。
 - 只有情节本身不完整（缺结局但展开了一个冲突场景 L2）→ 三档下沿到二档；二段未写但第一段完整、语言尚可 → 二档；情节碎片/无推进/离题 → 一档或更低。
 评语与档位矛盾视为判错：若你评语里说了"情节完整/起承转合/有升华"，档位就绝不可能是二档或以下。
+
+【铁律 #2 —— 先定分数，再写评语，分数与理由位置严格一致（最高优先级）】你在输出前必须先在心里定死一个 total_score，然后让评语的一切措辞都精确匹配这个分数，**绝不能出现"评语说落一档上沿/约5分/4-6，实际却给 2 分或 9 分"这类档内位置矛盾**。具体：
+- 你说"压到一档上沿附近（约5分上下，4-6）"，那 total_score 就必须落在 4-6 之间（如 4、4.5、5），**绝不允许给 3 分及以下**；
+- 你说"落一档低段/下沿/仅最差"，total_score 才能取 1-3 附近；
+- 你说"二档下沿/6-8"，total_score 必须 6-8；"三档下沿"必须 11-13。
+- 若发现自己的评语与分数位置对不上，**优先改分数去贴合评语所定的位置，而不是让两者互相矛盾**。评语里提到的任何数字区间都必须与 total_score 完全自洽。
+评语、档位、分数三者必须三角一致，任何一条对不上都视为整题判错。
 
 【第一步·先决校验】
 先核对该续写篇幅是否与题目所给文章情节高度相关：是否承接并推进了原文的故事线（人物、冲突、走向）。若完全离题/与原文无关，或没有写任何自主内容（仅原文提示句不算考生所写）→ 直接 0 分或一档下限；若内容只是零散片段无推进 → 一档。
