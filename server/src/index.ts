@@ -97,24 +97,31 @@ const KEYBOARD_FIX_SCRIPT = `<script>
       return { err: String(e) };
     }
   }
+  // Track the tallest (no-keyboard) viewport height so we can tell "keyboard dismissed" apart from
+  // "keyboard open but #root already squeezed to <= visible": only a real recovery of innerHeight
+  // (>= lastFullH) may restore #root. Restoring based on root.clientHeight would wrongly undo the
+  // squeeze during a focusin debounce and re-cover the focused input.
+  var lastFullH = 0;
   function squash() {
     var root = document.getElementById('root');
     if (!root) return;
     var vv = window.visualViewport;
     var visH = vv && vv.height ? vv.height : window.innerHeight;
     var innerH = window.innerHeight;
+    if (typeof innerH === 'number' && innerH > lastFullH) lastFullH = innerH;
     var target = null;
     if (typeof visH === 'number' && typeof innerH === 'number' && visH < innerH) {
       // keyboard visible (resizes-visual): squeeze #root to the visible viewport
       target = visH;
     } else if (typeof visH === 'number' && root.clientHeight > visH) {
-      // resizes-content (vv==inner), or a previously-squeezed #root still taller than visible -> squeeze
+      // resizes-content (vv==inner) or stale layout taller than visible -> squeeze
       target = visH;
     }
     if (target) {
       if (root.style.height !== target + 'px') root.style.height = target + 'px';
-    } else if (root.style.height) {
-      // keyboard dismissed: restore #root so the page isn't pinned short with blank space below
+    } else if (typeof innerH === 'number' && innerH >= lastFullH && root.style.height) {
+      // keyboard truly dismissed (innerHeight back to full): restore #root so the page isn't
+      // pinned short with blank space below
       root.style.height = '';
     }
   }
