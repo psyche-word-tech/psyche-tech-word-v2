@@ -214,8 +214,12 @@ const RawScreen = ({
   const useScrollContainer = !childIsNativeScrollable;
 
   // 2. 滚动容器配置
-  // 如果使用滚动容器，则使用 KeyboardAwareScrollView 替代原有的 ScrollView
-  const Container = useScrollContainer ? KeyboardAwareScrollView : View;
+  // 如果使用滚动容器，则使用 ScrollView；Web 上软键盘不触发 RN Keyboard 事件，
+  // KeyboardAwareScrollView 的自动滚动会做错误位移导致焦点丢失（键盘闪退），
+  // 故 Web 使用普通 ScrollView（浏览器原生处理软键盘滚动与焦点保持），原生端依旧用 KeyboardAwareScrollView
+  const Container = useScrollContainer
+    ? (Platform.OS === 'web' ? ScrollView : KeyboardAwareScrollView)
+    : View;
 
   const containerProps = useScrollContainer ? {
     contentContainerStyle: {
@@ -226,8 +230,12 @@ const RawScreen = ({
     keyboardShouldPersistTaps: 'handled' as const,
     showsVerticalScrollIndicator: false,
     keyboardDismissMode: 'on-drag' as const,
-    enableOnAndroid: true,
-    extraHeight: 100, // 替代原代码手动计算的 offset
+    ...(Platform.OS === 'web'
+      ? {}
+      : {
+          enableOnAndroid: true,
+          extraHeight: 100, // 替代原代码手动计算的 offset
+        }),
     // iOS 顶部白条修复：强制不自动添加顶部安全区
     ...(Platform.OS === 'ios'
       ? { contentInsetAdjustmentBehavior: contentInsetBehaviorIOS }
