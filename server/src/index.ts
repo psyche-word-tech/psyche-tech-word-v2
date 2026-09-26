@@ -110,8 +110,17 @@ const KEYBOARD_FIX_SCRIPT = `<script>
     if (diagEl.classList.contains('kb-open')) {
       diagEl.textContent = diagLog.join(String.fromCharCode(10));
     } else {
-      var last = diagLog[diagLog.length - 1] || '';
-      diagEl.textContent = last.length > 95 ? last.slice(0, 92) + '...' : last;
+      var show = null;
+      for (var i = diagLog.length - 1; i >= 0; i--) {
+        if (diagLog[i].indexOf('rectTop=') !== -1) { show = diagLog[i]; break; }
+      }
+      if (show === null) {
+        for (var j = diagLog.length - 1; j >= 0; j--) {
+          if (diagLog[j].indexOf('[focus:') === 0 || diagLog[j].indexOf('[reveal:') === 0) { show = diagLog[j]; break; }
+        }
+      }
+      if (show === null) show = diagLog[diagLog.length - 1] || '';
+      diagEl.textContent = show.length > 200 ? show.slice(0, 197) + '...' : show;
     }
   }
   function pushDiag(tag, data) {
