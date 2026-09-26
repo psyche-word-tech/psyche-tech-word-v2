@@ -149,17 +149,21 @@ const KEYBOARD_FIX_SCRIPT = `<script>
       return { err: String(e) };
     }
   }
-  // keyboard pops up => visualViewport shrinks; squash #root so RN ScrollView overflows & scrolls
+  // keyboard pops up => visualViewport shrinks; squeeze #root so RN ScrollView overflows & scrolls.
+  // Aggressive: apply whenever visualViewport.height is known & < innerHeight (covers keyboards that
+  // only resize window/layout viewport without firing visualViewport.resize).
   function squash() {
     var root = document.getElementById('root');
     if (!root) return { target: null, appliedHeight: null, rootClient: null };
     var vv = window.visualViewport;
     var visH = vv && vv.height ? vv.height : window.innerHeight;
+    var innerH = window.innerHeight;
     var target = null;
-    // 键盘压缩了可视区(visH变小)但 #root 没跟随缩小(clientHeight>visH)时，
-    // 必须强制把 root 压到可视高，使 RN ScrollView 获得溢出滚动能力(否则内容锁定不可滚)
-    if (typeof visH === 'number' && root.clientHeight > visH) target = visH;
-    else if (vv && vv.height && vv.height < window.innerHeight) target = vv.height;
+    if (typeof visH === 'number' && typeof innerH === 'number' && visH < innerH) {
+      target = visH;
+    } else if (typeof visH === 'number' && root.clientHeight > visH) {
+      target = visH;
+    }
     if (target && root.style.height !== target + 'px') root.style.height = target + 'px';
     return { target: target, appliedHeight: root.style.height, rootClient: root.clientHeight };
   }
