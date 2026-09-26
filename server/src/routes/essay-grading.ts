@@ -308,13 +308,20 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       }
       // ——【书写整洁奖励】程序化兜底（读后续写）：评语明确认定"书写整洁/工整/卷面干净/字迹清晰"，但总分未体现上浮时，
       // 在档内自动 +1.5（封顶档内 max），不跨档。跳过：评语提到潦草/难辨/混乱/多处涂改 → 不奖励。
-      const neatUp = /书写(?:整洁|工整|清晰|规整|较好|尚可)|卷面(?:整洁|干净|清爽|工整|较好|尚可|一般但整洁)|字迹(?:工整|清晰|规范|好|整洁)/.test(c);
+      const neatUpSent = /(?:书写|卷面|字迹)[\s\S]{0,6}(?:整洁|工整|清晰|规整|干净|较好|尚可|清爽)/;
+      const neatUp = /书写(?:整洁|工整|清晰|规整|较好|尚可)|卷面(?:整洁|干净|清爽|工整|较好|尚可|一般但整洁)|字迹(?:工整|清晰|规范|好|整洁)/.test(c) || neatUpSent.test(c);
       const neatDown = /书写(?:潦草|较差|乱|难辨|混乱)|卷面(?:潦草|较乱|脏乱|乱|混乱)|字迹(?:潦草|难辨|混乱|不清楚)/.test(c);
       const tierMax = tierInfo ? tierInfo.max : null;
       if (isContinuation && neatUp && !neatDown && Number.isFinite(gradingResult.total_score)) {
         const cap = (tierMax && Number.isFinite(tierMax)) ? tierMax : Infinity;
-        const boosted = gradingResult.total_score + 1.5;
-        if (boosted <= cap) {
+        const committed = /(?:上浮至|定为|给予|最终(?:为|得)?|评分为)\s*(\d+(?:\.5)?)\s*(?:分)?(?![一-龥]|\d)/.exec(c);
+        let boosted = gradingResult.total_score + 1.5;
+        if (committed) {
+          const want = Number(committed[1]);
+          // 评语承诺分须落在当前档内，且高于现分才采用（避免误抓“三档11-15”这类区间数字）
+          if (want > gradingResult.total_score && want <= cap) boosted = want;
+        }
+        if (boosted <= cap && boosted > gradingResult.total_score) {
           gradingResult.total_score = Math.round(boosted * 2) / 2;
         }
       }
