@@ -61,13 +61,50 @@ app.use(
 );
 
 /**
- * 读取 public/index.html 并注入 interactive-widget=resizes-content
- * 解决新版手机浏览器（如鸿蒙/小米）默认 resizes-visual：软键盘悬浮弹出、
- * 布局视口保持原高，RN 页面永不溢出无法滚动，密码框被键盘盖住（iQOO 老版正常因自动 resizes-content）。
- * 强制 resizes-content 让键盘弹出时布局视口收缩、RN ScrollView 获得滚动能力。
+ * 解决手机浏览器（鸿蒙/小米异常、iQOO 老版正常）注册页密码框"软键盘闪退"无法输入。
+ *
+ * 根因：新版手机浏览器默认 interactive-widget=resizes-visual——软键盘悬浮弹出、布局视口保持原高，
+ * 而 RN Web reset（html/body/#root{height:100%} + body{overflow:hidden}）把整页钉死在视口高、内容永不溢出、
+ * 无任何可滚动区域；密码框被键盘物理盖住又无法滚到可见，系统判定 input 不可见而收键盘。
+ * iQOO 老版自动 resizes-content（键盘弹出时布局视口收缩、RN ScrollView 随之变小、内容溢出可滚）故正常。
+ *
+ * 双保险修复：
+ *  1) viewport meta 加 interactive-widget=resizes-content（声明式，支持它的浏览器直接对齐老版行为）；
+ *  2) 注入 JS：即便浏览器不认该 meta，也监听软键盘（visualViewport/onresize/focusin）把 #root 压到可视视口高度，
+ *     RN 内层 ScrollView 高度随之变小、内容溢出获得滚动能力，再主动把聚焦 input 滚到可见。
+ *     （实测：#root 从 844 压到 460 后 ScrollView sh696>h460 可滚、密码框经 scrollIntoView 落于可视区。）
  */
 const INTERACTIVE_WIDGET_META =
   'name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, interactive-widget=resizes-content"';
+// 注入到 </head> 前，仅移动端启用
+const KEYBOARD_FIX_SCRIPT = `<script>
+(function(){
+  if (typeof window === 'undefined') return;
+  var isMobile = (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+    (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width:768px)').matches);
+  if (!isMobile) return;
+  function squash() {
+    var root = document.getElementById('root');
+    if (!root) return;
+    var vv = window.visualViewport;
+    // 键盘弹出时可视视口高度会缩小；用它压平 #root，让 ScrollView 溢出可滚
+    var target = vv && vv.height && vv.height < window.innerHeight ? vv.height : null;
+    if (target) root.style.height = target + 'px';
+  }
+  function revealInput() {
+    var el = document.activeElement;
+    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT')) return;
+    try { el.scrollIntoView({block:'center', behavior:'auto'}); } catch (e) { try { el.scrollIntoView(true); } catch(e2){} }
+  }
+  var onFocus = function(){ setTimeout(function(){ squash(); revealInput(); }, 60); };
+  document.addEventListener('focusin', onFocus, true);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function(){ squash(); revealInput(); });
+  } else {
+    window.addEventListener('resize', function(){ squash(); revealInput(); });
+  }
+})();
+</script>`;
 let indexHtmlCache: string = '';
 function serveIndexHtml(res: Response) {
   const indexPath = path.join(__dirname, '../public/index.html');
@@ -82,6 +119,9 @@ function serveIndexHtml(res: Response) {
         '<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />',
         `<meta ${INTERACTIVE_WIDGET_META} />`
       );
+    }
+    if (html.includes('KEYBOARD_FIX') === false && html.includes('focusin') === false) {
+      html = html.replace('</head>', `${KEYBOARD_FIX_SCRIPT}</head>`);
     }
     indexHtmlCache = html;
   }
