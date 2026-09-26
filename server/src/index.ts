@@ -84,70 +84,44 @@ const KEYBOARD_FIX_SCRIPT = `<script>
     (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width:768px)').matches);
   if (!isMobile) return;
 
-  // keyboard pops up => visualViewport shrinks; squeeze #root so the RN ScrollView overflows & scrolls,
-  // and restore it when the keyboard is dismissed (otherwise the page stays pinned short with blank space).
-  function measure(el) {
-    var vv = window.visualViewport;
-    var visibleH = vv && vv.height ? vv.height : window.innerHeight;
-    if (!el) return { type: 'none', visibleH: Math.round(visibleH), innerH: window.innerHeight };
-    try {
-      var rect = el.getBoundingClientRect();
-      return { type: el.type || 'text', ph: el.placeholder || el.name || el.tagName, rectTop: Math.round(rect.top), rectBottom: Math.round(rect.bottom), visibleH: Math.round(visibleH), innerH: window.innerHeight, need: (rect.bottom > visibleH - 8 || rect.top < 0) };
-    } catch (e) {
-      return { err: String(e) };
-    }
-  }
-  // Track the tallest (no-keyboard) viewport height so we can tell "keyboard dismissed" apart from
-  // "keyboard open but #root already squeezed to <= visible": only a real recovery of innerHeight
-  // (>= lastFullH) may restore #root. Restoring based on root.clientHeight would wrongly undo the
-  // squeeze during a focusin debounce and re-cover the focused input.
-  var lastFullH = 0;
-  function squash() {
+  // Keyboard events on Android WebView are unreliable: focusin fires before the soft keyboard animates
+  // (view still full height -> nothing to squeeze), and some browsers never emit visualViewport.resize /
+  // window.resize when it pops up. So we POLL every 150ms instead of relying on events. Whenever the
+  // visible viewport has shrunk below its recorded full height (keyboard open) and the focused input is
+  // actually covered, squeeze #root so the RN ScrollView gains an inner scroll area, then bring the
+  // input into view. We restore #root only when the visible viewport is back at full height (keyboard
+  // gone) — never mid-keyboard, so a debounced re-check can't undo the squeeze and re-cover the input.
+  var lastFullView = 0;
+  function sync() {
     var root = document.getElementById('root');
     if (!root) return;
     var vv = window.visualViewport;
-    var visH = vv && vv.height ? vv.height : window.innerHeight;
-    var innerH = window.innerHeight;
-    if (typeof innerH === 'number' && innerH > lastFullH) lastFullH = innerH;
-    var target = null;
-    if (typeof visH === 'number' && typeof innerH === 'number' && visH < innerH) {
-      // keyboard visible (resizes-visual): squeeze #root to the visible viewport
-      target = visH;
-    } else if (typeof visH === 'number' && root.clientHeight > visH) {
-      // resizes-content (vv==inner) or stale layout taller than visible -> squeeze
-      target = visH;
+    var visH = (vv && vv.height) ? vv.height : window.innerHeight;
+    if (typeof visH === 'number' && visH > lastFullView) lastFullView = visH;
+    var el = document.activeElement;
+    var field = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
+    var covered = false;
+    if (field) {
+      var rect = el.getBoundingClientRect();
+      covered = (rect.bottom > visH - 6 || rect.top < 0);
     }
-    if (target) {
-      if (root.style.height !== target + 'px') root.style.height = target + 'px';
-    } else if (typeof innerH === 'number' && innerH >= lastFullH && root.style.height) {
-      // keyboard truly dismissed (innerHeight back to full): restore #root so the page isn't
-      // pinned short with blank space below
+    var kb = (typeof visH === 'number' && typeof lastFullView === 'number' && visH < lastFullView - 1);
+    if (field && covered && kb) {
+      if (root.style.height !== visH + 'px') root.style.height = visH + 'px';
+      try { el.scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (e) {}
+    } else if (!kb && root.style.height) {
       root.style.height = '';
     }
   }
-  // scroll focused input into view only if it is actually covered by the keyboard
-  function reveal(el) {
-    var vv = window.visualViewport;
-    var visibleH = vv && vv.height ? vv.height : window.innerHeight;
-    var rect = el.getBoundingClientRect();
-    if (rect.bottom > visibleH - 8 || rect.top < 0) {
-      el.scrollIntoView({ block: 'center', behavior: 'auto' });
-    }
-  }
-  function onFocus() {
-    squash();
-    setTimeout(function(){ squash(); reveal(document.activeElement); }, 60);
-  }
-  document.addEventListener('focusin', onFocus, true);
-  function onResize() {
-    squash();
-    if (document.activeElement && document.activeElement.tagName) reveal(document.activeElement);
-  }
+  sync();
+  setInterval(sync, 150);
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onResize);
+    window.visualViewport.addEventListener('resize', function(){ sync(); });
   } else {
-    window.addEventListener('resize', onResize);
+    window.addEventListener('resize', function(){ sync(); });
   }
+  // also run once the keyboard has had time to animate in/tool out after focus/blur
+  document.addEventListener('focusin', function(){ setTimeout(sync, 0); setTimeout(sync, 150); setTimeout(sync, 400); }, true);
 })();
 </script>`;
 let indexHtmlCache: string = '';
