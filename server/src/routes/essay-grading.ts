@@ -278,16 +278,21 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     // 此处按评语关键词把分数钳到评语所声称的位置，坚决消除"评语与分数数字对不上"。
     if (isContinuation && gradingResult.comments) {
       const c = gradingResult.comments;
-      const isFirstTier = /一档|1\s*档/.test(c) && !/二档|三档|四档|五档/.test(c);
-      const upStr = /一档上沿|一档高|约\s*5|4-6|4~6|5分上下|\b[45](\.5)?\b\s*分/.test(c);
-      const lowStr = /一档低段|一档下沿|仅.*最差|1-3|1~3|1\s*分/.test(c);
+      // 用模型真实定档（tier.min/max=1-5 即一档）判断，而非看评语里有没有"二档"字样——评语中常引用"二段未写最高二档"等规则说明，极易误导字符串判定。
+      const tierInfo = gradingResult.tier && Number.isFinite(Number(gradingResult.tier.min)) && Number.isFinite(Number(gradingResult.tier.max))
+        ? { min: Math.round(Number(gradingResult.tier.min)), max: Math.round(Number(gradingResult.tier.max)) } : null;
+      const isFirstTier = tierInfo ? (tierInfo.min <= 1 && tierInfo.max <= 6) : /一档[^\d一二三四五]*『?\s*1-5|一档[^\d一二三四五]*1-5/.test(c);
+      const upStr = /一档上沿|一档中|一档高|约\s*5|4-6|4[~-]6|5分上下|高分段|\b[45](\.5)?\b\s*分/.test(c);
+      const lowStr = /一档低段|一档下沿|仅.*最差|1-3|1[~-]3|低分段|最差/.test(c);
       if (isFirstTier && upStr && gradingResult.total_score < 4) {
-        gradingResult.total_score = roundToStep(Math.min(5, Math.max(4, gradingResult.total_score))); // 抬到 4-6 区间
+        // 评语声明"一档上沿（约5分/4-6）"→ 分数强制抬到 4-6（取 5 档内最接近）
+        gradingResult.total_score = gradingResult.total_score <= 3 ? 4 : Math.min(6, gradingResult.total_score);
+        gradingResult.total_score = roundToStep(gradingResult.total_score);
         if (gradingResult.total_score < 4) gradingResult.total_score = 4;
       }
       if (isFirstTier && lowStr && gradingResult.total_score > 3) {
-        gradingResult.total_score = roundToStep(Math.min(3, Math.max(1, gradingResult.total_score))); // 压到 1-3 区间
-        if (gradingResult.total_score > 3) gradingResult.total_score = 3;
+        gradingResult.total_score = Math.min(3, gradingResult.total_score);
+        if (gradingResult.total_score < 3) gradingResult.total_score = roundToStep(gradingResult.total_score);
       }
     }
 
