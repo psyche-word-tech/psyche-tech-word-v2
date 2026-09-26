@@ -154,7 +154,12 @@ const KEYBOARD_FIX_SCRIPT = `<script>
     var root = document.getElementById('root');
     if (!root) return { target: null, appliedHeight: null, rootClient: null };
     var vv = window.visualViewport;
-    var target = vv && vv.height && vv.height < window.innerHeight ? vv.height : null;
+    var visH = vv && vv.height ? vv.height : window.innerHeight;
+    var target = null;
+    // 键盘压缩了可视区(visH变小)但 #root 没跟随缩小(clientHeight>visH)时，
+    // 必须强制把 root 压到可视高，使 RN ScrollView 获得溢出滚动能力(否则内容锁定不可滚)
+    if (typeof visH === 'number' && root.clientHeight > visH) target = visH;
+    else if (vv && vv.height && vv.height < window.innerHeight) target = vv.height;
     if (target && root.style.height !== target + 'px') root.style.height = target + 'px';
     return { target: target, appliedHeight: root.style.height, rootClient: root.clientHeight };
   }
@@ -182,7 +187,8 @@ const KEYBOARD_FIX_SCRIPT = `<script>
         try {
           var s2 = squash();
           var r = reveal();
-          pushDiag('reveal:' + label, Object.assign({ rootTarget: s2 && s2.target, rootH: s2 && s2.appliedHeight }, r || {}));
+          var rootC2 = document.getElementById('root');
+          pushDiag('reveal:' + label, Object.assign({ rootTarget: s2 && s2.target, rootH: s2 && s2.appliedHeight, rootC: rootC2 ? rootC2.clientHeight : null }, r || {}));
         } catch (e) { pushDiag('reveal:' + label, { err: String(e) }); }
       }, 60);
     } catch (e) { pushDiag('focus:' + label, { err: String(e) }); }
