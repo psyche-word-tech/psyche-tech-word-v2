@@ -216,6 +216,9 @@ export default function RegisterPage() {
                 setPassword(text);
               }}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
             />
           </View>
 
@@ -229,6 +232,9 @@ export default function RegisterPage() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
             />
           </View>
           
