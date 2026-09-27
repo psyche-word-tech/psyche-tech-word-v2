@@ -4,6 +4,61 @@ import { authMiddleware, type AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// 获取学习统计：个人中心三列（学习天数/已学单词/已掌握）统一口径
+// 学习天数 = 自注册（created_at）截至今天的自然天数
+// 已学单词 = 所有已会 + 不会 + 模糊 的单词总数（四级 sijicihui_progress）
+// 已掌握   = 所有已会（known）的单词量
+router.get('/progress', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId as number;
+    const supabase = getSupabaseClient();
+
+    // 学习天数：自注册日算起
+    let learningDays = 1;
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, created_at')
+      .eq('id', userId)
+      .maybeSingle();
+    if (user && user.created_at) {
+      const start = Date.parse(user.created_at);
+      if (!isNaN(start)) {
+        learningDays = Math.max(1, Math.floor((Date.now() - start) / 86400000));
+      }
+    }
+
+    // 已学/已掌握：四级词书分类（known/vague/unknown）
+    const counts = { known: 0, vague: 0, unknown: 0 };
+    const { data: rows, error: err } = await supabase
+      .from('sijicihui_progress')
+      .select('status')
+      .eq('user_id', userId);
+    if (err) {
+      console.error('[Progress] 统计失败:', err.message);
+      return res.status(500).json({ success: false, error: '查询失败: ' + err.message });
+    }
+    (rows || []).forEach((r: any) => {
+      if (r.status in counts) counts[r.status as keyof typeof counts] += 1;
+    });
+
+    const learnedWords = counts.known + counts.vague + counts.unknown;
+    const masteredWords = counts.known;
+
+    res.json({
+      success: true,
+      learningDays,
+      learnedWords,
+      masteredWords,
+      totalWords: learnedWords,
+      dailyAverage: 0,
+      streak: 0,
+    });
+  } catch (error: any) {
+    console.error('[Progress] 统计异常:', error.message);
+    res.status(500).json({ success: false, error: '服务器错误: ' + error.message });
+  }
+});
+
 // 修改密码
 router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

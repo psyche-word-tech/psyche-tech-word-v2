@@ -11,6 +11,26 @@ export default function ProfileScreen() {
   const router = useSafeRouter();
   const { user, logout } = useAuth();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [stats, setStats] = useState({ learningDays: 0, learnedWords: 0, masteredWords: 0 });
+
+  // 加载学习统计（个人中心三列：学习天数/已学单词/已掌握）
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${getApiBaseUrl()}/api/v1/user/progress`, {
+      headers: { 'Authorization': `Bearer ${user.token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => {
+        if (d && (d.learningDays !== undefined || d.learnedWords !== undefined)) {
+          setStats({
+            learningDays: d.learningDays || 0,
+            learnedWords: d.learnedWords || 0,
+            masteredWords: d.masteredWords || 0,
+          });
+        }
+      })
+      .catch((e) => console.error('加载学习统计失败:', e));
+  }, [user]);
 
   // 检查登录状态
   useEffect(() => {
@@ -30,9 +50,9 @@ export default function ProfileScreen() {
     role: roleLabel,
     avatar: null,
     stats: {
-      learningDays: 128,
-      totalWords: 2560,
-      masteredWords: 890,
+      learningDays: stats.learningDays,
+      totalWords: stats.learnedWords, // 已学单词 = 已会+不会+模糊
+      masteredWords: stats.masteredWords, // 已掌握 = 已会
     },
   };
 
