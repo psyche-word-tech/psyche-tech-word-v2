@@ -687,3 +687,14 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - 后端接口 `server/src/routes/sijicihui.ts`，挂 `/api/v1/sijicihui`，**只读共享**（无需登录，任何用户可查）：
   `GET ?keyword=&page=&limit=`，`ilike word 'kw%'` 前缀搜索，返回 `{success,count,page,limit,data}`。count=总数，供前端分页。
 - 注意：用户私有学习数据（进度/收藏/生词本等）仍按 `user_id` 隔离，与全局词库是两套，不互串。
+
+## 四级词汇记忆功能（per-user 隔离，2026-09 新增）
+- **解锁**：`client/screens/my-vocabulary/index.tsx` 中四级词汇（id=2）已全部开通，点「开始学习」→ `/sijicihui-study` 进入记忆学习；六级(id3)/考研(id4) 仍弹「您未解锁本词汇书」；高中(id1) 走原 `word-preview`(表 a)。
+- **记忆进度表** `public.sijicihui_progress`（**per-user 隔离**，须在 Supabase SQL Editor 建，supabase-js 不能 DDL）：
+  `id bigint identity PK, user_id bigint NOT NULL, word_id bigint NOT NULL references sijicihui(id) on delete cascade, status text default 'new' check(status in ('new','known','vague','unknown')), review_count int default 0, last_review_at timestamptz, created_at timestamptz default now(), unique(user_id, word_id)` + `(user_id)`、`(user_id,status)` 索引。
+- 后端 `server/src/routes/sijicihui-study.ts`，挂 `/api/v1/sijicihui-study`，**全部路由 authMiddleware + 按 `req.userId` 过滤**（未登录 401；绝无跨用户入口）：
+  - `GET /progress` → 该用户统计 `{total,learned,pending,known,vague,unknown}`（learned=known+vague+unknown，pending=total-learned）。
+  - `GET /words?status=&page=&limit=`：默认返回该用户"待学"词（`sijicihui_progress` 无记录 或 status='new'）；传 `status=known/vague/unknown` 返回对应分类复习词。实现：拉全量 sijicihui(4424) + 该用户 progress map，服务端过滤分页。
+  - `POST /status` `{wordId,status}` → 按 (user_id,word_id) upsert 记忆状态，`review_count+1`、`last_review_at=now`。
+- 前端学习页 `client/screens/sijicihui-study/index.tsx` + 路由 `client/app/sijicihui-study.tsx`：顶部待学/已学进度条、统计胶囊（认识/模糊/不认识，点击进入对应分类复习列表）、词卡（word/phonetic/meaning）+ 认识/模糊/不认识三按钮上报后进下一词。请求用 `fetchWithRetry`（自动带 Bearer）。
+- 校验写作 env 相同：连接 `COZE_SUPABASE_URL`（生产库 hmkkynldaiypuhhlpjxd），无 pg 直连串，故建表只能走 SQL Editor。

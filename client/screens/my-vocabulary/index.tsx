@@ -80,20 +80,23 @@ export default function MyVocabularyPage() {
   );
 
   const handleLearnPress = (book: WordBook) => {
-    // 考研/四级/六级未解锁
-    if (book.id === 2 || book.id === 3 || book.id === 4) {
+    // 六级/考研未解锁
+    if (book.id === 3 || book.id === 4) {
       setAlertMessage('您未解锁本词汇书');
       setAlertVisible(true);
       return;
     }
 
+    // 四级词汇已全部开通：走 sijicihui 四级库，记忆进度按用户隔离
+    if (book.id === 2) {
+      router.push('/sijicihui-study');
+      return;
+    }
+
     const tableMap: Record<number, string> = {
       1: 'a',
-      2: 'b',
-      3: 'c',
-      4: 'd'
     };
-    const table = tableMap[book.id] || 'b';
+    const table = tableMap[book.id] || 'a';
     router.push('/word-preview', { table });
   };
 
