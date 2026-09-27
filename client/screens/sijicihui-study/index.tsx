@@ -31,6 +31,23 @@ function DraggableWordCard({ word, onDrop, onPress, onDoublePress }: DraggableWo
 	const lastTapRef = useRef(0);
 	const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+	const handlePress = () => {
+		const now = Date.now();
+		if (now - lastTapRef.current < 320) {
+			// 双击 → 标记为"不会"
+			if (singleTapTimer.current) {
+				clearTimeout(singleTapTimer.current);
+				singleTapTimer.current = null;
+			}
+			lastTapRef.current = 0;
+			onDoublePress();
+			return;
+		}
+		lastTapRef.current = now;
+		if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+		singleTapTimer.current = setTimeout(() => onPress(), 300);
+	};
+
 	const panResponder = useMemo(
 		() =>
 			PanResponder.create({
@@ -60,24 +77,6 @@ function DraggableWordCard({ word, onDrop, onPress, onDoublePress }: DraggableWo
 							targetCategory = 2;
 						}
 						onDrop(word.id, targetCategory);
-						lastTapRef.current = 0;
-					} else if (Math.abs(gestureState.dx) < 6 && Math.abs(dy) < 6) {
-						// 轻点：区分单击(进详情) / 双击(标记"不会")
-						const now = Date.now();
-						if (now - lastTapRef.current < 320) {
-							if (singleTapTimer.current) {
-								clearTimeout(singleTapTimer.current);
-								singleTapTimer.current = null;
-							}
-							lastTapRef.current = 0;
-							onDoublePress();
-						} else {
-							lastTapRef.current = now;
-							if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
-							singleTapTimer.current = setTimeout(() => onPress(), 300);
-						}
-					} else {
-						lastTapRef.current = 0;
 					}
 					Animated.spring(pan, {
 						toValue: { x: 0, y: 0 },
@@ -93,7 +92,7 @@ function DraggableWordCard({ word, onDrop, onPress, onDoublePress }: DraggableWo
 					}).start();
 				},
 			}),
-		[onDrop, onPress, onDoublePress, word.id, pan]
+		[onDrop, word.id, pan]
 	);
 
 	return (
@@ -108,9 +107,11 @@ function DraggableWordCard({ word, onDrop, onPress, onDoublePress }: DraggableWo
 				},
 			]}
 		>
-			<View style={styles.wordCard}>
-				<Text style={styles.wordCardText}>{word.word}</Text>
-			</View>
+			<TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
+				<View style={styles.wordCard}>
+					<Text style={styles.wordCardText}>{word.word}</Text>
+				</View>
+			</TouchableOpacity>
 		</Animated.View>
 	);
 }
