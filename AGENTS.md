@@ -696,5 +696,6 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - `GET /progress` → 该用户统计 `{total,learned,pending,known,vague,unknown}`（learned=known+vague+unknown，pending=total-learned）。
   - `GET /words?status=&page=&limit=`：默认返回该用户"待学"词（`sijicihui_progress` 无记录 或 status='new'）；传 `status=known/vague/unknown` 返回对应分类复习词。实现：拉全量 sijicihui(4424) + 该用户 progress map，服务端过滤分页。
   - `POST /status` `{wordId,status}` → 按 (user_id,word_id) upsert 记忆状态，`review_count+1`、`last_review_at=now`。
-- 前端学习页 `client/screens/sijicihui-study/index.tsx` + 路由 `client/app/sijicihui-study.tsx`：顶部待学/已学进度条、统计胶囊（认识/模糊/不认识，点击进入对应分类复习列表）、词卡（word/phonetic/meaning）+ 认识/模糊/不认识三按钮上报后进下一词。请求用 `fetchWithRetry`（自动带 Bearer）。
+- 前端学习页 `client/screens/sijicihui-study/index.tsx` + 路由 `client/app/sijicihui-study.tsx`：**按用户要求复刻 `learn` 页交互**——顶部「剩余 N 个单词」（N=该用户 pending），上排 3 张单词小卡 `DraggableWordCard` 可拖到下方「已会/模糊/不会」三个分类大按钮（各带该用户计数），拖动上报记忆状态并进下一词；点击分类按钮弹 Modal 查看该用户对应分类的四级词列表、点击词卡弹详情。请求用 `fetchWithRetry`（自动带 Bearer）。
+- **`/words` count 坑**：Supabase `count=exact` 非 head 时上限 1000（4424 会截成 1000）；`/progress` 用 `head:true` 才返回精确 4424。因此前端分页/到底判定用 `data.length < limit`，不依赖响应里的 `count`。
 - 校验写作 env 相同：连接 `COZE_SUPABASE_URL`（生产库 hmkkynldaiypuhhlpjxd），无 pg 直连串，故建表只能走 SQL Editor。

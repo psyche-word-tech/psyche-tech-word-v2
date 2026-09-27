@@ -77,13 +77,21 @@ router.get('/words', authMiddleware, async (req: AuthRequest, res: Response) => 
     const limit = Math.min(100, Math.max(1, parseInt(q.limit ?? '20', 10) || 20));
 
     const supabase = getSupabaseClient();
-    const { data: words, error: err0 } = await supabase
-      .from('sijicihui')
-      .select('id, word, phonetic, meaning')
-      .order('id');
-    if (err0) {
-      console.error('[SijicihuiStudy] 取词失败:', err0.message);
-      return res.status(500).json({ success: false, message: '查询失败: ' + err0.message });
+    // PostgREST 默认单次最多返回 1000 行，四级词库 4424 词，需分页拉全量
+    const BATCH = 1000;
+    const words: any[] = [];
+    for (let i = 0; ; i++) {
+      const { data: batch, error: err0 } = await supabase
+        .from('sijicihui')
+        .select('id, word, phonetic, meaning')
+        .order('id')
+        .range(i * BATCH, (i + 1) * BATCH - 1);
+      if (err0) {
+        console.error('[SijicihuiStudy] 取词失败:', err0.message);
+        return res.status(500).json({ success: false, message: '查询失败: ' + err0.message });
+      }
+      if (batch) words.push(...batch);
+      if (!batch || batch.length < BATCH) break;
     }
 
     const { data: prog, error: err1 } = await supabase
