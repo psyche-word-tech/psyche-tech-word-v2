@@ -185,9 +185,9 @@ export default function SijicihuiStudyPage() {
 	};
 
 	const handleCategoryPress = (id: number) => {
-		if (id === 1) router.push('/sijicihui-known-words');
-		else if (id === 2) router.push('/sijicihui-vague-words');
-		else router.push('/sijicihui-unknown-words');
+		const current = allWords[0];
+		if (!current) return;
+		handleDrop(current.id, id);
 	};
 
 	const fetchData = useCallback(async () => {
