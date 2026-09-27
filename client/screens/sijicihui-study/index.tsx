@@ -5,6 +5,7 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { fetchWithRetry } from '@/utils/apiClient';
+import { useIrisRecognition } from '@/hooks/useIrisRecognition';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -126,6 +127,24 @@ export default function SijicihuiStudyPage() {
 	const pageRef = useRef(1);
 	const pageSize = 50;
 
+	// 虹膜识别：开通后在该界面学习时自动采集相关数据（与高中学习页一致）
+	const { irisEnabled, isMonitoring, startMonitoring, stopMonitoring } = useIrisRecognition({
+		enabled: true,
+		intervalMs: 30000,
+	});
+
+	useEffect(() => {
+		if (irisEnabled && !isMonitoring) {
+			console.log('[SijicihuiStudy] 虹膜识别已开通，启动监测');
+			startMonitoring();
+		}
+		return () => {
+			if (isMonitoring) {
+				stopMonitoring();
+			}
+		};
+	}, [irisEnabled, isMonitoring, startMonitoring, stopMonitoring]);
+
 	const categoryColors = ['#4CAF50', '#FF9800', '#F44336'];
 	const categoryNames = ['已会', '模糊', '不会'];
 
@@ -234,6 +253,20 @@ export default function SijicihuiStudyPage() {
 						<View style={styles.headerSub}>
 							<Text style={styles.pendingSubText}>{pending} 个单词待学习</Text>
 						</View>
+						<View style={styles.headerSub}>
+							{irisEnabled ? (
+								<View style={styles.irisIndicator}>
+									<View style={[styles.irisDot, isMonitoring && styles.irisDotActive]} />
+									<Text style={styles.irisText}>
+										{isMonitoring ? '监测中' : '已开通'}
+									</Text>
+								</View>
+							) : (
+								<TouchableOpacity onPress={() => router.push('/profile')}>
+									<Text style={styles.irisEnableText}>开通虹膜</Text>
+								</TouchableOpacity>
+							)}
+						</View>
 					</View>
 					<TouchableOpacity onPress={() => fetchData()} style={styles.refreshButton}>
 						<FontAwesome6 name="rotate-right" size={16} color="#333" />
@@ -320,6 +353,30 @@ const styles = StyleSheet.create({
 	pendingSubText: {
 		fontSize: 10,
 		color: '#666',
+	},
+	irisIndicator: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginTop: 4,
+	},
+	irisDot: {
+		width: 6,
+		height: 6,
+		borderRadius: 3,
+		backgroundColor: '#999',
+	},
+	irisDotActive: {
+		backgroundColor: '#4CAF50',
+	},
+	irisText: {
+		fontSize: 10,
+		color: '#666',
+		marginLeft: 4,
+	},
+	irisEnableText: {
+		fontSize: 10,
+		color: '#4CAF50',
+		marginTop: 4,
 	},
 	refreshButton: {
 		width: 50,
