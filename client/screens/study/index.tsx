@@ -320,7 +320,7 @@ export default function StudyScreen() {
               activeOpacity={0.8} 
               onPress={() => router.push('/vocabulary')}
             >
-              <Text style={styles.gridLabel}>词汇学习</Text>
+              <Text style={styles.gridLabel}>能力图谱</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.gridItem} 
