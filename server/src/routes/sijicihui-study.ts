@@ -186,6 +186,19 @@ router.post('/status', authMiddleware, async (req: AuthRequest, res: Response) =
         .from('sijicihui_progress')
         .insert({ user_id: userId, word_id: wordIdNum, status, review_count: 1, last_review_at: now });
       if (errIns) {
+        // 并发/快速重复点击触发唯一约束冲突 -> 降级为按 (user_id,word_id) 更新，避免报错
+        if (errIns.code === '23505') {
+          const { error: errUpd2 } = await supabase
+            .from('sijicihui_progress')
+            .update({ status, last_review_at: now })
+            .eq('user_id', userId)
+            .eq('word_id', wordIdNum);
+          if (errUpd2) {
+            console.error('[SijicihuiStudy] 冲突后更新失败:', errUpd2.message);
+            return res.status(500).json({ success: false, message: '更新失败: ' + errUpd2.message });
+          }
+          return res.json({ success: true });
+        }
         console.error('[SijicihuiStudy] 写入失败:', errIns.message);
         return res.status(500).json({ success: false, message: '写入失败: ' + errIns.message });
       }

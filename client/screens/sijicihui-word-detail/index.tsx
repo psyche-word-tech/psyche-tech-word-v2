@@ -68,10 +68,13 @@ export default function SijicihuiWordDetail() {
               return (
                 <TouchableOpacity
                   key={c.status}
-                  style={[styles.categoryButton, { backgroundColor: active ? c.color : '#EEEEEE' }]}
+                  style={[
+                    styles.categoryButton,
+                    { backgroundColor: active ? c.color : c.color + '26', borderColor: c.color, borderWidth: active ? 2 : 1 },
+                  ]}
                   onPress={() => classify(c.status)}
                 >
-                  <Text style={[styles.categoryLabel, { color: active ? '#FFFFFF' : '#666666' }]}>
+                  <Text style={[styles.categoryLabel, { color: active ? '#FFFFFF' : c.color }]}>
                     {c.label}
                   </Text>
                 </TouchableOpacity>
