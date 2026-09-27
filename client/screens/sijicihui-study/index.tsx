@@ -204,6 +204,13 @@ export default function SijicihuiStudyPage() {
 		});
 	};
 
+	const categoryRoutes = ['/sijicihui-known-words', '/sijicihui-vague-words', '/sijicihui-unknown-words'];
+
+	const handleCategoryNav = (id: number) => {
+		const route = categoryRoutes[id - 1] as `/${string}`;
+		if (route) router.push(route);
+	};
+
 	const fetchData = useCallback(async () => {
 		setError(null);
 		refreshCounts();
@@ -262,12 +269,12 @@ export default function SijicihuiStudyPage() {
 						{[1, 2, 3].map((id) => {
 							const count = id === 1 ? categoryCounts.known : id === 2 ? categoryCounts.vague : categoryCounts.unknown;
 							return (
-								<View key={id} style={styles.categoryItem}>
+								<TouchableOpacity key={id} style={styles.categoryItem} onPress={() => handleCategoryNav(id)}>
 									<View style={[styles.categoryCard, { backgroundColor: categoryColors[id - 1] }]}>
 										<Text style={styles.categoryName}>{categoryNames[id - 1]}</Text>
 										<Text style={styles.categoryCount}>({count})</Text>
 									</View>
-								</View>
+								</TouchableOpacity>
 								);
 							})}
 					</View>
