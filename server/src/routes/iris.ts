@@ -6,6 +6,15 @@ import type { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// 生成标准 UUID 格式的主键（user_profiles.id 为 uuid 类型）
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 // 获取虹膜识别状态
 router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -41,7 +50,7 @@ router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) =>
       // 记录不存在，创建一条
       const { data: newData, error: insertError } = await client
         .from('user_profiles')
-        .insert({ id: `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`, user_id: userData.id, role: 'student', iris_enabled: false })
+        .insert({ id: generateUUID(), user_id: userData.id, role: 'student', iris_enabled: false })
         .select('iris_enabled')
         .single();
       
@@ -103,7 +112,7 @@ router.post('/enable', authMiddleware, async (req: AuthRequest, res: Response) =
     if (!existing) {
       const { error: insErr } = await client
         .from('user_profiles')
-        .insert({ id: `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`, user_id: userData.id, role: 'student', iris_enabled: enabled });
+        .insert({ id: generateUUID(), user_id: userData.id, role: 'student', iris_enabled: enabled });
       if (insErr) {
         console.error('Create user profile error:', insErr);
         return res.status(500).json({ success: false, error: '创建用户档案失败' });
@@ -139,15 +148,6 @@ router.post('/iris-data', authMiddleware, async (req: AuthRequest, res: Response
     }
 
     const client = getSupabaseClient();
-    
-    // 生成标准 UUID 格式的 session_id
-    const generateUUID = () => {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-      });
-    };
     
     const validSessionId = sessionId || generateUUID();
     
