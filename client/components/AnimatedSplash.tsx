@@ -12,8 +12,35 @@ import Animated, {
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
+// 开机动画只在一次 App/浏览器会话里播一次：首次进入播，随后任何返回、整页刷新、重挂载
+// 都不再进入开机动画。Web 用 sessionStorage 跨刷新记忆进程，原生端由模块级变量保证。
+const SPLASH_PLAYED_KEY = 'ws-ani-splash-played-v1';
+let splashPlayedCache: boolean | null = null;
+function splashAlreadyPlayed(): boolean {
+  if (splashPlayedCache !== null) return splashPlayedCache;
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      splashPlayedCache = !!sessionStorage.getItem(SPLASH_PLAYED_KEY);
+    } else {
+      splashPlayedCache = false;
+    }
+  } catch {
+    splashPlayedCache = false;
+  }
+  return splashPlayedCache;
+}
+function markSplashPlayed() {
+  splashPlayedCache = true;
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(SPLASH_PLAYED_KEY, '1');
+    }
+  } catch {}
+}
+
 export default function AnimatedSplash() {
-  const [visible, setVisible] = useState(true);
+  const shouldPlay = !splashAlreadyPlayed();
+  const [visible, setVisible] = useState(shouldPlay);
   const [zIndex, setZIndex] = useState(999);
   const [showText, setShowText] = useState(false);
 
@@ -44,6 +71,14 @@ export default function AnimatedSplash() {
   useEffect(() => {
     // 立即隐藏系统原生启动页，让自定义飞入动画接管
     SplashScreen.hideAsync().catch(() => {});
+
+    if (!shouldPlay) {
+      // 本会话已播过（返回/重挂载），不再进入开机动画
+      setVisible(false);
+      setZIndex(-1);
+      return;
+    }
+    markSplashPlayed();
 
     // 第一个：左上角飞入
     topLeftX.value = withTiming(0, { duration: 400, easing: Easing.out(Easing.cubic) });
