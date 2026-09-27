@@ -1,60 +1,116 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-	View,
-	Text,
-	StyleSheet,
-	Dimensions,
-	FlatList,
-	TouchableOpacity,
-	Animated,
-	PanResponder,
-} from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { FontAwesome6 } from '@expo/vector-icons';
-import { Screen } from '@/components/Screen';
+/* eslint-disable react-hooks/refs */
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, PanResponder } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { Screen } from '@/components/Screen';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { fetchWithRetry } from '@/utils/apiClient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH - 32;
 const PAGE_SIZE = 50;
 
 interface Word {
 	id: number;
 	word: string;
+	phonetic?: string;
 	meaning: string;
-	phonetic: string;
+}
+
+interface DraggableWordCardProps {
+	word: Word;
+	onDrop: (wordId: number, categoryId: number) => void;
+	onPress: () => void;
+}
+
+// 复刻 learn 的拖动单词小卡：只显示单词，垂直拖到下方三分类
+function DraggableWordCard({ word, onDrop, onPress }: DraggableWordCardProps) {
+	const pan = useRef(new Animated.ValueXY()).current;
+	const [isDragging, setIsDragging] = useState(false);
+
+	const closePan = useCallback(() => {
+		Animated.spring(pan, {
+			toValue: { x: 0, y: 0 },
+			useNativeDriver: false,
+			friction: 5,
+		}).start();
+	}, [pan]);
+
+	const panResponder = useMemo(
+		() =>
+			PanResponder.create({
+				onStartShouldSetPanResponder: () => true,
+				onMoveShouldSetPanResponder: () => true,
+				onPanResponderGrant: () => {
+					setIsDragging(true);
+					pan.setOffset({ x: (pan.x as any)._value || 0, y: (pan.y as any)._value || 0 });
+					pan.setValue({ x: 0, y: 0 });
+				},
+				onPanResponderMove: (_evt, gestureState) => {
+					pan.setValue({ x: gestureState.dx, y: gestureState.dy });
+				},
+				onPanResponderRelease: (_evt, gestureState) => {
+					setIsDragging(false);
+					pan.flattenOffset();
+					const dy = gestureState.dy;
+					const absoluteX = gestureState.moveX;
+					if (dy > 80) {
+						let targetCategory = 3;
+						if (absoluteX < SCREEN_WIDTH / 3) targetCategory = 1;
+						else if (absoluteX < (SCREEN_WIDTH / 3) * 2) targetCategory = 2;
+						onDrop(word.id, targetCategory);
+						return;
+					}
+					closePan();
+				},
+				onPanResponderTerminate: () => {
+					setIsDragging(false);
+					pan.flattenOffset();
+					closePan();
+				},
+			}),
+		[onDrop, word.id, pan, closePan]
+	);
+
+	return (
+		<Animated.View
+			{...panResponder.panHandlers}
+			style={[
+				styles.wordItemContainer,
+				{
+					transform: [{ translateX: pan.x }, { translateY: pan.y }],
+					opacity: isDragging ? 0.8 : 1,
+					zIndex: isDragging ? 100 : 1,
+				},
+			]}
+		>
+			<TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+				<View style={styles.wordCard}>
+					<Text style={styles.wordCardText} numberOfLines={2}>{word.word}</Text>
+				</View>
+			</TouchableOpacity>
+		</Animated.View>
+	);
 }
 
 const CATEGORY_CONFIG = {
-	x: { label: '已会', status: 'known' as const, color: '#4CAF50', route: '/sijicihui-known-words' as const },
-	y: { label: '模糊', status: 'vague' as const, color: '#FF9800', route: '/sijicihui-vague-words' as const },
-	z: { label: '不会', status: 'unknown' as const, color: '#F44336', route: '/sijicihui-unknown-words' as const },
+	1: { label: '已会', status: 'known' as const, color: '#4CAF50', route: '/sijicihui-known-words' as const },
+	2: { label: '模糊', status: 'vague' as const, color: '#FF9800', route: '/sijicihui-vague-words' as const },
+	3: { label: '不会', status: 'unknown' as const, color: '#F44336', route: '/sijicihui-unknown-words' as const },
 };
 
 export default function SijicihuiStudyPage() {
 	const router = useSafeRouter();
+	const nativeRouter = useRouter();
 	const [words, setWords] = useState<Word[]>([]);
-	const [currentIndex, setCurrentIndex] = useState(0);
-	const [categoryCounts, setCategoryCounts] = useState({ x: 0, y: 0, z: 0 });
 	const [pendingCount, setPendingCount] = useState(0);
+	const [categoryCounts, setCategoryCounts] = useState({ 1: 0, 2: 0, 3: 0 });
 	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
 	const [hasMore, setHasMore] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const pageRef = useRef(1);
 	const loadingRef = useRef(false);
 
-	const pan = useRef(new Animated.ValueXY()).current;
-	const [isDragging, setIsDragging] = useState(false);
-	const [dropTarget, setDropTarget] = useState<string | null>(null);
-	const dragJustEnded = useRef(false);
-
-	const buttonRefs = useRef<{ [key: string]: View | null }>({}).current;
-	const [buttonLayouts, setButtonLayouts] = useState<{
-		[key: string]: { x: number; y: number; width: number; height: number };
-	}>({});
-
-	// 获取四级待分类单词（分页）
 	const fetchPage = useCallback(async (page: number, append: boolean) => {
 		if (loadingRef.current) return;
 		loadingRef.current = true;
@@ -74,7 +130,6 @@ export default function SijicihuiStudyPage() {
 			pageRef.current = page;
 			setHasMore(list.length === PAGE_SIZE);
 			setWords(prev => (append ? [...prev, ...list] : list));
-			if (!append) setCurrentIndex(0);
 		} catch (e: any) {
 			console.error('[SijicihuiStudy] fetch words failed:', e);
 			setError(e.message || '获取单词列表失败');
@@ -84,24 +139,13 @@ export default function SijicihuiStudyPage() {
 		}
 	}, []);
 
-	const loadMore = useCallback(() => {
-		if (hasMore && !loadingRef.current) {
-			fetchPage(pageRef.current + 1, true);
-		}
-	}, [hasMore, fetchPage]);
-
-	// 获取分类计数 + 待分类数量
 	const fetchProgress = useCallback(async () => {
 		try {
 			const response = await fetchWithRetry(`/api/v1/sijicihui-study/progress`);
 			if (!response.ok) return;
 			const json = await response.json();
 			const d = json.data || {};
-			setCategoryCounts({
-				x: d.known || 0,
-				y: d.vague || 0,
-				z: d.unknown || 0,
-			});
+			setCategoryCounts({ 1: d.known || 0, 2: d.vague || 0, 3: d.unknown || 0 });
 			setPendingCount(typeof d.pending === 'number' ? d.pending : 0);
 		} catch (e) {
 			console.error('[SijicihuiStudy] fetch progress failed:', e);
@@ -122,242 +166,124 @@ export default function SijicihuiStudyPage() {
 		}, [fetchProgress])
 	);
 
-	// 移动单词到分类（按用户隔离的记忆状态）
-	const handleMoveWord = useCallback(async (word: Word, status: string) => {
-		try {
-			const response = await fetchWithRetry(`/api/v1/sijicihui-study/status`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ wordId: word.id, status }),
-			});
-			if (!response.ok) throw new Error('移动失败');
-			const newWords = words.filter(w => w.id !== word.id);
-			setWords(newWords);
-			if (currentIndex >= newWords.length && newWords.length > 0) {
-				setCurrentIndex(newWords.length - 1);
+	// 拖动分类：上报记忆状态 + 从队列移除 + 刷新计数
+	const handleDrop = useCallback(
+		async (wordId: number, categoryId: number) => {
+			const cfg = (CATEGORY_CONFIG as Record<number, { label: string; status: 'known' | 'vague' | 'unknown'; color: string; route: string }>)[categoryId];
+			if (!cfg) return;
+			try {
+				const response = await fetchWithRetry(`/api/v1/sijicihui-study/status`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ wordId, status: cfg.status }),
+				});
+				if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+			} catch (e) {
+				console.error('Failed to set word status:', e);
+				return;
 			}
+			setWords(prev => prev.filter(w => w.id !== wordId));
 			fetchProgress();
-			if (newWords.length <= PAGE_SIZE * 2 && hasMore && !loadingRef.current) {
-				fetchPage(pageRef.current + 1, true);
-			}
-		} catch (e) {
-			console.error('Failed to move word:', e);
+		},
+		[fetchProgress]
+	);
+
+	const handleWordPress = useCallback(
+		(word: Word) => {
+			nativeRouter.push({
+				pathname: '/sijicihui-word-detail',
+				params: { word: JSON.stringify({ id: word.id, word: word.word, phonetic: word.phonetic || '', meaning: word.meaning }) },
+			});
+		},
+		[nativeRouter]
+	);
+
+	const loadMore = useCallback(() => {
+		if (hasMore && words.length < 5 && !loadingRef.current) {
+			fetchPage(pageRef.current + 1, true);
 		}
-	}, [words, currentIndex, fetchProgress, hasMore, fetchPage]);
+	}, [hasMore, words.length, fetchPage]);
 
-	const detectDropTarget = useCallback((moveX: number, moveY: number): string | null => {
-		for (const [key, layout] of Object.entries(buttonLayouts)) {
-			if (
-				moveX >= layout.x && moveX <= layout.x + layout.width &&
-				moveY >= layout.y && moveY <= layout.y + layout.height
-			) {
-				return key;
-			}
-		}
-		return null;
-	}, [buttonLayouts]);
-
-	const panResponder = useRef(
-		PanResponder.create({
-			onMoveShouldSetPanResponder: (evt, gestureState) =>
-				Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 10,
-			onPanResponderGrant: () => {
-				setIsDragging(true);
-				pan.setValue({ x: 0, y: 0 });
-			},
-			onPanResponderMove: (evt, gestureState) => {
-				pan.setValue({ x: gestureState.dx, y: gestureState.dy });
-				const target = detectDropTarget(evt.nativeEvent.pageX, evt.nativeEvent.pageY);
-				setDropTarget(target);
-			},
-			onPanResponderRelease: (evt, gestureState) => {
-				setIsDragging(false);
-				dragJustEnded.current = true;
-				setTimeout(() => { dragJustEnded.current = false; }, 200);
-				const target = detectDropTarget(evt.nativeEvent.pageX, evt.nativeEvent.pageY);
-				setDropTarget(null);
-				if (target && currentWord) {
-					handleMoveWord(currentWord, CATEGORY_CONFIG[target as keyof typeof CATEGORY_CONFIG].status);
-				}
-				Animated.spring(pan, {
-					toValue: { x: 0, y: 0 },
-					useNativeDriver: false,
-					friction: 5,
-				}).start();
-			},
-			onPanResponderTerminate: () => {
-				setIsDragging(false);
-				setDropTarget(null);
-				Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false, friction: 5 }).start();
-			},
-		})
-	).current;
-
-	const onButtonLayout = useCallback((key: string) => (event: any) => {
-		buttonRefs[key]?.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
-			setButtonLayouts(prev => ({ ...prev, [key]: { x: px, y: py, width, height } }));
-		});
-	}, [buttonRefs]);
-
-	const renderWordCard = useCallback(({ item, index }: { item: Word; index: number }) => {
-		const isCurrent = index === currentIndex;
-		return (
-			<View style={styles.cardContainer}>
-				{isCurrent ? (
-					<Animated.View
-						style={[
-							styles.wordCard,
-							{
-								transform: [{ translateX: pan.x }, { translateY: pan.y }],
-								opacity: isDragging ? 0.9 : 1,
-								zIndex: isDragging ? 100 : 1,
-							},
-						]}
-						{...panResponder.panHandlers}
-					>
-						<View style={styles.cardHeader}>
-							<Text style={styles.indexText}>{index + 1} / {words.length}</Text>
-						</View>
-						<Text style={styles.wordText}>{item.word}</Text>
-						<Text style={styles.phoneticText}>{item.phonetic}</Text>
-						<Text style={styles.meaningText}>{item.meaning}</Text>
-						{isDragging && (
-							<View style={styles.dragHintContainer}>
-								<Text style={styles.dragHintText}>
-									{dropTarget ? `松手放入${CATEGORY_CONFIG[dropTarget as keyof typeof CATEGORY_CONFIG]?.label || ''}` : '拖动到下方按钮'}
-								</Text>
-							</View>
-						)}
-					</Animated.View>
-				) : (
-					<View style={styles.wordCard}>
-						<View style={styles.cardHeader}>
-							<Text style={styles.indexText}>{index + 1} / {words.length}</Text>
-						</View>
-						<Text style={styles.wordText}>{item.word}</Text>
-						<Text style={styles.phoneticText}>{item.phonetic}</Text>
-						<Text style={styles.meaningText}>{item.meaning}</Text>
-					</View>
-				)}
-			</View>
-		);
-	}, [words.length, currentIndex, isDragging, dropTarget, pan, panResponder.panHandlers]);
-
-	const handleScroll = useCallback((event: any) => {
-		const offsetX = event.nativeEvent.contentOffset.x;
-		setCurrentIndex(Math.round(offsetX / SCREEN_WIDTH));
-	}, []);
-
-	const currentWord = words[currentIndex];
-
-	const navigateToCategory = useCallback((route: string) => {
-		router.push(route);
+	const displayWords = words.slice(0, 3);
+	const goBack = useCallback(() => {
+		if (router.canGoBack && router.canGoBack()) router.back();
+		else router.replace('/');
 	}, [router]);
 
 	return (
 		<Screen>
 			<View style={styles.container}>
+				{/* Header */}
 				<View style={styles.header}>
-					<TouchableOpacity
-						style={styles.backButton}
-						onPress={() => {
-							if (router.canGoBack && router.canGoBack()) {
-								router.back();
-							} else {
-								router.replace('/');
-							}
-						}}
-						activeOpacity={0.6}
-					>
-						<FontAwesome6 name="arrow-left" size={18} color="#1F2937" />
+					<TouchableOpacity onPress={goBack} style={styles.backButton} activeOpacity={0.6}>
+						<Text style={styles.backText}>back</Text>
 					</TouchableOpacity>
-					<View style={styles.headerLeft}>
-						<Text style={styles.headerTitle}>四级词汇</Text>
-						<Text style={styles.headerCount}>
-							{isLoading ? '加载中...' : `${pendingCount} 个单词待学习`}
-						</Text>
+					<View style={styles.headerCenter}>
+						<Text style={styles.title}>四级词汇</Text>
+						<Text style={styles.headerCount}>{isLoading ? '加载中...' : `${pendingCount} 个单词待学习`}</Text>
 					</View>
-					<TouchableOpacity style={styles.refreshButton} onPress={() => fetchPage(1, false)}>
-						<Text style={styles.refreshText}>刷新</Text>
+					<TouchableOpacity onPress={() => nativeRouter.push('/calendar' as any)} style={styles.calButton} activeOpacity={0.6}>
+						<FontAwesome6 name="calendar-days" size={22} color="#333333" />
 					</TouchableOpacity>
 				</View>
 
-				<View style={styles.cardsSection}>
-					{words.length > 0 ? (
-						<>
-							<FlatList
-								data={words}
-								renderItem={renderWordCard}
-								keyExtractor={(item) => item.id.toString()}
-								horizontal
-								pagingEnabled
-								showsHorizontalScrollIndicator={false}
-								onScroll={handleScroll}
-								scrollEventThrottle={16}
-								onEndReached={loadMore}
-								onEndReachedThreshold={0.3}
-								getItemLayout={(data, index) => ({
-									length: SCREEN_WIDTH,
-									offset: SCREEN_WIDTH * index,
-									index,
-								})}
-							/>
-							<View style={styles.indicatorContainer}>
-								{words.map((_, index) => (
-									<View
-										key={index}
-										style={[styles.indicatorDot, index === currentIndex && styles.indicatorDotActive]}
-									/>
-								))}
-							</View>
-						</>
-					) : (
-						<View style={styles.emptyContainer}>
-							{error ? (
+				<View style={styles.centerContainer}>
+					<View style={styles.content}>
+						{error ? (
+							<View style={styles.emptyContainer}>
 								<Text style={styles.errorText}>加载失败: {error}</Text>
-							) : (
-								<Text style={styles.emptyText}>四级词汇已分类完成！</Text>
-							)}
-						</View>
-					)}
+							</View>
+						) : (
+							<>
+								<Text style={styles.remainingText}>剩余 {pendingCount} 个单词</Text>
+								{displayWords.length > 0 ? (
+									<View style={styles.wordRow}>
+										{displayWords.map((word) => (
+											<DraggableWordCard
+												key={word.id}
+												word={word}
+												onDrop={handleDrop}
+												onPress={() => handleWordPress(word)}
+											/>
+										))}
+									</View>
+								) : (
+									<View style={styles.emptyContainer}>
+										{isLoading ? (
+											<Text style={styles.emptyText}>加载中...</Text>
+										) : (
+											<Text style={styles.emptyText}>所有单词已分类完成！</Text>
+										)}
+									</View>
+								)}
+								{!error && displayWords.length === 0 && hasMore && (
+									<TouchableOpacity onPress={loadMore} style={styles.loadMoreBtn}>
+										<Text style={styles.loadMoreText}>加载更多</Text>
+									</TouchableOpacity>
+								)}
+							</>
+						)}
+					</View>
 				</View>
 
-				{currentWord && (
-					<View style={styles.actionSection}>
-						<Text style={styles.actionHint}>
-							{isDragging ? '松手放入对应分类' : '长按拖动单词到按钮分类，单击按钮查看列表'}
-						</Text>
-						<View style={styles.actionRow}>
-							{(Object.entries(CATEGORY_CONFIG) as [string, { label: string; color: string; route: string }][]).map(([key, config]) => (
+				{/* Action Buttons */}
+				<View style={styles.actionSection}>
+					<Text style={styles.actionHint}>拖动单词到下方分类区域</Text>
+					<View style={styles.actionRow}>
+						{([1, 2, 3] as (keyof typeof CATEGORY_CONFIG)[]).map((key) => {
+							const cfg = CATEGORY_CONFIG[key];
+							return (
 								<TouchableOpacity
 									key={key}
-									ref={(ref) => { buttonRefs[key] = ref; }}
-									onLayout={onButtonLayout(key)}
-									style={[styles.actionButton, { backgroundColor: config.color }, dropTarget === key && styles.actionButtonActive]}
-									onPress={() => {
-										if (dragJustEnded.current) return;
-										navigateToCategory(config.route);
-									}}
+									style={[styles.actionButton, { backgroundColor: cfg.color }]}
 									activeOpacity={0.8}
+									onPress={() => router.push(cfg.route)}
 								>
-									<Text style={styles.actionButtonText}>{config.label}</Text>
-									<Text style={styles.actionButtonCount}>
-										({categoryCounts[key as keyof typeof categoryCounts]})
-									</Text>
+									<Text style={styles.actionButtonText}>{cfg.label}</Text>
+									<Text style={styles.actionButtonCount}>({categoryCounts[key]})</Text>
 								</TouchableOpacity>
-							))}
-						</View>
-					</View>
-				)}
-
-				<View style={styles.statsSection}>
-					<View style={styles.statsRow}>
-						{(Object.entries(CATEGORY_CONFIG) as [string, { label: string; color: string }][]).map(([key, config]) => (
-							<View key={key} style={[styles.statsItem, { backgroundColor: config.color }]}>
-								<Text style={styles.statsLabel}>{config.label}</Text>
-								<Text style={styles.statsCount}>{categoryCounts[key as keyof typeof categoryCounts]}</Text>
-							</View>
-						))}
+							);
+						})}
 					</View>
 				</View>
 			</View>
@@ -366,65 +292,52 @@ export default function SijicihuiStudyPage() {
 }
 
 const styles = StyleSheet.create({
-	container: { flex: 1, backgroundColor: '#F3F4F6' },
+	container: { flex: 1, backgroundColor: '#FFFFFF' },
 	header: {
-		backgroundColor: '#FFFFFF',
-		paddingHorizontal: 16,
-		paddingVertical: 14,
-		borderBottomWidth: 1,
-		borderBottomColor: '#E5E7EB',
 		flexDirection: 'row',
 		alignItems: 'center',
+		justifyContent: 'space-between',
+		paddingHorizontal: 16,
+		paddingTop: 10,
+		paddingBottom: 10,
+		borderBottomWidth: 1,
+		borderBottomColor: '#F3F4F6',
 	},
-	backButton: { padding: 6, marginRight: 10 },
-	headerLeft: { flex: 1 },
-	headerTitle: { fontSize: 20, fontWeight: '700', color: '#1F2937' },
-	headerCount: { fontSize: 13, color: '#9CA3AF', marginTop: 2 },
-	refreshButton: { backgroundColor: '#3B82F6', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
-	refreshText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-	cardsSection: { flex: 1, justifyContent: 'center' },
-	cardContainer: { width: SCREEN_WIDTH, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center' },
+	backButton: { paddingRight: 8, minWidth: 60 },
+	backText: { fontSize: 16, color: '#1F2937' },
+	headerCenter: { alignItems: 'center', flex: 1 },
+	title: { fontSize: 18, fontWeight: '700', color: '#111827' },
+	headerCount: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+	calButton: { paddingLeft: 8, minWidth: 40, alignItems: 'flex-end' },
+	centerContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 24 },
+	content: { flex: 1 },
+	remainingText: { textAlign: 'center', fontSize: 14, color: '#9CA3AF', marginBottom: 20 },
+	wordRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+	wordItemContainer: { width: (SCREEN_WIDTH - 32 - 24) / 3 },
 	wordCard: {
-		width: CARD_WIDTH,
-		backgroundColor: '#FFFFFF',
-		borderRadius: 20,
-		padding: 28,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.06,
-		shadowRadius: 8,
-		elevation: 4,
-		minHeight: 320,
+		borderRadius: 16,
+		backgroundColor: '#F3F4F6',
+		paddingVertical: 48,
+		paddingHorizontal: 8,
+		alignItems: 'center',
+		justifyContent: 'center',
+		minHeight: 140,
 	},
-	cardHeader: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 12 },
-	indexText: { fontSize: 13, color: '#9CA3AF', fontWeight: '500' },
-	wordText: { fontSize: 40, fontWeight: '800', color: '#1F2937', textAlign: 'center', marginTop: 8 },
-	phoneticText: { fontSize: 16, color: '#6B7280', marginTop: 10, textAlign: 'center' },
-	meaningText: { fontSize: 15, color: '#3B82F6', marginTop: 20, textAlign: 'center', lineHeight: 24, fontWeight: '500' },
-	dragHintContainer: { marginTop: 20, alignItems: 'center' },
-	dragHintText: { fontSize: 14, color: '#9CA3AF', fontWeight: '500' },
-	indicatorContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12 },
-	indicatorDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D1D5DB', marginHorizontal: 3 },
-	indicatorDotActive: { backgroundColor: '#3B82F6', width: 18 },
-	emptyContainer: { alignItems: 'center', paddingVertical: 60 },
-	emptyText: { fontSize: 16, color: '#9CA3AF' },
-	errorText: { fontSize: 14, color: '#F87171' },
-	actionSection: { paddingHorizontal: 16, paddingBottom: 12 },
-	actionHint: { fontSize: 13, color: '#9CA3AF', textAlign: 'center', marginBottom: 10 },
-	actionRow: { flexDirection: 'row', justifyContent: 'space-between' },
+	wordCardText: { fontSize: 18, fontWeight: '600', color: '#1F2937', textAlign: 'center' },
+	emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
+	emptyText: { fontSize: 15, color: '#9CA3AF', marginTop: 20 },
+	errorText: { fontSize: 15, color: '#EF4444', marginTop: 20, textAlign: 'center' },
+	loadMoreBtn: { alignSelf: 'center', marginTop: 24, paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#EEF2FF' },
+	loadMoreText: { color: '#4F46E5', fontSize: 14, fontWeight: '600' },
+	actionSection: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 8 },
+	actionHint: { textAlign: 'center', fontSize: 12, color: '#9CA3AF', marginBottom: 12 },
+	actionRow: { flexDirection: 'row', gap: 12 },
 	actionButton: {
 		flex: 1,
-		marginHorizontal: 6,
-		paddingVertical: 14,
-		borderRadius: 12,
+		borderRadius: 16,
+		paddingVertical: 16,
 		alignItems: 'center',
 	},
-	actionButtonActive: { opacity: 0.85, transform: [{ scale: 1.05 }] },
 	actionButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-	actionButtonCount: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginTop: 2 },
-	statsSection: { paddingHorizontal: 16, paddingBottom: 20 },
-	statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-	statsItem: { flex: 1, marginHorizontal: 6, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-	statsLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 13 },
-	statsCount: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginTop: 2 },
+	actionButtonCount: { color: '#FFFFFF', fontSize: 12, marginTop: 2, opacity: 0.9 },
 });

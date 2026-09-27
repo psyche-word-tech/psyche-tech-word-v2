@@ -697,7 +697,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - `GET /words?status=&page=&limit=`：默认返回该用户"待学"词（`sijicihui_progress` 无记录 或 status='new'）；传 `status=known/vague/unknown` 返回对应分类复习词。实现：拉全量 sijicihui(4424) + 该用户 progress map，服务端过滤分页。
   - `POST /status` `{wordId,status}` → 按 (user_id,word_id) upsert 记忆状态，`review_count+1`、`last_review_at=now`。
 - 前端四级别词链（**完全复刻高中 word-preview 机制/界面/跳转，数据走 sijicihui per-user**）：
-  - 学习入口 `client/app/sijicihui-study.tsx` → `screens/sijicihui-study`：复刻 `word-preview`——横向 pagingEnabled 卡片（word/phonetic/meaning），垂直拖动当前卡到下方「已会/模糊/不会」三分类按钮（`POST /sijicihui-study/status`），单击分类按钮跳分类列表，页头显示 `pending 个单词待学习`，下方三色统计（known/vague/unknown）。待学词 `GET /words?status=&page=&limit=50` 分页，onEndReached 补拉、拖动后不足阈值续拉。
+  - 学习入口 `client/app/sijicihui-study.tsx` → `screens/sijicihui-study`：**复刻高中 `learn` 页**——header(back+「四级词汇」+副标题「N 个单词待学习」+日历)；「剩余 N 个单词」（N=该用户 pending）；`displayWords=words.slice(0,3)` **3 张并排单词小卡（只显示 word）**，垂直拖动当前卡到底部「已会/模糊/不会」三分类大按钮（moveX 三分屏选 1/2/3，dy>80 触发 `POST /sijicihui-study/status`），按钮各带该用户计数、点击跳分类列表；提示「拖动单词到下方分类区域」。待学词 `GET /words?status=&page=&limit=50` 分页，words<5 时 loadMore 补拉；拖动后 filter 移除并刷新 progress。
   - 分类列表 `app/sijicihui-known-words.tsx` / `sijicihui-vague-words.tsx` / `sijicihui-unknown-words.tsx`（共用一个通用组件 `screens/sijicihui-category`，按 status/title/color 区分），数据 `GET /words?status=known|vague|unknown&limit=500`，点词跳详情。
   - 详情 `app/sijicihui-word-detail.tsx` → `screens/sijicihui-word-detail`：word/phonetic/meaning + 记忆状态三按钮（known/vague/unknown 即时切换）。
   - 请求全部 `fetchWithRetry`（自动带 Bearer）；四级(id2)入口在 `my-vocabulary` → `/sijicihui-study`。
