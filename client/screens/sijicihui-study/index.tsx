@@ -348,6 +348,7 @@ const styles = StyleSheet.create({
 	categorySection: {
 		paddingVertical: 10,
 		backgroundColor: '#FFFFFF',
+		transform: [{ translateY: -200 }],
 	},
 	categoryRow: {
 		flexDirection: 'row',
