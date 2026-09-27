@@ -50,6 +50,11 @@ export default function VocabularyPage() {
           <View style={styles.placeholder} />
         </View>
 
+        {/* 内测标识 */}
+        <View style={styles.internalBadge}>
+          <Text style={styles.internalBadgeText}>内测用户 · 无需付费</Text>
+        </View>
+
         {/* Word Books Grid */}
         <View style={styles.gridContainer}>
           {wordBooks.map(book => (
@@ -130,6 +135,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 40,
+  },
+  internalBadge: {
+    alignSelf: 'center',
+    marginTop: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#E8F5E9',
+    borderColor: '#4CAF50',
+    borderWidth: 1,
+    borderRadius: 20,
+  },
+  internalBadgeText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontWeight: '600',
+    fontFamily: 'serif',
   },
   card: {
     alignItems: 'center',
