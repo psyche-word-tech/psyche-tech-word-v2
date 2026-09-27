@@ -22,11 +22,31 @@ interface DraggableWordCardProps {
 	word: Word;
 	onDrop: (wordId: number, categoryId: number) => void;
 	onPress: () => void;
+	onDoublePress: () => void;
 }
 
-function DraggableWordCard({ word, onDrop, onPress }: DraggableWordCardProps) {
+function DraggableWordCard({ word, onDrop, onPress, onDoublePress }: DraggableWordCardProps) {
 	const pan = useRef(new Animated.ValueXY()).current;
 	const [isDragging, setIsDragging] = useState(false);
+	const lastTapRef = useRef(0);
+	const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const handlePress = () => {
+		const now = Date.now();
+		if (now - lastTapRef.current < 320) {
+			// 双击 → 标记为"不会"
+			if (singleTapTimer.current) {
+				clearTimeout(singleTapTimer.current);
+				singleTapTimer.current = null;
+			}
+			lastTapRef.current = 0;
+			onDoublePress();
+			return;
+		}
+		lastTapRef.current = now;
+		if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+		singleTapTimer.current = setTimeout(() => onPress(), 300);
+	};
 
 	const panResponder = useMemo(
 		() =>
@@ -87,7 +107,7 @@ function DraggableWordCard({ word, onDrop, onPress }: DraggableWordCardProps) {
 				},
 			]}
 		>
-			<TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+			<TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
 				<View style={styles.wordCard}>
 					<Text style={styles.wordCardText}>{word.word}</Text>
 				</View>
@@ -184,12 +204,6 @@ export default function SijicihuiStudyPage() {
 		});
 	};
 
-	const handleCategoryPress = (id: number) => {
-		const current = allWords[0];
-		if (!current) return;
-		handleDrop(current.id, id);
-	};
-
 	const fetchData = useCallback(async () => {
 		setError(null);
 		refreshCounts();
@@ -230,6 +244,7 @@ export default function SijicihuiStudyPage() {
 										word={word}
 										onDrop={handleDrop}
 										onPress={() => handleWordPress(word)}
+										onDoublePress={() => handleDrop(word.id, 3)}
 									/>
 								))}
 							</View>
@@ -247,14 +262,14 @@ export default function SijicihuiStudyPage() {
 						{[1, 2, 3].map((id) => {
 							const count = id === 1 ? categoryCounts.known : id === 2 ? categoryCounts.vague : categoryCounts.unknown;
 							return (
-								<TouchableOpacity key={id} style={styles.categoryItem} onPress={() => handleCategoryPress(id)}>
+								<View key={id} style={styles.categoryItem}>
 									<View style={[styles.categoryCard, { backgroundColor: categoryColors[id - 1] }]}>
 										<Text style={styles.categoryName}>{categoryNames[id - 1]}</Text>
 										<Text style={styles.categoryCount}>({count})</Text>
 									</View>
-								</TouchableOpacity>
-							);
-						})}
+								</View>
+								);
+							})}
 					</View>
 					<Text style={styles.instructionText}>拖动单词到上方分类区域</Text>
 				</View>
