@@ -87,20 +87,41 @@ router.post('/enable', authMiddleware, async (req: AuthRequest, res: Response) =
     }
 
     // 用 users 表的 id 更新 user_profiles 表（通过 user_id 关联）
-    const { data, error } = await client
+    // 先确认记录存在：无则插入（upsert 语义），避免无行/多行导致 .single() 报错
+    const { data: existing, error: qErr } = await client
+      .from('user_profiles')
+      .select('id')
+      .eq('user_id', userData.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (qErr) {
+      console.error('Query user profile error:', qErr);
+      return res.status(500).json({ success: false, error: '查询失败' });
+    }
+
+    if (!existing) {
+      const { error: insErr } = await client
+        .from('user_profiles')
+        .insert({ id: `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`, user_id: userData.id, role: 'student', iris_enabled: enabled });
+      if (insErr) {
+        console.error('Create user profile error:', insErr);
+        return res.status(500).json({ success: false, error: '创建用户档案失败' });
+      }
+      return res.json({ success: true, enabled });
+    }
+
+    const { error } = await client
       .from('user_profiles')
       .update({ iris_enabled: enabled })
-      .eq('user_id', userData.id)
-      .select()
-      .limit(1)
-      .single();
+      .eq('user_id', userData.id);
 
     if (error) {
       console.error('Update iris status error:', error);
       return res.status(500).json({ success: false, error: '更新失败' });
     }
 
-    res.json({ success: true, enabled: data?.iris_enabled || false });
+    res.json({ success: true, enabled });
   } catch (error) {
     console.error('Update iris status error:', error);
     res.status(500).json({ success: false, error: '服务器错误' });
