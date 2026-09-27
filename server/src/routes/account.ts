@@ -1,12 +1,14 @@
 import { Router, type Request, type Response } from 'express';
 import { getSupabaseClient } from '../storage/database/supabase-client';
+import { authMiddleware, type AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // 修改密码
-router.post('/change-password', async (req: Request, res: Response) => {
+router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { userId, oldPassword, newPassword } = req.body;
+    const userId = req.userId;
+    const { oldPassword, newPassword } = req.body;
 
     if (!userId || !oldPassword || !newPassword) {
       return res.json({ success: false, error: '参数不完整' });
@@ -90,9 +92,10 @@ router.post('/send-verification-code', async (req: Request, res: Response) => {
 });
 
 // 修改手机号
-router.post('/change-phone', async (req: Request, res: Response) => {
+router.post('/change-phone', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { userId, newPhone, code } = req.body;
+    const userId = req.userId;
+    const { newPhone, code } = req.body;
 
     if (!userId || !newPhone || !code) {
       return res.json({ success: false, error: '参数不完整' });
@@ -147,10 +150,10 @@ router.post('/change-phone', async (req: Request, res: Response) => {
 });
 
 // 获取通知设置
-router.get('/notification-settings', async (req: Request, res: Response) => {
+router.get('/notification-settings', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
+    const userId = req.userId;
+    if (!userId) {
       return res.json({ success: false, error: '未授权' });
     }
 
@@ -159,7 +162,7 @@ router.get('/notification-settings', async (req: Request, res: Response) => {
     const { data: settings, error } = await supabase
       .from('user_settings')
       .select('notification_settings')
-      .eq('user_id', authHeader.replace('Bearer ', ''))
+      .eq('user_id', userId)
       .single();
 
     if (error || !settings) {
@@ -182,9 +185,10 @@ router.get('/notification-settings', async (req: Request, res: Response) => {
 });
 
 // 更新通知设置
-router.post('/notification-settings', async (req: Request, res: Response) => {
+router.post('/notification-settings', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { userId, settings } = req.body;
+    const userId = req.userId;
+    const { settings } = req.body;
 
     if (!userId || !settings) {
       return res.json({ success: false, error: '参数不完整' });
@@ -212,9 +216,9 @@ router.post('/notification-settings', async (req: Request, res: Response) => {
 });
 
 // 备份数据
-router.post('/backup-data', async (req: Request, res: Response) => {
+router.post('/backup-data', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { userId } = req.body;
+    const userId = req.userId;
 
     if (!userId) {
       return res.json({ success: false, error: '参数不完整' });
@@ -243,9 +247,9 @@ router.post('/backup-data', async (req: Request, res: Response) => {
 });
 
 // 导出数据
-router.post('/export-data', async (req: Request, res: Response) => {
+router.post('/export-data', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { userId } = req.body;
+    const userId = req.userId;
 
     if (!userId) {
       return res.json({ success: false, error: '参数不完整' });
@@ -273,9 +277,10 @@ router.post('/export-data', async (req: Request, res: Response) => {
 });
 
 // 注销账号
-router.post('/delete-account', async (req: Request, res: Response) => {
+router.post('/delete-account', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { userId, password } = req.body;
+    const userId = req.userId;
+    const { password } = req.body;
 
     if (!userId || !password) {
       return res.json({ success: false, error: '参数不完整' });
