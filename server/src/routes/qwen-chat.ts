@@ -6,8 +6,7 @@ const router = Router();
 const QWEN_API_URL_DEFAULT =
   "https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions";
 
-// 弦歌回响：日常与千问(默认 qwen3.8-max)对话，良师益友式答疑
-// 多轮上下文由前端维护，payload 直接透传历史 messages 给模型
+// 弦歌回响：日常与千问(默认 qwen3.8-max)对话，良师益友式答疑，SSE 流式逐字返回
 router.post("/", authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const { messages } = req.body;
@@ -18,56 +17,85 @@ router.post("/", authMiddleware, async (req: Request, res: Response): Promise<vo
 
     const qwenApiUrl = process.env.QWEN_API_URL || QWEN_API_URL_DEFAULT;
     const qwenApiKey = process.env.QWEN_API_KEY || "";
-    const qwenModel = process.env.QWEN_MODEL || "qwen3.8-max";
+    // 对话页按用户要求固定用千问 3.8 max(不随 .env 的 QWEN_MODEL=flash 走)
+    const qwenModel = "qwen3.8-max";
     const chatUrl = qwenApiUrl.includes("/chat/completions")
       ? qwenApiUrl
       : `${qwenApiUrl.replace(/\/+$/, "")}/chat/completions`;
 
-    // 角色设定：良师益友 + 孔子弦歌不辍的循循善诱风格
     const systemPrompt =
       "你是一位循循善诱、如沐春风的良师益友。回答学风严谨又不失温度：先正面回应问题，必要时给出思路与例子帮助理解，最后常以一句启发收束，鼓励提问者自己再往前想一步。" +
       "你可以偶用《论语》等典故中的意象（如'如切如磋、如琢如磨'）来点拨，但切勿堆砌说教。语气亲切、肯定，像一位懂学问也懂学生的师长。回答用简体中文。";
 
+    // SSE 流式：请求千问 stream 模式，边收边转发给前端；客户端断开则中止上游
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const timeoutId = setTimeout(() => controller.abort(), 180000);
 
-    const resp = await fetch(chatUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${qwenApiKey}`,
-      },
-      body: JSON.stringify({
-        model: qwenModel,
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
-        temperature: 0.7,
-        enable_thinking: false,
-      }),
-      signal: controller.signal,
+    res.on("close", () => {
+      if (!res.writableEnded) controller.abort(); // 客户端断连或响应结束时停上游
+      clearTimeout(timeoutId);
     });
-    clearTimeout(timeoutId);
 
-    if (!resp.ok) {
+    let resp: Response;
+    try {
+      resp = await fetch(chatUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${qwenApiKey}`,
+        },
+        body: JSON.stringify({
+          model: qwenModel,
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
+          temperature: 0.7,
+          enable_thinking: false,
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === "AbortError") res.write("data: [ERROR] timed out\n\n");
+      else res.write(`data: [ERROR] ${JSON.stringify(String(err.message || "network"))}\n\n`);
+      res.end();
+      return;
+    }
+
+    if (!resp.ok || !resp.body) {
+      clearTimeout(timeoutId);
       const errorText = await resp.text();
-      res.status(502).json({ success: false, message: `千问 API 调用失败: ${resp.status}` });
+      res.write(`data: [ERROR] http ${resp.status} ${JSON.stringify(errorText.slice(0, 300))}\n\n`);
+      res.end();
       return;
     }
 
-    const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = data.choices?.[0]?.message?.content || "";
-    if (!content) {
-      res.status(502).json({ success: false, message: "千问 API 返回内容为空" });
-      return;
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      // 千问 SSE：每条以 \n\n 分隔
+      const parts = buf.split("\n\n");
+      buf = parts.pop() || "";
+      for (const part of parts) {
+        res.write(`data: ${part}\n\n`);
+      }
     }
-
-    res.json({ success: true, content });
+    // 收尾标记
+    res.write(`data: [DONE]\n\n`);
+    clearTimeout(timeoutId);
+    res.end();
   } catch (err: any) {
-    if (err.name === "AbortError") {
-      res.status(504).json({ success: false, message: "请求超时，请稍后重试" });
-      return;
-    }
     console.error("弦歌回响 对话接口错误:", err);
-    res.status(500).json({ success: false, message: "对话服务异常" });
+    try { res.write(`data: [ERROR] ${JSON.stringify(String(err.message || "unknown"))}\n\n`); res.end(); }
+    catch { res.end(); }
   }
 });
 

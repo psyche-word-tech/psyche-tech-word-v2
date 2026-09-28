@@ -25,7 +25,7 @@ export default function QwenChatPage() {
     if (!text || loading) return;
     setInput('');
     const nextHistory: Msg[] = [...messages, { role: 'user', content: text }];
-    setMessages([...nextHistory, { role: 'assistant', content: '…' }]);
+    setMessages([...nextHistory, { role: 'assistant', content: '' }]);
     setLoading(true);
     try {
       const payload = nextHistory.map(({ role, content }) => ({ role, content }));
@@ -34,9 +34,52 @@ export default function QwenChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: payload }),
       });
-      const data = await res.json();
-      const reply = data?.content || '抱歉，我没有收到清晰的回复，换个说法再问我一次好吗？';
-      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant' as const, content: reply }]);
+      if (!res.ok || !res.body) {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: 'assistant', content: '服务暂时不可用，请稍后再试。' },
+        ]);
+        return;
+      }
+      // 流式消费 SSE，逐字累积到最后一个 assistant 气泡
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buf = '';
+      let full = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() || '';
+        for (const part of parts) {
+          if (!part.startsWith('data:')) continue;
+          const payloadStr = part.slice(5).trim();
+          if (payloadStr === '[DONE]') continue;
+          if (payloadStr.startsWith('[ERROR]')) {
+            const msg = payloadStr.slice(7).trim().replace(/^"|"$/g, '');
+            setMessages((prev) => [
+              ...prev.slice(0, -1),
+              { role: 'assistant', content: `出错了：${msg}`.slice(0, 200) },
+            ]);
+            return;
+          }
+          try {
+            const parsed = JSON.parse(payloadStr);
+            const delta = parsed?.choices?.[0]?.delta?.content;
+            if (typeof delta === 'string' && delta) {
+              full += delta;
+              setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: full }]);
+            }
+          } catch { /* 忽略无法解析的 SSE 行 */ }
+        }
+      }
+      if (!full) {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: 'assistant', content: '抱歉，我没有收到清晰的回复，换个说法再问我一次好吗？' },
+        ]);
+      }
     } catch {
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -84,10 +127,15 @@ export default function QwenChatPage() {
                   m.role === 'user' ? styles.userBubble : styles.aiBubble,
                 ]}
               >
-                {m.content === '…' ? (
-                  <ActivityIndicator size="small" color="#9CA3AF" />
+                {m.content && m.content !== '…' ? (
+                  <Text style={m.role === 'user' ? styles.userText : styles.aiText}>
+                    {m.content}
+                    {m.role === 'assistant' && loading && i === messages.length - 1 && (
+                      <Text style={styles.cursor}>▍</Text>
+                    )}
+                  </Text>
                 ) : (
-                  <Text style={m.role === 'user' ? styles.userText : styles.aiText}>{m.content}</Text>
+                  <ActivityIndicator size="small" color="#9CA3AF" />
                 )}
               </View>
             </View>
@@ -147,6 +195,7 @@ const styles = StyleSheet.create({
   aiBubble: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', borderBottomLeftRadius: 4 },
   userText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'serif', lineHeight: 22 },
   aiText: { fontSize: 15, color: '#1F2937', fontFamily: 'serif', lineHeight: 22 },
+  cursor: { fontSize: 16, color: '#1D4ED8', fontWeight: '700' },
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,
     padding: 12, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB',
