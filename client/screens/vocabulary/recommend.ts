@@ -87,6 +87,122 @@ export function aggregateAbility(subjectLevels: Record<string, number>): number[
   return vec.map((v) => clamp(Math.round((v / total) / 5 * 5 + 1), 1, 6));
 }
 
+// 二级学科 → 能力需求（门类 → 专业 → 细分方向能力模板，列序 R01..R10）
+// 仅覆盖主要专业，可继续扩充；未被覆盖的专业返回空，前端提示"暂无细化方向"
+export const SPECIALTY_ABILITY_NEED: Record<string, Record<string, { name: string; need: number[] }[]>> = {
+  教育学: {
+    教育学: [
+      { name: '课程与教学论', need: [2, 4, 2, 3, 0, 3, 5, 4, 3, 5] },
+      { name: '教育心理学', need: [3, 4, 4, 3, 2, 3, 4, 4, 3, 5] },
+      { name: '教育技术学', need: [2, 3, 2, 5, 3, 5, 3, 2, 2, 4] },
+      { name: '教育测量与评价', need: [3, 3, 5, 4, 1, 5, 3, 3, 1, 4] },
+    ],
+    教育技术学: [
+      { name: '信息化教学设计', need: [2, 3, 2, 4, 3, 5, 4, 3, 3, 5] },
+      { name: '学习分析', need: [3, 3, 4, 5, 1, 5, 3, 2, 1, 4] },
+      { name: '教育游戏与交互设计', need: [2, 5, 2, 4, 3, 4, 4, 2, 3, 4] },
+    ],
+  },
+  文学: {
+    汉语言文学: [
+      { name: '汉语言文字学', need: [4, 3, 5, 3, 1, 4, 4, 3, 5, 3] },
+      { name: '中国古代文学', need: [4, 4, 4, 2, 0, 3, 4, 3, 5, 3] },
+      { name: '中国现当代文学', need: [2, 5, 2, 2, 0, 3, 5, 3, 5, 4] },
+      { name: '文艺学', need: [2, 5, 2, 2, 0, 2, 5, 3, 5, 3] },
+    ],
+    英语: [
+      { name: '英语语言文学', need: [3, 3, 4, 2, 0, 4, 5, 3, 5, 3] },
+      { name: '翻译学', need: [3, 4, 3, 3, 0, 4, 5, 3, 4, 3] },
+      { name: '外国语言学及应用语言学', need: [3, 3, 5, 3, 1, 4, 4, 3, 3, 3] },
+    ],
+    新闻学: [
+      { name: '新闻学', need: [2, 4, 3, 2, 0, 4, 5, 4, 4, 4] },
+      { name: '传播学', need: [2, 5, 3, 3, 0, 4, 5, 4, 3, 4] },
+      { name: '网络与新媒体', need: [2, 4, 3, 3, 0, 5, 5, 3, 3, 4] },
+    ],
+  },
+  理学: {
+    数学与应用数学: [
+      { name: '基础数学', need: [5, 3, 3, 5, 0, 4, 1, 0, 0, 3] },
+      { name: '计算数学', need: [4, 3, 3, 5, 0, 5, 1, 0, 0, 4] },
+      { name: '应用数学', need: [4, 3, 4, 5, 3, 5, 2, 2, 1, 4] },
+      { name: '概率论与数理统计', need: [4, 3, 5, 4, 1, 5, 2, 1, 0, 3] },
+    ],
+    物理学: [
+      { name: '理论物理', need: [5, 3, 3, 5, 3, 4, 1, 1, 0, 4] },
+      { name: '光学', need: [4, 2, 4, 5, 5, 3, 1, 1, 0, 3] },
+      { name: '凝聚态物理', need: [4, 2, 5, 5, 5, 3, 1, 1, 0, 3] },
+    ],
+    化学: [
+      { name: '有机化学', need: [4, 2, 4, 4, 5, 2, 1, 3, 0, 4] },
+      { name: '分析化学', need: [4, 2, 5, 4, 5, 3, 1, 2, 0, 3] },
+      { name: '物理化学', need: [5, 3, 4, 5, 4, 4, 1, 2, 0, 4] },
+    ],
+  },
+  工学: {
+    计算机科学与技术: [
+      { name: '计算机系统结构', need: [4, 3, 2, 5, 2, 5, 1, 1, 0, 4] },
+      { name: '计算机软件与理论', need: [5, 3, 3, 5, 1, 4, 1, 0, 0, 4] },
+      { name: '计算机应用技术', need: [3, 3, 3, 4, 3, 5, 2, 2, 1, 4] },
+      { name: '人工智能', need: [4, 5, 3, 5, 2, 5, 2, 2, 1, 5] },
+    ],
+    软件工程: [
+      { name: '软件工程技术', need: [4, 3, 3, 5, 2, 5, 1, 0, 0, 4] },
+      { name: '软件体系结构', need: [5, 4, 3, 5, 1, 4, 1, 1, 0, 4] },
+      { name: '数据工程', need: [4, 3, 4, 5, 2, 5, 2, 1, 1, 4] },
+    ],
+    机械工程: [
+      { name: '机械设计及理论', need: [4, 2, 4, 5, 4, 4, 1, 2, 0, 3] },
+      { name: '机械制造及其自动化', need: [4, 2, 3, 5, 5, 4, 1, 2, 0, 4] },
+      { name: '机械电子工程', need: [4, 3, 4, 5, 5, 4, 1, 1, 0, 4] },
+    ],
+  },
+  医学: {
+    临床医学: [
+      { name: '内科学', need: [4, 2, 5, 3, 4, 3, 3, 5, 2, 4] },
+      { name: '外科学', need: [5, 2, 4, 4, 5, 3, 2, 4, 1, 4] },
+      { name: '儿科学', need: [4, 2, 5, 3, 4, 3, 4, 5, 2, 4] },
+      { name: '影像医学与核医学', need: [3, 2, 5, 4, 3, 5, 2, 4, 1, 4] },
+    ],
+    药学: [
+      { name: '药物化学', need: [4, 2, 4, 4, 5, 3, 1, 3, 0, 4] },
+      { name: '药剂学', need: [3, 2, 4, 4, 5, 3, 2, 3, 1, 4] },
+      { name: '药理学', need: [4, 3, 5, 3, 4, 3, 2, 4, 1, 4] },
+    ],
+  },
+  管理学: {
+    工商管理: [
+      { name: '企业管理', need: [3, 3, 3, 4, 0, 4, 5, 4, 2, 5] },
+      { name: '会计学', need: [4, 2, 5, 4, 0, 5, 3, 3, 1, 4] },
+      { name: '市场营销', need: [2, 4, 2, 3, 0, 4, 5, 3, 2, 5] },
+      { name: '技术经济及管理', need: [3, 3, 4, 5, 0, 5, 3, 3, 1, 5] },
+    ],
+    公共事业管理: [
+      { name: '行政管理', need: [3, 3, 4, 3, 0, 3, 4, 5, 3, 4] },
+      { name: '社会保障', need: [3, 3, 5, 3, 0, 4, 3, 5, 3, 4] },
+      { name: '卫生事业管理', need: [3, 3, 5, 3, 1, 4, 4, 5, 2, 4] },
+    ],
+  },
+};
+
+// 精准匹配：学生能力向量 vs 指定专业下各二级学科需求（余弦相似度 → 百分比）
+export function matchSpecialties(
+  subjectLevels: Record<string, number>,
+  field: string,
+  major: string
+): { ability: number[]; specs: { name: string; score: number }[] } {
+  const ability = aggregateAbility(subjectLevels);
+  const norm = Math.sqrt(ability.reduce((s, x) => s + x * x, 0)) || 1;
+  const specs = ((SPECIALTY_ABILITY_NEED[field] || {})[major] || []).map((spec) => {
+    const need = spec.need;
+    const n2 = Math.sqrt(need.reduce((s, x) => s + x * x, 0)) || 1;
+    let dot = 0;
+    for (let i = 0; i < 10; i++) dot += ability[i] * need[i];
+    return { name: spec.name, score: Math.round((dot / (norm * n2)) * 100) };
+  }).sort((a, b) => b.score - a.score);
+  return { ability, specs };
+}
+
 // 匹配：学生能力向量 vs 门类需求向量（余弦相似度 → 百分比）
 export function recommendStudent(subjectLevels: Record<string, number>): {
   ability: number[]; fields: { field: string; score: number; majors: string[] }[];

@@ -704,3 +704,9 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - 请求全部 `fetchWithRetry`（自动带 Bearer）；四级(id2)入口在 `my-vocabulary` → `/sijicihui-study`。
 - **`/words` count 坑**：Supabase `count=exact` 非 head 时上限 1000（4424 会截成 1000）；`/progress` 用 `head:true` 才返回精确 4424。因此前端分页/到底判定用 `data.length < limit`，不依赖响应里的 `count`。
 - 校验写作 env 相同：连接 `COZE_SUPABASE_URL`（生产库 hmkkynldaiypuhhlpjxd），无 pg 直连串，故建表只能走 SQL Editor。
+
+- **【能力图谱·专业推荐与二级学科精准匹配（2026-09 原型）】** 能力图谱页 `client/screens/vocabulary`（模式 mode：subject|family|major）：
+  - `recommend.ts`：`ABILITY_NAMES/IDS(R01-R10)/COLORS`、`SUBJECT_ABILITY_MATRIX`（9科×10能力权重0-5）、`FIELD_ABILITY_NEED`（14门类×10矩阵）、`FIELD_MAJORS`（门类→代表专业）、`SPECIALTY_ABILITY_NEED`（门类→专业→二级学科能力模板）、`aggregateAbility()`（学科等级×矩阵→归一化1-6十维向量）、`recommendStudent()`（能力向量 vs 14门类余弦相似度排序）、`matchSpecialties(levels,field,major)`（能力向量 vs 该专业下二级学科余弦相似度精准匹配）。
+  - `index.tsx` 专业推荐 tab：门类匹配榜(Top3绿底高亮) + 代表专业改为可点击 chip（`activeMajor` state），点击专业→`RefinedMajor` 面板展示该专业二级学科按匹配度排序（含百分比）。
+  - 数据均为人工整理初稿（矩阵/门类模板/二级学科可据审阅微调）；学生学科等级现为演示常量 `SUBJECT_LEVELS`，后续接真实诊断数据即个性化。注意公有 `Radar` 用原生 `<svg>`，label 可点（onClick → `onLabelPress`）；改前端须 `cd client && node node_modules/expo/bin/cli export --platform web` + `rm -rf ../server/public && cp -r dist ../server/public` + KaTeX 字体复制 + 重启 node。
+  - 已知坑：`ABILITY_IDS` 为 readonly tuple，喂 Radar labels 需 `[...ABILITY_IDS]`；`vocabulary/index.tsx` 的 `sectionTitle` 曾被定义两次(TS1117)——已合并为一个，勿再重复新增。

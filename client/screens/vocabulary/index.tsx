@@ -4,7 +4,7 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { fetchWithRetry } from '@/utils/apiClient';
 import { FontAwesome6 } from '@expo/vector-icons';
-import { recommendStudent, ABILITY_IDS, ABILITY_NAMES, ABILITY_COLORS } from './recommend';
+import { recommendStudent, matchSpecialties, ABILITY_IDS, ABILITY_NAMES, ABILITY_COLORS } from './recommend';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = Math.min(SCREEN_WIDTH - 64, 336);
@@ -113,12 +113,34 @@ function Radar({ labels, values, color = '#3B82F6', onLabelPress }: {
   );
 }
 
+// 专业二级学科精准匹配面板
+function RefinedMajor({ field, major }: { field: string; major: string }) {
+  const { specs } = matchSpecialties(SUBJECT_LEVELS, field, major);
+  return (
+    <View style={styles.refinedBox}>
+      <Text style={styles.refinedTitle}>「{major}」二级学科精准匹配</Text>
+      {specs.length === 0 ? (
+        <Text style={styles.refinedEmpty}>暂无细化方向（数据待扩充）</Text>
+      ) : (
+        specs.map((s, i) => (
+          <View key={s.name} style={styles.refinedRow}>
+            <Text style={styles.fieldRank}>{i + 1}</Text>
+            <Text style={styles.refinedName}>{s.name}</Text>
+            <Text style={styles.fieldScore}>{s.score}%</Text>
+          </View>
+        ))
+      )}
+    </View>
+  );
+}
+
 export default function VocabularyPage() {
   const router = useSafeRouter();
   const [mode, setMode] = useState<'subject' | 'family' | 'major'>('subject');
   const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
   const [selected, setSelected] = useState<string[]>(['物理', '化学', '生物']);
   const [collapsed, setCollapsed] = useState(false);
+  const [activeMajor, setActiveMajor] = useState<{ field: string; major: string } | null>(null);
   const rec = recommendStudent(SUBJECT_LEVELS);
 
   // 能力图谱灰度开放：仅对指定用户开放，其他人不可用
@@ -281,7 +303,7 @@ export default function VocabularyPage() {
         ) : mode === 'major' ? (
           <View style={styles.familyContainer}>
             <View style={styles.radarWrap}>
-              <Radar labels={ABILITY_IDS} values={rec.ability} />
+              <Radar labels={[...ABILITY_IDS]} values={rec.ability} />
               <Text style={styles.radarHint}>你的能力家族：R01 推理与论证 · … · R10 自主学习与元认知</Text>
             </View>
             <Text style={styles.sectionTitle}>推荐学科门类（按匹配度排序）</Text>
@@ -294,15 +316,27 @@ export default function VocabularyPage() {
                 </View>
               ))}
             </View>
-            <Text style={styles.sectionTitle}>匹配门类的代表专业</Text>
+            <Text style={styles.sectionTitle}>匹配门类的代表专业（点击专业查看二级学科精准匹配）</Text>
             <View style={styles.list}>
               {rec.fields.slice(0, 3).map((f) => (
                 <View key={f.field} style={styles.majorItem}>
                   <Text style={styles.majorField}>{f.field}</Text>
-                  <Text style={styles.majorNames}>{f.majors.join(' · ')}</Text>
+                  <View style={styles.majorNamesWrap}>
+                    {f.majors.map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.majorChip, activeMajor?.major === m && styles.majorChipActive]}
+                        activeOpacity={0.7}
+                        onPress={() => setActiveMajor(activeMajor?.major === m ? null : { field: f.field, major: m })}
+                      >
+                        <Text style={[styles.majorChipText, activeMajor?.major === m && styles.majorChipTextActive]}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
               ))}
             </View>
+            {activeMajor && <RefinedMajor field={activeMajor.field} major={activeMajor.major} />}
           </View>
         ) : (
           <View style={styles.familyContainer}>
@@ -453,9 +487,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 13,
+    fontWeight: '700',
     color: '#374151',
     fontFamily: 'serif',
-    marginBottom: 12,
+    marginTop: 18,
+    marginBottom: 6,
+    paddingHorizontal: 20,
   },
   minTip: {
     fontSize: 12,
@@ -492,14 +529,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-    marginTop: 18,
-    marginBottom: 6,
-    paddingHorizontal: 20,
   },
   fieldItem: {
     flexDirection: 'row',
@@ -547,6 +576,65 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginTop: 2,
+  },
+  majorNamesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  majorChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+  },
+  majorChipActive: {
+    backgroundColor: '#22C55E',
+    borderColor: '#22C55E',
+  },
+  majorChipText: {
+    fontSize: 12,
+    color: '#374151',
+  },
+  majorChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  refinedBox: {
+    width: '100%',
+    marginTop: 4,
+    marginBottom: 24,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  refinedTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  refinedEmpty: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+  refinedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  refinedName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   dot: {
     width: 10,
