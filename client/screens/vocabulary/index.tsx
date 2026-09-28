@@ -249,7 +249,7 @@ export default function VocabularyPage() {
                       activeOpacity={0.8}
                       onPress={() => setCollapsed(true)}
                     >
-                      <FontAwesome6 name="eye-slash" size={16} color="#fff" />
+                      <FontAwesome6 name="eye" size={16} color="#fff" />
                     </TouchableOpacity>
                   </View>
                 </>
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4B5563',
+    backgroundColor: '#22C55E',
   },
   expandBtn: {
     width: 40,
