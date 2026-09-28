@@ -12,6 +12,10 @@ const SUBJECT_COLORS = [
   '#EF5350', '#42A5F5', '#66BB6A', '#FFA726',
   '#AB47BC', '#26C6DA', '#EC407A', '#FF7043', '#8D6E63',
 ];
+// 各学科当前能力等级示例（L1-L6），后续可接诊断数据
+const SUBJECT_LEVELS: Record<string, number> = {
+  语文: 5, 数学: 5, 外语: 4, 物理: 4, 化学: 4, 生物: 4, 政治: 4, 历史: 3, 地理: 3,
+};
 
 // 十个能力家族 R01-R10，能力分 6 级（level: 1-6，对应 L1-L6）
 const ABILITIES = [
@@ -29,31 +33,28 @@ const ABILITIES = [
 
 const LEVELS = 6;
 
-// 10 轴 6 级雷达图
-function AbilityRadar() {
+// 通用雷达图：n 轴（3~10）、6 级（L1-L6）
+function Radar({ labels, values, color = '#3B82F6' }: { labels: string[]; values: number[]; color?: string }) {
+  const n = values.length;
   const center = RADAR_SIZE / 2;
-  const n = ABILITIES.length;
   const angleStep = (Math.PI * 2) / n;
   const radius = RADAR_SIZE / 2;
 
   const point = (index: number, value: number) => {
     const angle = angleStep * index - Math.PI / 2;
     const r = radius * 0.82 * (value / LEVELS);
-    return {
-      x: center + r * Math.cos(angle),
-      y: center + r * Math.sin(angle),
-    };
+    return { x: center + r * Math.cos(angle), y: center + r * Math.sin(angle) };
   };
 
   const polygonPoints = (level: number) =>
-    ABILITIES.map((_, i) => {
+    values.map((_, i) => {
       const p = point(i, level);
       return `${p.x},${p.y}`;
     }).join(' ');
 
   const dataPoints = () =>
-    ABILITIES.map((item, i) => {
-      const p = point(i, item.level);
+    values.map((_, i) => {
+      const p = point(i, values[i]);
       return `${p.x},${p.y}`;
     }).join(' ');
 
@@ -70,30 +71,30 @@ function AbilityRadar() {
         />
       ))}
       {/* 放射轴线 */}
-      {ABILITIES.map((_, i) => {
+      {values.map((_, i) => {
         const p = point(i, LEVELS);
         return <line key={`axis-${i}`} x1={center} y1={center} x2={p.x} y2={p.y} stroke="#E5E7EB" strokeWidth="1" />;
       })}
-      {/* 能力数据区域 */}
-      <polygon points={dataPoints()} fill="rgba(59,130,246,0.25)" stroke="#3B82F6" strokeWidth="2" />
+      {/* 数据区域 */}
+      <polygon points={dataPoints()} fill="rgba(59,130,246,0.25)" stroke={color} strokeWidth="2" />
       {/* 数据点 */}
-      {ABILITIES.map((item, i) => (
-        <circle key={`dot-${i}`} cx={point(i, item.level).x} cy={point(i, item.level).y} r="4" fill="#3B82F6" />
+      {values.map((_, i) => (
+        <circle key={`dot-${i}`} cx={point(i, values[i]).x} cy={point(i, values[i]).y} r="4" fill={color} />
       ))}
-      {/* 顶点能力编号 */}
-      {ABILITIES.map((item, i) => {
+      {/* 顶点标签 */}
+      {labels.map((label, i) => {
         const p = point(i, LEVELS);
         return (
           <text
             key={`label-${i}`}
             x={p.x}
-            y={p.y + (p.y <= center ? -6 : 12)}
+            y={p.y + (p.y <= center ? -8 : 16)}
             textAnchor="middle"
             fontSize="12"
-            fill="#6B7280"
+            fill="#374151"
             fontWeight="600"
           >
-            {item.id}
+            {label}
           </text>
         );
       })}
@@ -105,6 +106,7 @@ export default function VocabularyPage() {
   const router = useSafeRouter();
   const [mode, setMode] = useState<'subject' | 'family'>('subject');
   const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
+  const [selected, setSelected] = useState<string[]>(['物理', '化学', '生物']);
 
   // 能力图谱灰度开放：仅对指定用户开放，其他人不可用
   useEffect(() => {
@@ -118,6 +120,12 @@ export default function VocabularyPage() {
       }
     })();
   }, []);
+
+  const toggleSubject = (subject: string) => {
+    setSelected((prev) =>
+      prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject]
+    );
+  };
 
   if (access === 'checking') {
     return (
@@ -150,6 +158,8 @@ export default function VocabularyPage() {
     );
   }
 
+  const selectedValues = selected.map((s) => SUBJECT_LEVELS[s] ?? 4);
+
   return (
     <Screen>
       <View style={styles.container}>
@@ -179,21 +189,46 @@ export default function VocabularyPage() {
         </View>
 
         {mode === 'subject' ? (
-          <View style={styles.grid}>
-            {SUBJECTS.map((subject, index) => (
-              <TouchableOpacity
-                key={subject}
-                style={[styles.subjectCard, { backgroundColor: SUBJECT_COLORS[index] }]}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.subjectText}>{subject}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <>
+            <View style={styles.grid}>
+              {SUBJECTS.map((subject, index) => {
+                const isSelected = selected.includes(subject);
+                return (
+                  <TouchableOpacity
+                    key={subject}
+                    style={[
+                      styles.subjectCard,
+                      { backgroundColor: SUBJECT_COLORS[index] },
+                      isSelected && styles.subjectSelected,
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => toggleSubject(subject)}
+                  >
+                    <Text style={styles.subjectText}>{subject}</Text>
+                    {isSelected && <Text style={styles.checkMark}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {selected.length >= 3 ? (
+              <View style={styles.radarSection}>
+                <Text style={styles.sectionTitle}>
+                  已选 {selected.length} 科：{selected.join(' · ')}
+                </Text>
+                <View style={styles.radarWrap}>
+                  <Radar labels={selected} values={selectedValues} />
+                </View>
+                <Text style={styles.radarHint}>能力共 6 级：L1 识记 · L2 理解 · L3 应用 · L4 分析 · L5 评价 · L6 创造</Text>
+              </View>
+            ) : (
+              <Text style={styles.minTip}>至少选择 3 个学科即可生成能力雷达图（已选 {selected.length} 科，可继续点击学科添加/取消）</Text>
+            )}
+          </>
         ) : (
           <View style={styles.familyContainer}>
             <View style={styles.radarWrap}>
-              <AbilityRadar />
+              <Radar labels={ABILITIES.map((a) => a.id)} values={ABILITIES.map((a) => a.level)} />
               <Text style={styles.radarHint}>能力共 6 级：L1 识记 · L2 理解 · L3 应用 · L4 分析 · L5 评价 · L6 创造</Text>
             </View>
             <View style={styles.list}>
@@ -304,11 +339,37 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     fontWeight: '600',
   },
-  familyContainer: {
-    flex: 1,
+  subjectSelected: {
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    opacity: 0.92,
+  },
+  checkMark: {
+    position: 'absolute',
+    top: 4,
+    right: 7,
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  radarSection: {
     alignItems: 'center',
-    paddingTop: 16,
+    marginTop: 20,
     paddingHorizontal: 16,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    color: '#374151',
+    fontFamily: 'serif',
+    marginBottom: 12,
+  },
+  minTip: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'serif',
+    textAlign: 'center',
+    marginTop: 24,
+    paddingHorizontal: 32,
   },
   radarWrap: {
     alignItems: 'center',
@@ -318,6 +379,12 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 8,
     textAlign: 'center',
+  },
+  familyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingHorizontal: 16,
   },
   list: {
     flex: 1,
