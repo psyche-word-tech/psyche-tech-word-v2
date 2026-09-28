@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { fetchWithRetry } from '@/utils/apiClient';
+import { FontAwesome6 } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = Math.min(SCREEN_WIDTH - 64, 336);
@@ -107,6 +108,7 @@ export default function VocabularyPage() {
   const [mode, setMode] = useState<'subject' | 'family'>('subject');
   const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
   const [selected, setSelected] = useState<string[]>(['物理', '化学', '生物']);
+  const [collapsed, setCollapsed] = useState(false);
 
   // 能力图谱灰度开放：仅对指定用户开放，其他人不可用
   useEffect(() => {
@@ -203,19 +205,55 @@ export default function VocabularyPage() {
             </View>
 
             <View style={styles.grid}>
-              {SUBJECTS.map((subject) => {
-                const isSelected = selected.includes(subject);
-                return (
-                  <TouchableOpacity
-                    key={subject}
-                    style={[styles.subjectCard, isSelected ? styles.subjectSelected : styles.subjectDefault]}
-                    activeOpacity={0.8}
-                    onPress={() => toggleSubject(subject)}
-                  >
-                    <Text style={styles.subjectText}>{subject}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {collapsed ? (
+                <TouchableOpacity
+                  style={styles.expandBtn}
+                  activeOpacity={0.8}
+                  onPress={() => setCollapsed(false)}
+                >
+                  <FontAwesome6 name="expand" size={16} color="#fff" />
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <View style={styles.gridRow}>
+                    {SUBJECTS.slice(0, 5).map((subject) => {
+                      const isSelected = selected.includes(subject);
+                      return (
+                        <TouchableOpacity
+                          key={subject}
+                          style={[styles.subjectCard, isSelected ? styles.subjectSelected : styles.subjectDefault]}
+                          activeOpacity={0.8}
+                          onPress={() => toggleSubject(subject)}
+                        >
+                          <Text style={styles.subjectText}>{subject}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.gridRow}>
+                    {SUBJECTS.slice(5).map((subject) => {
+                      const isSelected = selected.includes(subject);
+                      return (
+                        <TouchableOpacity
+                          key={subject}
+                          style={[styles.subjectCard, isSelected ? styles.subjectSelected : styles.subjectDefault]}
+                          activeOpacity={0.8}
+                          onPress={() => toggleSubject(subject)}
+                        >
+                          <Text style={styles.subjectText}>{subject}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    <TouchableOpacity
+                      style={styles.subjectHide}
+                      activeOpacity={0.8}
+                      onPress={() => setCollapsed(true)}
+                    >
+                      <FontAwesome6 name="eye-slash" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </>
         ) : (
@@ -313,14 +351,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    alignItems: 'center',
     rowGap: 8,
-    columnGap: 8,
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 44,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    columnGap: 8,
+    justifyContent: 'center',
   },
   subjectCard: {
     width: 40,
@@ -339,6 +379,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#9CA3AF',
   },
   subjectSelected: {
+    backgroundColor: '#22C55E',
+  },
+  subjectHide: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4B5563',
+  },
+  expandBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#22C55E',
   },
   radarSection: {
