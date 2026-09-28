@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
+import { fetchWithRetry } from '@/utils/apiClient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = Math.min(SCREEN_WIDTH - 64, 336);
@@ -103,6 +104,51 @@ function AbilityRadar() {
 export default function VocabularyPage() {
   const router = useSafeRouter();
   const [mode, setMode] = useState<'subject' | 'family'>('subject');
+  const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
+
+  // 能力图谱灰度开放：仅对指定用户开放，其他人不可用
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetchWithRetry('/api/v1/user/ability-graph/access');
+        const data = await res.json();
+        setAccess(data?.enabled ? 'allowed' : 'denied');
+      } catch {
+        setAccess('denied');
+      }
+    })();
+  }, []);
+
+  if (access === 'checking') {
+    return (
+      <Screen>
+        <View style={styles.gateContainer}>
+          <ActivityIndicator color="#3B82F6" size="large" />
+          <Text style={styles.gateText}>加载中…</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (access === 'denied') {
+    return (
+      <Screen>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Text style={styles.backText}>← back</Text>
+            </TouchableOpacity>
+            <Text style={styles.title}>能力图谱</Text>
+            <View style={styles.placeholder} />
+          </View>
+          <View style={styles.gateContainer}>
+            <Text style={styles.gateText}>功能暂未开放</Text>
+            <Text style={styles.gateSubText}>当前仅对指定用户开放，敬请期待</Text>
+          </View>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -198,6 +244,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     gap: 12,
+  },
+  gateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    gap: 12,
+  },
+  gateText: {
+    fontSize: 15,
+    color: '#6B7280',
+    fontFamily: 'serif',
+  },
+  gateSubText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'serif',
   },
   tabBtn: {
     flex: 1,

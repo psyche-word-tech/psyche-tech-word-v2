@@ -380,4 +380,27 @@ router.post('/delete-account', authMiddleware, async (req: AuthRequest, res: Res
   }
 });
 
+// 能力图谱灰度：仅对手机号 13995589952（用户 id 116）开放
+const ABILITY_GRAPH_ALLOWED_PHONE = '13995589952';
+
+router.get('/ability-graph/access', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.userId as number;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: '未登录' });
+  }
+  try {
+    const supabase = getSupabaseClient();
+    const { data } = await supabase
+      .from('users')
+      .select('phone')
+      .eq('id', userId)
+      .maybeSingle();
+    const enabled = !!data && data.phone === ABILITY_GRAPH_ALLOWED_PHONE;
+    res.json({ success: true, enabled });
+  } catch (error) {
+    console.error('能力图谱权限查询错误:', error);
+    res.json({ success: false, enabled: false });
+  }
+});
+
 export default router;
