@@ -94,6 +94,12 @@ export default function QwenChatPage() {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages, loading]);
 
+  // 首次进入立即滚到底，让完整引导语可见（动画版可能因首帧未就绪而停在顶部）
+  useEffect(() => {
+    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 60);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <Screen safeAreaEdges={['left', 'right', 'bottom']}>
       <View style={styles.header}>
@@ -147,7 +153,7 @@ export default function QwenChatPage() {
             style={styles.input}
             value={input}
             onChangeText={setInput}
-            placeholder="向弦歌回响提问…"
+            placeholder="向弦歌回响提问，或说说你的困惑…"
             placeholderTextColor="#9CA3AF"
             multiline
             maxLength={2000}

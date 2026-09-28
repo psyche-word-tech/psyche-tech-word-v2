@@ -84,8 +84,11 @@ router.post("/", authMiddleware, async (req: Request, res: Response): Promise<vo
       // 千问 SSE：每条以 \n\n 分隔
       const parts = buf.split("\n\n");
       buf = parts.pop() || "";
-      for (const part of parts) {
-        res.write(`data: ${part}\n\n`);
+      for (const raw of parts) {
+        // 千问上游 SSE 行本身带 `data: ` 前缀，剥掉后再统一加，避免双重前缀解析失败
+        const payload = raw.startsWith("data:") ? raw.slice(5).trim() : raw.trim();
+        if (!payload) continue;
+        res.write(`data: ${payload}\n\n`);
       }
     }
     // 收尾标记
