@@ -203,6 +203,27 @@ export function matchSpecialties(
   return { ability, specs };
 }
 
+// 门类级二级学科精准匹配：把某门类下所有代表专业的二级学科铺平，统一按匹配度排序
+export function matchFieldSpecialties(
+  subjectLevels: Record<string, number>,
+  field: string
+): { major: string; name: string; score: number }[] {
+  const ability = aggregateAbility(subjectLevels);
+  const norm = Math.sqrt(ability.reduce((s, x) => s + x * x, 0)) || 1;
+  const out: { major: string; name: string; score: number }[] = [];
+  const fields = SPECIALTY_ABILITY_NEED[field] || {};
+  for (const major of Object.keys(fields)) {
+    const specs = fields[major] || [];
+    for (const spec of specs) {
+      const n2 = Math.sqrt(spec.need.reduce((s, x) => s + x * x, 0)) || 1;
+      let dot = 0;
+      for (let i = 0; i < 10; i++) dot += ability[i] * spec.need[i];
+      out.push({ major, name: spec.name, score: Math.round((dot / (norm * n2)) * 100) });
+    }
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+
 // 匹配：学生能力向量 vs 门类需求向量（余弦相似度 → 百分比）
 export function recommendStudent(subjectLevels: Record<string, number>): {
   ability: number[]; fields: { field: string; score: number; majors: string[] }[];

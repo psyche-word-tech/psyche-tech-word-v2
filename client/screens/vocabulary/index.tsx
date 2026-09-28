@@ -4,7 +4,7 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { fetchWithRetry } from '@/utils/apiClient';
 import { FontAwesome6 } from '@expo/vector-icons';
-import { recommendStudent, matchSpecialties, ABILITY_IDS, ABILITY_NAMES, ABILITY_COLORS } from './recommend';
+import { recommendStudent, matchFieldSpecialties, ABILITY_IDS, ABILITY_NAMES, ABILITY_COLORS } from './recommend';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = Math.min(SCREEN_WIDTH - 64, 336);
@@ -113,34 +113,13 @@ function Radar({ labels, values, color = '#3B82F6', onLabelPress }: {
   );
 }
 
-// 专业二级学科精准匹配面板
-function RefinedMajor({ field, major }: { field: string; major: string }) {
-  const { specs } = matchSpecialties(SUBJECT_LEVELS, field, major);
-  return (
-    <View style={styles.refinedBox}>
-      <Text style={styles.refinedTitle}>「{major}」二级学科精准匹配</Text>
-      {specs.length === 0 ? (
-        <Text style={styles.refinedEmpty}>暂无细化方向（数据待扩充）</Text>
-      ) : (
-        specs.map((s, i) => (
-          <View key={s.name} style={styles.refinedRow}>
-            <Text style={styles.fieldRank}>{i + 1}</Text>
-            <Text style={styles.refinedName}>{s.name}</Text>
-            <Text style={styles.fieldScore}>{s.score}%</Text>
-          </View>
-        ))
-      )}
-    </View>
-  );
-}
-
 export default function VocabularyPage() {
   const router = useSafeRouter();
   const [mode, setMode] = useState<'subject' | 'family' | 'major'>('subject');
   const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
   const [selected, setSelected] = useState<string[]>(['物理', '化学', '生物']);
   const [collapsed, setCollapsed] = useState(false);
-  const [activeMajor, setActiveMajor] = useState<{ field: string; major: string } | null>(null);
+  const [activeField, setActiveField] = useState<string | null>(null);
   const rec = recommendStudent(SUBJECT_LEVELS);
 
   // 能力图谱灰度开放：仅对指定用户开放，其他人不可用
@@ -306,37 +285,43 @@ export default function VocabularyPage() {
               <Radar labels={[...ABILITY_IDS]} values={rec.ability} />
               <Text style={styles.radarHint}>你的能力家族：R01 推理与论证 · … · R10 自主学习与元认知</Text>
             </View>
-            <Text style={styles.sectionTitle}>推荐学科门类（按匹配度排序）</Text>
+            <Text style={styles.sectionTitle}>推荐学科门类（点击门类查看其全部二级学科匹配度）</Text>
             <View style={styles.list}>
-              {rec.fields.map((f, i) => (
-                <View key={f.field} style={[styles.fieldItem, i < 3 && styles.fieldTop]}>
-                  <Text style={styles.fieldRank}>{i + 1}</Text>
-                  <Text style={[styles.fieldName, i < 3 && styles.fieldNameTop]}>{f.field}</Text>
-                  <Text style={styles.fieldScore}>{f.score}%</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.sectionTitle}>匹配门类的代表专业（点击专业查看二级学科精准匹配）</Text>
-            <View style={styles.list}>
-              {rec.fields.slice(0, 3).map((f) => (
-                <View key={f.field} style={styles.majorItem}>
-                  <Text style={styles.majorField}>{f.field}</Text>
-                  <View style={styles.majorNamesWrap}>
-                    {f.majors.map((m) => (
-                      <TouchableOpacity
-                        key={m}
-                        style={[styles.majorChip, activeMajor?.major === m && styles.majorChipActive]}
-                        activeOpacity={0.7}
-                        onPress={() => setActiveMajor(activeMajor?.major === m ? null : { field: f.field, major: m })}
-                      >
-                        <Text style={[styles.majorChipText, activeMajor?.major === m && styles.majorChipTextActive]}>{m}</Text>
-                      </TouchableOpacity>
-                    ))}
+              {rec.fields.map((f, i) => {
+                const open = activeField === f.field;
+                const specs = matchFieldSpecialties(SUBJECT_LEVELS, f.field);
+                return (
+                  <View key={f.field}>
+                    <TouchableOpacity
+                      style={[styles.fieldItem, i < 3 && styles.fieldTop]}
+                      activeOpacity={0.7}
+                      onPress={() => setActiveField(open ? null : f.field)}
+                    >
+                      <Text style={styles.fieldRank}>{i + 1}</Text>
+                      <Text style={[styles.fieldName, i < 3 && styles.fieldNameTop]}>{f.field}</Text>
+                      <Text style={styles.fieldScore}>{f.score}%</Text>
+                      <Text style={styles.fieldCaret}>{open ? '▾' : '▸'}</Text>
+                    </TouchableOpacity>
+                    {open && (
+                      <View style={styles.fieldSpecBox}>
+                        {specs.length === 0 ? (
+                          <Text style={styles.refinedEmpty}>该门类暂无二级学科数据（待扩充）</Text>
+                        ) : (
+                          specs.map((s, si) => (
+                            <View key={s.name} style={[styles.fieldSpecRow, si === 0 && styles.fieldSpecBest]}>
+                              <Text style={styles.fieldSpecRank}>{si + 1}</Text>
+                              <Text style={styles.fieldSpecMajor}>{s.major}</Text>
+                              <Text style={styles.refinedName}>{s.name}</Text>
+                              <Text style={[styles.fieldScore, si === 0 && styles.fieldScoreBest]}>{s.score}%</Text>
+                            </View>
+                          ))
+                        )}
+                      </View>
+                    )}
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
-            {activeMajor && <RefinedMajor field={activeMajor.field} major={activeMajor.major} />}
           </View>
         ) : (
           <View style={styles.familyContainer}>
@@ -561,80 +546,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1F2937',
   },
-  majorItem: {
-    paddingHorizontal: 20,
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  majorField: {
+  fieldCaret: {
+    width: 20,
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  majorNames: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  majorNamesWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 6,
-  },
-  majorChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
-  },
-  majorChipActive: {
-    backgroundColor: '#22C55E',
-    borderColor: '#22C55E',
-  },
-  majorChipText: {
-    fontSize: 12,
-    color: '#374151',
-  },
-  majorChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  refinedBox: {
-    width: '100%',
-    marginTop: 4,
-    marginBottom: 24,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingVertical: 12,
-  },
-  refinedTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  refinedEmpty: {
-    fontSize: 12,
     color: '#9CA3AF',
     textAlign: 'center',
-    paddingVertical: 10,
   },
-  refinedRow: {
+  fieldSpecBox: {
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  fieldSpecRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 9,
+  },
+  fieldSpecBest: {
+    backgroundColor: '#ECFDF5',
+  },
+  fieldSpecRank: {
+    width: 22,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
+  fieldSpecMajor: {
+    width: 108,
+    fontSize: 11,
+    color: '#9CA3AF',
   },
   refinedName: {
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  fieldScoreBest: {
+    color: '#059669',
+  },
+  refinedEmpty: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingVertical: 12,
   },
   dot: {
     width: 10,
