@@ -1,23 +1,8 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 
 const RADAR_SIZE = Math.min(336, 320);
-
-// 十个能力家族 R01-R10（能力共 6 级 L1-L6）
-const ABILITIES = [
-  { id: 'R01', name: '推理与论证' },
-  { id: 'R02', name: '批判性思维与创新' },
-  { id: 'R03', name: '证据与实证' },
-  { id: 'R04', name: '模型建构与抽象' },
-  { id: 'R05', name: '实验探究' },
-  { id: 'R06', name: '信息处理与量化' },
-  { id: 'R07', name: '表达与交流' },
-  { id: 'R08', name: '价值判断与社会责任' },
-  { id: 'R09', name: '文化理解与传承' },
-  { id: 'R10', name: '自主学习与元认知' },
-];
-
 const LEVELS = 6;
 
 // 各学科当前能力等级（1-6，后续可接诊断数据替换此演示模型）
@@ -25,11 +10,24 @@ const SUBJECT_LEVELS: Record<string, number> = {
   语文: 5, 数学: 5, 外语: 4, 物理: 4, 化学: 4, 生物: 4, 政治: 4, 历史: 3, 地理: 3,
 };
 
-// 由学科整体等级派生十个能力等级的确定性分布（演示模型，可替换为真实诊断数据）
-function abilityLevels(subject: string): number[] {
+// 各学科知识点大类（参考课标与常见考纲分层）
+const SUBJECT_KNOWLEDGE: Record<string, string[]> = {
+  语文: ['基础知识与积累', '现代文阅读', '古诗文阅读', '写作表达', '名著阅读与综合运用'],
+  数学: ['数与代数', '图形与几何', '统计与概率', '函数与分析', '综合与实践'],
+  外语: ['语音与词汇', '语法', '阅读理解', '书面表达', '听力与口语', '完形填空'],
+  物理: ['力学', '热学', '电磁学', '光学', '声学', '原子与近代物理', '实验与科学探究'],
+  化学: ['物质的组成与结构', '化学反应与能量', '元素及其化合物', '有机化学基础', '化学实验', '化学计算'],
+  生物: ['分子与细胞', '遗传与进化', '稳态与调节', '生物与环境', '生物技术与工程'],
+  政治: ['经济与社会', '政治与法治', '哲学与文化', '法律与生活', '当代国际政治与经济', '时事热点与价值观'],
+  历史: ['中国古代史', '中国近代史', '中国现代史', '世界古代史', '世界近代史', '世界现代史'],
+  地理: ['自然地理', '人文地理', '区域地理', '地理信息技术与读图能力'],
+};
+
+// 由学科整体等级派生各知识点大类等级的确定性分布（演示模型，可替换为真实诊断数据）
+function kpLevels(subject: string, count: number): number[] {
   const base = SUBJECT_LEVELS[subject] ?? 4;
-  const off = [0, 1, -1, 0, 1, -1, 0, 1, -1, 0];
-  return off.map((d) => Math.max(1, Math.min(6, base + d)));
+  const off = [0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1];
+  return Array.from({ length: count }, (_, i) => Math.max(1, Math.min(6, base + (off[i % off.length] ?? 0))));
 }
 
 function Radar({ labels, values }: { labels: string[]; values: number[] }) {
@@ -63,7 +61,7 @@ function Radar({ labels, values }: { labels: string[]; values: number[] }) {
       {labels.map((label, i) => {
         const p = point(i, LEVELS);
         return (
-          <text key={`l-${i}`} x={p.x} y={p.y + (p.y <= center ? -8 : 16)} textAnchor="middle" fontSize="11" fill="#374151" fontWeight="600">
+          <text key={`l-${i}`} x={p.x} y={p.y + (p.y <= center ? -10 : 18)} textAnchor="middle" fontSize="9" fill="#374151" fontWeight="600">
             {label}
           </text>
         );
@@ -76,7 +74,8 @@ export default function SubjectRadarPage() {
   const router = useSafeRouter();
   const { subject } = useSafeSearchParams<{ subject?: string }>();
   const name = subject || '';
-  const values = abilityLevels(name);
+  const knowledge = SUBJECT_KNOWLEDGE[name] ?? [];
+  const values = kpLevels(name, knowledge.length || 1);
 
   return (
     <Screen>
@@ -89,27 +88,34 @@ export default function SubjectRadarPage() {
           <View style={styles.placeholder} />
         </View>
 
-        <View style={styles.body}>
-          <Radar labels={ABILITIES.map((a) => a.id)} values={values} />
-          <Text style={styles.hint}>能力共 6 级：L1 识记 · L2 理解 · L3 应用 · L4 分析 · L5 评价 · L6 创造</Text>
-        </View>
-
-        <View style={styles.list}>
-          {ABILITIES.map((item, i) => (
-            <View key={item.id} style={styles.listItem}>
-              <View style={[styles.dot, { backgroundColor: COLORS[i % COLORS.length] }]} />
-              <Text style={styles.idText}>{item.id}</Text>
-              <Text style={styles.nameText}>{item.name}</Text>
-              <Text style={styles.levelText}>L{values[i]}</Text>
+        {knowledge.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>暂无该学科的知识点分类</Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.body}>
+              <Radar labels={knowledge} values={values} />
+              <Text style={styles.hint}>能力共 {LEVELS} 级：L1 识记 · L2 理解 · L3 应用 · L4 分析 · L5 评价 · L6 创造</Text>
             </View>
-          ))}
-        </View>
+
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+              {knowledge.map((kp, i) => (
+                <View key={kp} style={styles.listItem}>
+                  <Text style={[styles.kpIndex, { backgroundColor: KP_COLORS[i % KP_COLORS.length] }]}>{i + 1}</Text>
+                  <Text style={styles.nameText}>{kp}</Text>
+                  <Text style={styles.levelText}>L{values[i]}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        )}
       </View>
     </Screen>
   );
 }
 
-const COLORS = ['#EF5350', '#42A5F5', '#66BB6A', '#FFA726', '#AB47BC', '#26C6DA', '#EC407A', '#FF7043', '#8D6E63', '#5C6BC0'];
+const KP_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
@@ -123,16 +129,25 @@ const styles = StyleSheet.create({
   backText: { fontSize: 14, color: '#000000', fontFamily: 'serif' },
   title: { fontSize: 16, color: '#333333', fontFamily: 'serif', fontWeight: '600' },
   placeholder: { width: 50 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { fontSize: 14, color: '#9CA3AF' },
   body: { alignItems: 'center', paddingTop: 24 },
   hint: { marginTop: 12, fontSize: 11, color: '#9CA3AF' },
-  list: { flex: 1, paddingHorizontal: 24, paddingTop: 16 },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
+  listItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  kpIndex: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 12,
+    textAlign: 'center',
+    lineHeight: 20,
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    overflow: 'hidden',
   },
-  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
-  idText: { width: 40, fontSize: 12, color: '#666666', fontWeight: '600' },
   nameText: { flex: 1, fontSize: 13, color: '#333333' },
   levelText: { fontSize: 13, color: '#3B82F6', fontWeight: '700' },
 });
