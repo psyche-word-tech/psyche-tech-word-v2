@@ -80,6 +80,34 @@ export async function fetchWithRetry(
   throw new Error(`Request failed after ${maxRetries + 1} attempts`);
 }
 
+/**
+ * 长超时请求（用于 LLM 对话等慢响应场景）：默认 120s 超时，带鉴权头。
+ * fetchWithRetry 固定 10s 超时，千问 max 等模型回复可能更慢，故单独提供。
+ */
+export async function fetchLongTimeout(
+  path: string,
+  options?: RequestInit,
+  timeoutMs = 120000,
+  baseUrl?: string
+): Promise<Response> {
+  const apiBase = baseUrl || getApiBaseUrl();
+  const url = path.startsWith('http') ? path : `${apiBase}${path}`;
+  const token = await getAuthToken();
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string> || {}),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (!headers['Content-Type'] && options?.body) headers['Content-Type'] = 'application/json';
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, headers, signal: controller.signal, cache: 'no-store' });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }

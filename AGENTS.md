@@ -711,3 +711,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - **用户历史数据（方案二：前端 localStorage 造史）**：`ability_graph_history_v1` 存用户学科等级快照 `LevelSnapshot{t,l}`，首次进入自动种子 3 条（30/15 天前+当前，展示趋势）。后端/库无用户能力测评史，故用 localStorage。展开门类时 `specHistoryScores(history,field)` 汇总每个二级学科历次匹配度(时间升序)；每个二级学科下行显示「历史：8月29日 92% · 9月13日 94% · 9月28日 94%」+ 相对上次的变化标记(▲/▼%)，右侧分取最新一次。若后续接真实测评，替换 `loadHistory()` 的数据来源即可。
   - 数据均为人工整理初稿（矩阵/门类模板/二级学科可据审阅微调）；学生学科等级现为演示常量 `SUBJECT_LEVELS`，后续接真实诊断数据即个性化。注意公有 `Radar` 用原生 `<svg>`，label 可点（onClick → `onLabelPress`）；改前端须 `cd client && node node_modules/expo/bin/cli export --platform web` + `rm -rf ../server/public && cp -r dist ../server/public` + KaTeX 字体复制 + 重启 node。
   - 已知坑：`ABILITY_IDS` 为 readonly tuple，喂 Radar labels 需 `[...ABILITY_IDS]`；`vocabulary/index.tsx` 的 `sectionTitle` 曾被定义两次(TS1117)——已合并为一个，勿再重复新增。
+
+- **【弦歌回响·AI 对话（2026-09 新增）】** 将 study 首页底部「学习日历」入口替换为「弦歌回响」AI 答疑（旧 `/calendar` 路由保留）。入口 `router.push('/qwen-chat')` → `screens/qwen-chat`，多轮对话页（消息列表 + 输入栏 + 发送按钮）。
+  - 后端 `server/src/routes/qwen-chat.ts`：`POST /api/v1/qwen-chat`（authMiddleware），透传前端 `messages`（多轮历史由前端维护），复用千问直连配置（`QWEN_API_URL`/`QWEN_API_KEY`/`QWEN_MODEL`，默认 `qwen3.8-max`），system prompt = "循循善诱良师益友 + 可偶用《论语》意象点拨"，temperature 0.7，服务端 120s 超时；返回 `{success, content}`。
+  - **前端必须用 `fetchLongTimeout`（apiClient 新增：120s 超时+带 token），不能用 `fetchWithRetry`（固定 10s 超时），否则千问 max 回复超 10s 会被客户端 abort、UI 报"网络似乎开小差了"。**
+  - **Playwright 验证陷阱**：发送按钮在构建产物里背景色被转换，无法按色值定位；用 evaluate 从 textarea 上溯 5 层父级、筛 `cursor=pointer` 且 30~60px 的圆形元素点击最外层。验证真实回复：等待全文无"网络似乎开小差了"且长度增长。

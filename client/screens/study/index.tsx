@@ -325,9 +325,9 @@ export default function StudyScreen() {
             <TouchableOpacity 
               style={styles.gridItem} 
               activeOpacity={0.8} 
-              onPress={() => router.push('/calendar')}
+              onPress={() => router.push('/qwen-chat')}
             >
-              <Text style={styles.gridLabel}>学习日历</Text>
+              <Text style={styles.gridLabel}>弦歌回响</Text>
             </TouchableOpacity>
           </View>
           {/* 下一行 */}
