@@ -224,6 +224,24 @@ export function matchFieldSpecialties(
   return out.sort((a, b) => b.score - a.score);
 }
 
+// 用户能力测评历史快照：t 为毫秒时间戳，l 为各科学科等级
+export type LevelSnapshot = { t: number; l: Record<string, number> };
+
+// 对某门类下每个二级学科，汇总该用户历次测评对应的匹配度（按时间升序）
+export function specHistoryScores(
+  history: LevelSnapshot[],
+  field: string
+): Record<string, { t: number; score: number }[]> {
+  const acc: Record<string, { t: number; score: number }[]> = {};
+  for (const h of history) {
+    for (const s of matchFieldSpecialties(h.l, field)) {
+      (acc[s.name] = acc[s.name] || []).push({ t: h.t, score: s.score });
+    }
+  }
+  for (const k of Object.keys(acc)) acc[k].sort((a, b) => a.t - b.t);
+  return acc;
+}
+
 // 匹配：学生能力向量 vs 门类需求向量（余弦相似度 → 百分比）
 export function recommendStudent(subjectLevels: Record<string, number>): {
   ability: number[]; fields: { field: string; score: number; majors: string[] }[];

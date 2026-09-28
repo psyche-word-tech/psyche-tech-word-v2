@@ -4,7 +4,7 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { fetchWithRetry } from '@/utils/apiClient';
 import { FontAwesome6 } from '@expo/vector-icons';
-import { recommendStudent, matchFieldSpecialties, ABILITY_IDS, ABILITY_NAMES, ABILITY_COLORS } from './recommend';
+import { recommendStudent, matchFieldSpecialties, specHistoryScores, ABILITY_IDS, ABILITY_NAMES, ABILITY_COLORS, LevelSnapshot } from './recommend';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = Math.min(SCREEN_WIDTH - 64, 336);
@@ -17,6 +17,36 @@ const SUBJECT_COLORS = [
 // 各学科当前能力等级示例（L1-L6），后续可接诊断数据
 const SUBJECT_LEVELS: Record<string, number> = {
   语文: 5, 数学: 5, 外语: 4, 物理: 4, 化学: 4, 生物: 4, 政治: 4, 历史: 3, 地理: 3,
+};
+
+// 用户能力测评历史（localStorage，方案二：前端造历史）
+const HISTORY_KEY = 'ability_graph_history_v1';
+
+function loadHistory(): LevelSnapshot[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) return arr as LevelSnapshot[];
+    }
+  } catch { /* ignore */ }
+  // 首次无历史：造 3 条演示快照（30/15 天前 + 当前），呈现趋势
+  const now = Date.now();
+  const base = SUBJECT_LEVELS;
+  const older = { ...base, 数学: 4, 物理: 3, 化学: 3, 生物: 3 };
+  const mid = { ...base, 物理: 3, 化学: 3 };
+  const seed: LevelSnapshot[] = [
+    { t: now - 30 * 86400000, l: older },
+    { t: now - 15 * 86400000, l: mid },
+    { t: now, l: base },
+  ];
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(seed)); } catch { /* ignore */ }
+  return seed;
+}
+
+const fmtTime = (t: number) => {
+  const d = new Date(t);
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
 };
 
 // 十个能力家族 R01-R10，能力分 6 级（level: 1-6，对应 L1-L6）
@@ -120,6 +150,7 @@ export default function VocabularyPage() {
   const [selected, setSelected] = useState<string[]>(['物理', '化学', '生物']);
   const [collapsed, setCollapsed] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
+  const [history] = useState<LevelSnapshot[]>(() => loadHistory());
   const rec = recommendStudent(SUBJECT_LEVELS);
 
   // 能力图谱灰度开放：仅对指定用户开放，其他人不可用
@@ -290,6 +321,7 @@ export default function VocabularyPage() {
               {rec.fields.map((f, i) => {
                 const open = activeField === f.field;
                 const specs = matchFieldSpecialties(SUBJECT_LEVELS, f.field);
+                const hist = open ? specHistoryScores(history, f.field) : {};
                 return (
                   <View key={f.field}>
                     <TouchableOpacity
@@ -307,14 +339,39 @@ export default function VocabularyPage() {
                         {specs.length === 0 ? (
                           <Text style={styles.refinedEmpty}>该门类暂无二级学科数据（待扩充）</Text>
                         ) : (
-                          specs.map((s, si) => (
-                            <View key={s.name} style={[styles.fieldSpecRow, si === 0 && styles.fieldSpecBest]}>
-                              <Text style={styles.fieldSpecRank}>{si + 1}</Text>
-                              <Text style={styles.fieldSpecMajor}>{s.major}</Text>
-                              <Text style={styles.refinedName}>{s.name}</Text>
-                              <Text style={[styles.fieldScore, si === 0 && styles.fieldScoreBest]}>{s.score}%</Text>
-                            </View>
-                          ))
+                          specs.map((s, si) => {
+                            const h = hist[s.name] || [];
+                            const latest = h.length ? h[h.length - 1].score : s.score;
+                            const prev = h.length > 1 ? h[h.length - 2].score : null;
+                            const delta = prev == null ? null : latest - prev;
+                            return (
+                              <View key={s.name}>
+                                <View style={[styles.fieldSpecRow, si === 0 && styles.fieldSpecBest]}>
+                                  <Text style={styles.fieldSpecRank}>{si + 1}</Text>
+                                  <Text style={styles.fieldSpecMajor}>{s.major}</Text>
+                                  <Text style={styles.fieldSpecNameWrap}>
+                                    <Text style={styles.refinedName}>{s.name}</Text>
+                                    {h.length > 1 && (
+                                      <Text style={styles.fieldSpecDelta}>
+                                        {delta == null ? '' : delta >= 0 ? ` ▲${delta}%` : ` ▼${-delta}%`}
+                                      </Text>
+                                    )}
+                                  </Text>
+                                  <Text style={[styles.fieldScore, si === 0 && styles.fieldScoreBest]}>{latest}%</Text>
+                                </View>
+                                {h.length > 0 && (
+                                  <View style={styles.fieldSpecHist}>
+                                    <Text style={styles.fieldSpecHistLabel}>历史：</Text>
+                                    {h.map((p, pi) => (
+                                      <Text key={pi} style={styles.fieldSpecHistItem}>
+                                        {fmtTime(p.t)} {p.score}%{pi < h.length - 1 ? ' · ' : ''}
+                                      </Text>
+                                    ))}
+                                  </View>
+                                )}
+                              </View>
+                            );
+                          })
                         )}
                       </View>
                     )}
@@ -582,6 +639,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  fieldSpecNameWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fieldSpecDelta: {
+    marginLeft: 4,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  fieldSpecHist: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 26,
+    paddingBottom: 6,
+    gap: 2,
+  },
+  fieldSpecHistLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  fieldSpecHistItem: {
+    fontSize: 11,
+    color: '#6B7280',
   },
   fieldScoreBest: {
     color: '#059669',
