@@ -21,6 +21,19 @@ const SUBJECT_LEVELS: Record<string, number> = {
 
 // 用户能力测评历史（localStorage，方案二：前端造历史）
 const HISTORY_KEY = 'ability_graph_history_v1';
+const SELECTED_KEY = 'ability_graph_selected_v1';
+
+// 持久化用户选中的科目（避免返回/重进后选中丢失）
+function loadSelected(defaults: string[]): string[] {
+  try {
+    const raw = localStorage.getItem(SELECTED_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) return arr as string[];
+    }
+  } catch { /* ignore */ }
+  return defaults;
+}
 
 function loadHistory(): LevelSnapshot[] {
   try {
@@ -147,7 +160,9 @@ export default function VocabularyPage() {
   const router = useSafeRouter();
   const [mode, setMode] = useState<'subject' | 'family' | 'major'>('subject');
   const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
-  const [selected, setSelected] = useState<string[]>(['物理', '化学', '生物']);
+  const [selected, setSelected] = useState<string[]>(() =>
+    loadSelected(['物理', '化学', '生物'])
+  );
   const [collapsed, setCollapsed] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [history] = useState<LevelSnapshot[]>(() => loadHistory());
@@ -165,6 +180,11 @@ export default function VocabularyPage() {
       }
     })();
   }, []);
+
+  // 选中科目变更时持久化到 localStorage
+  useEffect(() => {
+    try { localStorage.setItem(SELECTED_KEY, JSON.stringify(selected)); } catch { /* ignore */ }
+  }, [selected]);
 
   const toggleSubject = (subject: string) => {
     setSelected((prev) =>
