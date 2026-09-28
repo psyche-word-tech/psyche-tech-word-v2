@@ -35,7 +35,12 @@ const ABILITIES = [
 const LEVELS = 6;
 
 // 通用雷达图：n 轴（3~10）、6 级（L1-L6）
-function Radar({ labels, values, color = '#3B82F6' }: { labels: string[]; values: number[]; color?: string }) {
+function Radar({ labels, values, color = '#3B82F6', onLabelPress }: {
+  labels: string[];
+  values: number[];
+  color?: string;
+  onLabelPress?: (label: string) => void;
+}) {
   const n = values.length;
   const center = RADAR_SIZE / 2;
   const angleStep = (Math.PI * 2) / n;
@@ -85,15 +90,19 @@ function Radar({ labels, values, color = '#3B82F6' }: { labels: string[]; values
       {/* 顶点标签 */}
       {labels.map((label, i) => {
         const p = point(i, LEVELS);
+        const clickable = !!onLabelPress;
+        const yOff = p.y <= center ? -8 : 16;
         return (
           <text
             key={`label-${i}`}
             x={p.x}
-            y={p.y + (p.y <= center ? -8 : 16)}
+            y={p.y + yOff}
             textAnchor="middle"
             fontSize="12"
-            fill="#374151"
+            fill={clickable ? '#1D4ED8' : '#374151'}
             fontWeight="600"
+            style={clickable ? { cursor: 'pointer' } : undefined}
+            onClick={clickable ? () => onLabelPress!(label) : undefined}
           >
             {label}
           </text>
@@ -127,6 +136,10 @@ export default function VocabularyPage() {
     setSelected((prev) =>
       prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject]
     );
+  };
+
+  const openSubjectRadar = (subject: string) => {
+    router.push('/subject-radar', { subject });
   };
 
   if (access === 'checking') {
@@ -196,7 +209,7 @@ export default function VocabularyPage() {
               {selected.length >= 3 ? (
                 <>
                   <View style={styles.radarWrap}>
-                    <Radar labels={selected} values={selectedValues} />
+                    <Radar labels={selected} values={selectedValues} onLabelPress={openSubjectRadar} />
                   </View>
                 </>
               ) : (
