@@ -190,40 +190,33 @@ export default function VocabularyPage() {
 
         {mode === 'subject' ? (
           <>
+            <View style={styles.radarSection}>
+              {selected.length >= 3 ? (
+                <>
+                  <View style={styles.radarWrap}>
+                    <Radar labels={selected} values={selectedValues} />
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.minTip}>至少选择 3 个学科即可生成能力雷达图（已选 {selected.length} 科，可继续点击学科添加/取消）</Text>
+              )}
+            </View>
+
             <View style={styles.grid}>
-              {SUBJECTS.map((subject, index) => {
+              {SUBJECTS.map((subject) => {
                 const isSelected = selected.includes(subject);
                 return (
                   <TouchableOpacity
                     key={subject}
-                    style={[
-                      styles.subjectCard,
-                      { backgroundColor: SUBJECT_COLORS[index] },
-                      isSelected && styles.subjectSelected,
-                    ]}
+                    style={[styles.subjectCard, isSelected ? styles.subjectSelected : styles.subjectDefault]}
                     activeOpacity={0.8}
                     onPress={() => toggleSubject(subject)}
                   >
                     <Text style={styles.subjectText}>{subject}</Text>
-                    {isSelected && <Text style={styles.checkMark}>✓</Text>}
                   </TouchableOpacity>
                 );
               })}
             </View>
-
-            {selected.length >= 3 ? (
-              <View style={styles.radarSection}>
-                <Text style={styles.sectionTitle}>
-                  已选 {selected.length} 科：{selected.join(' · ')}
-                </Text>
-                <View style={styles.radarWrap}>
-                  <Radar labels={selected} values={selectedValues} />
-                </View>
-                <Text style={styles.radarHint}>能力共 6 级：L1 识记 · L2 理解 · L3 应用 · L4 分析 · L5 评价 · L6 创造</Text>
-              </View>
-            ) : (
-              <Text style={styles.minTip}>至少选择 3 个学科即可生成能力雷达图（已选 {selected.length} 科，可继续点击学科添加/取消）</Text>
-            )}
           </>
         ) : (
           <View style={styles.familyContainer}>
@@ -327,30 +320,23 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   subjectCard: {
-    width: '30%',
-    aspectRatio: 1.4,
-    borderRadius: 10,
+    width: '31%',
+    aspectRatio: 2.0,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   subjectText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#FFFFFF',
     fontFamily: 'serif',
     fontWeight: '600',
   },
-  subjectSelected: {
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    opacity: 0.92,
+  subjectDefault: {
+    backgroundColor: '#9CA3AF',
   },
-  checkMark: {
-    position: 'absolute',
-    top: 4,
-    right: 7,
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '700',
+  subjectSelected: {
+    backgroundColor: '#22C55E',
   },
   radarSection: {
     alignItems: 'center',
