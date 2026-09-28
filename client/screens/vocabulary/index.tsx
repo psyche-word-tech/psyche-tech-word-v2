@@ -323,8 +323,8 @@ const styles = StyleSheet.create({
   },
   subjectCard: {
     width: '30%',
-    aspectRatio: 2.4,
-    borderRadius: 6,
+    aspectRatio: 1,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
