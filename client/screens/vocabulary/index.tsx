@@ -339,8 +339,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#22C55E',
   },
   radarSection: {
+    flex: 1,
     alignItems: 'center',
-    marginTop: 20,
+    justifyContent: 'center',
     paddingHorizontal: 16,
   },
   sectionTitle: {
