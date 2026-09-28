@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22C55E',
+    backgroundColor: '#4B5563',
   },
   expandBtn: {
     width: 40,
