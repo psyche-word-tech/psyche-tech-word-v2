@@ -1,13 +1,104 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const RADAR_SIZE = Math.min(SCREEN_WIDTH - 64, 336);
 
 const SUBJECTS = ['语文', '数学', '外语', '物理', '化学', '生物', '政治', '历史', '地理'];
 const SUBJECT_COLORS = [
   '#EF5350', '#42A5F5', '#66BB6A', '#FFA726',
-  '#AB47BC', '#26C6DA', '#EF5350', '#FF7043', '#8D6E63',
+  '#AB47BC', '#26C6DA', '#EC407A', '#FF7043', '#8D6E63',
 ];
+
+// 十个能力家族 R01-R10，能力分 6 级（level: 1-6，对应 L1-L6）
+const ABILITIES = [
+  { id: 'R01', name: '推理与论证', level: 5 },
+  { id: 'R02', name: '批判性思维与创新', level: 4 },
+  { id: 'R03', name: '证据与实证', level: 3 },
+  { id: 'R04', name: '模型建构与抽象', level: 4 },
+  { id: 'R05', name: '实验探究', level: 3 },
+  { id: 'R06', name: '信息处理与量化', level: 4 },
+  { id: 'R07', name: '表达与交流', level: 2 },
+  { id: 'R08', name: '价值判断与社会责任', level: 5 },
+  { id: 'R09', name: '文化理解与传承', level: 3 },
+  { id: 'R10', name: '自主学习与元认知', level: 4 },
+];
+
+const LEVELS = 6;
+
+// 10 轴 6 级雷达图
+function AbilityRadar() {
+  const center = RADAR_SIZE / 2;
+  const n = ABILITIES.length;
+  const angleStep = (Math.PI * 2) / n;
+  const radius = RADAR_SIZE / 2;
+
+  const point = (index: number, value: number) => {
+    const angle = angleStep * index - Math.PI / 2;
+    const r = radius * 0.82 * (value / LEVELS);
+    return {
+      x: center + r * Math.cos(angle),
+      y: center + r * Math.sin(angle),
+    };
+  };
+
+  const polygonPoints = (level: number) =>
+    ABILITIES.map((_, i) => {
+      const p = point(i, level);
+      return `${p.x},${p.y}`;
+    }).join(' ');
+
+  const dataPoints = () =>
+    ABILITIES.map((item, i) => {
+      const p = point(i, item.level);
+      return `${p.x},${p.y}`;
+    }).join(' ');
+
+  return (
+    <svg width={RADAR_SIZE} height={RADAR_SIZE} viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`}>
+      {/* 层级网格 L1-L6 */}
+      {Array.from({ length: LEVELS }, (_, i) => (
+        <polygon
+          key={`grid-${i}`}
+          points={polygonPoints(i + 1)}
+          fill="none"
+          stroke="#E5E7EB"
+          strokeWidth={i === LEVELS - 1 ? 1.5 : 1}
+        />
+      ))}
+      {/* 放射轴线 */}
+      {ABILITIES.map((_, i) => {
+        const p = point(i, LEVELS);
+        return <line key={`axis-${i}`} x1={center} y1={center} x2={p.x} y2={p.y} stroke="#E5E7EB" strokeWidth="1" />;
+      })}
+      {/* 能力数据区域 */}
+      <polygon points={dataPoints()} fill="rgba(59,130,246,0.25)" stroke="#3B82F6" strokeWidth="2" />
+      {/* 数据点 */}
+      {ABILITIES.map((item, i) => (
+        <circle key={`dot-${i}`} cx={point(i, item.level).x} cy={point(i, item.level).y} r="4" fill="#3B82F6" />
+      ))}
+      {/* 顶点能力编号 */}
+      {ABILITIES.map((item, i) => {
+        const p = point(i, LEVELS);
+        return (
+          <text
+            key={`label-${i}`}
+            x={p.x}
+            y={p.y + (p.y <= center ? -6 : 12)}
+            textAnchor="middle"
+            fontSize="12"
+            fill="#6B7280"
+            fontWeight="600"
+          >
+            {item.id}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
 
 export default function VocabularyPage() {
   const router = useSafeRouter();
@@ -24,7 +115,6 @@ export default function VocabularyPage() {
           <View style={styles.placeholder} />
         </View>
 
-        {/* 检索方式切换 */}
         <View style={styles.tabRow}>
           <TouchableOpacity
             style={[styles.tabBtn, mode === 'subject' && styles.tabActive]}
@@ -55,8 +145,21 @@ export default function VocabularyPage() {
             ))}
           </View>
         ) : (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>家族检索建设中</Text>
+          <View style={styles.familyContainer}>
+            <View style={styles.radarWrap}>
+              <AbilityRadar />
+              <Text style={styles.radarHint}>能力共 6 级：L1 识记 · L2 理解 · L3 应用 · L4 分析 · L5 评价 · L6 创造</Text>
+            </View>
+            <View style={styles.list}>
+              {ABILITIES.map((item, i) => (
+                <View key={item.id} style={styles.listItem}>
+                  <View style={[styles.dot, { backgroundColor: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }]} />
+                  <Text style={styles.idText}>{item.id}</Text>
+                  <Text style={styles.nameText}>{item.name}</Text>
+                  <Text style={styles.levelText}>L{item.level}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
       </View>
@@ -138,13 +241,57 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     fontWeight: '600',
   },
-  empty: {
-    padding: 48,
+  familyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingHorizontal: 16,
+  },
+  radarWrap: {
     alignItems: 'center',
   },
-  emptyText: {
-    fontSize: 14,
+  radarHint: {
+    fontSize: 10,
     color: '#9CA3AF',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  list: {
+    flex: 1,
+    width: '100%',
+    marginTop: 16,
+    paddingBottom: 24,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  idText: {
+    width: 38,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+    fontFamily: 'serif',
+  },
+  nameText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#374151',
+    fontFamily: 'serif',
+  },
+  levelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3B82F6',
     fontFamily: 'serif',
   },
 });
