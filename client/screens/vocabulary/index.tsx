@@ -211,7 +211,7 @@ export default function VocabularyPage() {
                   activeOpacity={0.8}
                   onPress={() => setCollapsed(false)}
                 >
-                  <FontAwesome6 name="expand" size={16} color="#fff" />
+                  <FontAwesome6 name="eye" size={16} color="#fff" />
                 </TouchableOpacity>
               ) : (
                 <>
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22C55E',
+    backgroundColor: '#4B5563',
   },
   expandBtn: {
     width: 40,
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22C55E',
+    backgroundColor: '#4B5563',
   },
   radarSection: {
     flex: 1,
