@@ -1,0 +1,104 @@
+// 专业推荐：能力家族聚合 + 门类匹配（原型）
+// 依据：跨学科知识点-能力映射谱系（R01-R10）；14 高等教育学科门类核心能力
+
+export const ABILITY_NAMES = [
+  '推理与论证',
+  '批判性思维与创新',
+  '证据与实证',
+  '模型建构与抽象',
+  '实验探究',
+  '信息处理与量化',
+  '表达与交流',
+  '价值判断与社会责任',
+  '文化理解与传承',
+  '自主学习与元认知',
+];
+export const ABILITY_IDS = ['R01','R02','R03','R04','R05','R06','R07','R08','R09','R10'] as const;
+
+export const ABILITY_COLORS = [
+  '#EF4444', '#3B82F6', '#22C55E', '#F97316', '#8B5CF6',
+  '#14B8A6', '#EC4899', '#A16207', '#7C3AED', '#0EA5E9',
+];
+
+// 学科 → 能力家族权重矩阵（0-5，基于课标与能力映射谱系整理，可微调）
+// 行序：语文 数学 外语 物理 化学 生物 政治 历史 地理；列序 R01..R10
+export const SUBJECT_ABILITY_MATRIX: Record<string, number[]> = {
+  语文: [4, 3, 4, 3, 0, 4, 5, 2, 5, 3],
+  数学: [5, 3, 3, 5, 0, 4, 1, 0, 0, 3],
+  外语: [2, 1, 0, 1, 0, 4, 5, 3, 4, 3],
+  物理: [4, 2, 3, 5, 5, 4, 1, 1, 0, 3],
+  化学: [4, 2, 4, 4, 5, 3, 1, 3, 0, 3],
+  生物: [4, 2, 4, 4, 5, 3, 1, 3, 1, 3],
+  政治: [3, 3, 3, 1, 0, 3, 4, 5, 4, 2],
+  历史: [4, 3, 5, 2, 0, 4, 3, 3, 5, 2],
+  地理: [3, 2, 3, 4, 1, 5, 2, 3, 2, 3],
+};
+
+// 14 高等教育学科门类 → 能力需求权重（0-5），列序 R01..R10
+export const FIELD_ABILITY_NEED: Record<string, number[]> = {
+  哲学:   [4, 5, 3, 5, 0, 2, 4, 4, 3, 2],
+  经济学: [4, 3, 4, 4, 0, 5, 3, 3, 1, 3],
+  法学:   [5, 3, 4, 3, 0, 2, 4, 5, 3, 2],
+  教育学: [2, 3, 2, 3, 1, 3, 5, 4, 3, 5],
+  文学:   [2, 4, 2, 2, 0, 3, 5, 3, 5, 3],
+  历史学: [4, 3, 5, 2, 1, 4, 3, 3, 5, 3],
+  理学:   [5, 3, 4, 5, 4, 5, 1, 1, 1, 3],
+  工学:   [4, 3, 4, 5, 4, 5, 2, 2, 1, 4],
+  农学:   [3, 2, 4, 3, 5, 4, 2, 4, 2, 3],
+  医学:   [4, 3, 5, 3, 4, 3, 3, 5, 2, 4],
+  军事学: [4, 3, 3, 3, 2, 3, 4, 4, 2, 4],
+  管理学: [3, 3, 4, 4, 0, 5, 4, 3, 2, 4],
+  艺术学: [1, 5, 1, 3, 2, 2, 5, 3, 5, 3],
+  交叉学科: [4, 4, 3, 5, 2, 5, 2, 4, 2, 5],
+};
+
+// 门类 → 代表专业（按学科目录初步列出一版）
+export const FIELD_MAJORS: Record<string, string[]> = {
+  哲学: ['哲学', '逻辑学', '伦理学'],
+  经济学: ['经济学', '金融学', '国际经济与贸易'],
+  法学: ['法学', '政治学与行政学', '社会学', '思想政治教育'],
+  教育学: ['教育学', '学前教育', '小学教育', '教育技术学'],
+  文学: ['汉语言文学', '英语', '新闻学', '外国语言文学'],
+  历史学: ['历史学', '世界史', '考古学'],
+  理学: ['数学与应用数学', '物理学', '化学', '生物科学', '地理科学', '应用统计学'],
+  工学: ['计算机科学与技术', '软件工程', '机械工程', '电气工程', '土木工程', '自动化'],
+  农学: ['农学', '园艺', '动物科学', '植物保护', '林学'],
+  医学: ['临床医学', '口腔医学', '药学', '基础医学', '中医学'],
+  军事学: ['军事指挥（国防生类）'],
+  管理学: ['工商管理', '会计学', '公共事业管理', '市场营销', '管理科学与工程'],
+  艺术学: ['视觉传达设计', '美术学', '音乐学', '广播电视编导'],
+  交叉学科: ['人工智能', '数据科学与大数据技术', '金融科技'],
+};
+
+const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
+// 聚合：由学生各科学科等级(L1-L6) → 10 维能力家族向量（归一化到 1-6）
+export function aggregateAbility(subjectLevels: Record<string, number>): number[] {
+  const vec = new Array(10).fill(0);
+  let total = 0;
+  for (const [subj, level] of Object.entries(subjectLevels)) {
+    const row = SUBJECT_ABILITY_MATRIX[subj];
+    if (!row) continue;
+    for (let i = 0; i < 10; i++) vec[i] += (level ?? 1) * row[i];
+    total += (level ?? 1);
+  }
+  if (total <= 0) return new Array(10).fill(1);
+  // 每个能力取 学科加权平均(0-30 scale) 映射到 1-6
+  return vec.map((v) => clamp(Math.round((v / total) / 5 * 5 + 1), 1, 6));
+}
+
+// 匹配：学生能力向量 vs 门类需求向量（余弦相似度 → 百分比）
+export function recommendStudent(subjectLevels: Record<string, number>): {
+  ability: number[]; fields: { field: string; score: number; majors: string[] }[];
+} {
+  const ability = aggregateAbility(subjectLevels);
+  const norm = Math.sqrt(ability.reduce((s, x) => s + x * x, 0)) || 1;
+  const fields = Object.keys(FIELD_ABILITY_NEED).map((field) => {
+    const need = FIELD_ABILITY_NEED[field];
+    const n2 = Math.sqrt(need.reduce((s, x) => s + x * x, 0)) || 1;
+    let dot = 0;
+    for (let i = 0; i < 10; i++) dot += ability[i] * need[i];
+    return { field, score: Math.round((dot / (norm * n2)) * 100), majors: FIELD_MAJORS[field] || [] };
+  }).sort((a, b) => b.score - a.score);
+  return { ability, fields };
+}

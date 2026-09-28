@@ -4,6 +4,7 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { fetchWithRetry } from '@/utils/apiClient';
 import { FontAwesome6 } from '@expo/vector-icons';
+import { recommendStudent, ABILITY_IDS, ABILITY_NAMES, ABILITY_COLORS } from './recommend';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = Math.min(SCREEN_WIDTH - 64, 336);
@@ -114,10 +115,11 @@ function Radar({ labels, values, color = '#3B82F6', onLabelPress }: {
 
 export default function VocabularyPage() {
   const router = useSafeRouter();
-  const [mode, setMode] = useState<'subject' | 'family'>('subject');
+  const [mode, setMode] = useState<'subject' | 'family' | 'major'>('subject');
   const [access, setAccess] = useState<'checking' | 'allowed' | 'denied'>('checking');
   const [selected, setSelected] = useState<string[]>(['物理', '化学', '生物']);
   const [collapsed, setCollapsed] = useState(false);
+  const rec = recommendStudent(SUBJECT_LEVELS);
 
   // 能力图谱灰度开放：仅对指定用户开放，其他人不可用
   useEffect(() => {
@@ -201,6 +203,13 @@ export default function VocabularyPage() {
           >
             <Text style={[styles.tabText, mode === 'family' && styles.tabTextActive]}>家族</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, mode === 'major' && styles.tabActive]}
+            onPress={() => setMode('major')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, mode === 'major' && styles.tabTextActive]}>专业推荐</Text>
+          </TouchableOpacity>
         </View>
 
         {mode === 'subject' ? (
@@ -269,6 +278,32 @@ export default function VocabularyPage() {
               )}
             </View>
           </>
+        ) : mode === 'major' ? (
+          <View style={styles.familyContainer}>
+            <View style={styles.radarWrap}>
+              <Radar labels={ABILITY_IDS} values={rec.ability} />
+              <Text style={styles.radarHint}>你的能力家族：R01 推理与论证 · … · R10 自主学习与元认知</Text>
+            </View>
+            <Text style={styles.sectionTitle}>推荐学科门类（按匹配度排序）</Text>
+            <View style={styles.list}>
+              {rec.fields.map((f, i) => (
+                <View key={f.field} style={[styles.fieldItem, i < 3 && styles.fieldTop]}>
+                  <Text style={styles.fieldRank}>{i + 1}</Text>
+                  <Text style={[styles.fieldName, i < 3 && styles.fieldNameTop]}>{f.field}</Text>
+                  <Text style={styles.fieldScore}>{f.score}%</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.sectionTitle}>匹配门类的代表专业</Text>
+            <View style={styles.list}>
+              {rec.fields.slice(0, 3).map((f) => (
+                <View key={f.field} style={styles.majorItem}>
+                  <Text style={styles.majorField}>{f.field}</Text>
+                  <Text style={styles.majorNames}>{f.majors.join(' · ')}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         ) : (
           <View style={styles.familyContainer}>
             <View style={styles.radarWrap}>
@@ -457,6 +492,61 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    marginTop: 18,
+    marginBottom: 6,
+    paddingHorizontal: 20,
+  },
+  fieldItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  fieldTop: {
+    backgroundColor: '#F0FDF4',
+  },
+  fieldRank: {
+    width: 24,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
+  fieldName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  fieldNameTop: {
+    color: '#15803D',
+  },
+  fieldScore: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  majorItem: {
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  majorField: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  majorNames: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
   dot: {
     width: 10,
