@@ -196,59 +196,59 @@ export default function RecordingGradingScreen() {
           )}
           {canAddMore && (
             <TouchableOpacity
-              className="flex-row items-center py-2.5"
+              className="flex-row items-center px-4 py-3.5 mb-2.5 rounded-lg bg-gray-100"
               onPress={takePhoto}
               activeOpacity={0.6}
             >
-              <Ionicons name="camera-outline" size={22} color="#16A34A" />
-              <Text className="ml-3 text-base text-gray-900">拍照</Text>
+              <Ionicons name="camera-outline" size={20} color="#64748B" />
+              <Text className="ml-3 text-base text-gray-800">拍照</Text>
             </TouchableOpacity>
           )}
           {canAddMore && (
             <TouchableOpacity
-              className="flex-row items-center py-2.5"
+              className="flex-row items-center px-4 py-3.5 rounded-lg bg-gray-100"
               onPress={pickImage}
               activeOpacity={0.6}
             >
-              <Ionicons name="images-outline" size={22} color="#16A34A" />
-              <Text className="ml-3 text-base text-gray-900">从相册选择</Text>
+              <Ionicons name="images-outline" size={20} color="#64748B" />
+              <Text className="ml-3 text-base text-gray-800">从相册选择</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* 2. 判分设置 */}
         <View className="mb-6">
-          <Text className="text-base font-semibold text-gray-900 mb-3">2. 判分设置</Text>
+          <Text className="text-base font-semibold text-gray-900 mb-2">2. 判分设置</Text>
 
           {/* 语言 */}
           <Text className="text-sm text-gray-600 mb-2">答案语言</Text>
-          <View className="flex-row mb-3">
+          <View className="flex-row mb-4">
             {(['en', 'ch'] as const).map((l) => (
-              <TouchableOpacity key={l} className="mr-4 py-1" onPress={() => setLang(l)} activeOpacity={0.6}>
-                <Text className={`text-base ${lang === l ? 'font-semibold text-green-600' : 'text-gray-700'}`}>
+              <TouchableOpacity
+                key={l}
+                className={`mr-3 px-4 py-2 rounded-lg border ${lang === l ? 'bg-blue-50 border-blue-500' : 'bg-gray-100 border-gray-200'}`}
+                onPress={() => setLang(l)}
+                activeOpacity={0.6}
+              >
+                <Text className={`text-sm font-medium ${lang === l ? 'text-blue-600' : 'text-gray-700'}`}>
                   {l === 'en' ? '英文答案' : '中文答案'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-          <View className="flex-row mb-4">
-            {(['en', 'ch'] as const).map((l) => (
-              <View key={l} className={`mr-4 h-0.5 rounded-full ${lang === l ? 'bg-green-500' : 'bg-transparent'}`} style={{ width: lang === l ? 44 : 0 }} />
-            ))}
-          </View>
 
           {/* 满分 */}
           <Text className="text-sm text-gray-600 mb-2">卷面总分</Text>
-          <View className="flex-row items-center mb-4">
+          <View className="flex-row items-center px-4 py-3 rounded-lg bg-gray-100 mb-1">
             <TextInput
-              className="text-2xl font-bold text-gray-900 w-20"
+              className="text-2xl font-bold text-gray-900 flex-1"
               value={maxScore}
               onChangeText={setMaxScore}
               keyboardType="numeric"
               placeholder="60"
               placeholderTextColor="#9CA3AF"
             />
-            <Text className="ml-1 text-sm text-gray-400">分</Text>
+            <Text className="text-sm text-gray-500">分</Text>
           </View>
 
           {/* 参考答案 */}
@@ -268,18 +268,17 @@ export default function RecordingGradingScreen() {
 
         {loading ? (
           <View className="items-center py-6">
-            <ActivityIndicator size="large" color="#16A34A" />
+            <ActivityIndicator size="small" color="#3B82F6" />
             <Text className="mt-3 text-sm text-gray-500">正在识别题目与逐空判分，约需 30-60 秒…</Text>
           </View>
         ) : (
           <TouchableOpacity
-            className="py-4 flex-row items-center justify-center"
+            className={`rounded-xl py-4 items-center ${selectedImages.length ? 'bg-blue-500' : 'bg-gray-300'}`}
             onPress={handleGrade}
             disabled={!selectedImages.length}
-            style={{ opacity: selectedImages.length ? 1 : 0.4 }}
+            activeOpacity={0.8}
           >
-            <Text className="text-base font-semibold text-gray-800">开始录题判分</Text>
-            <Text className="text-base font-semibold text-gray-800 ml-1">→</Text>
+            <Text className="text-base font-semibold text-white">开始录题判分</Text>
           </TouchableOpacity>
         )}
 
