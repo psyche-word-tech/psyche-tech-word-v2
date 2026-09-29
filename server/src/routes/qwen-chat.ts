@@ -6,9 +6,18 @@ const router = Router();
 const QWEN_API_URL_DEFAULT =
   "https://ws-93mjw4d2mm946w5o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions";
 
+// 弦歌回响仅对教师(userId 116 / 13995589952)开放
+const TEACHER_USER_ID = 116;
+
 // 弦歌回响：日常与千问(默认 qwen3.8-max)对话，良师益友式答疑，SSE 流式逐字返回
 router.post("/", authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
+    const authUserId = (req as { userId?: number }).userId;
+    if (authUserId !== TEACHER_USER_ID) {
+      res.status(403).json({ success: false, message: "弦歌回响仅对教师开放" });
+      return;
+    }
+
     const { messages } = req.body;
     if (!Array.isArray(messages) || !messages.length) {
       res.status(400).json({ success: false, message: "messages 参数缺失" });

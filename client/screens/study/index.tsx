@@ -325,7 +325,13 @@ export default function StudyScreen() {
             <TouchableOpacity 
               style={styles.gridItem} 
               activeOpacity={0.8} 
-              onPress={() => router.push('/qwen-chat')}
+              onPress={() => {
+                if (user?.phone === '13995589952' || user?.id === 116) {
+                  router.push('/qwen-chat');
+                } else {
+                  alert('弦歌回响仅对教师开放');
+                }
+              }}
             >
               <Text style={styles.gridLabel}>弦歌回响</Text>
             </TouchableOpacity>
