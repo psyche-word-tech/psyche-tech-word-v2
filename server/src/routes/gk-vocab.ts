@@ -23,26 +23,6 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/** 清理释义中的词性标注（开头 "adj. "/"[v.] " 及内嵌 "；[n]"、" n. "、" ;adv. "），保留中文含义 */
-function stripPosPrefix(m: string): string {
-  let s = (m || '').trim();
-  // 去开头的 "[v.] " 或 "adj. " / "adv./prep. "
-  s = s.replace(/^\[[^\]]*\]\s*/, '').replace(/^[A-Za-z][A-Za-z/.]*\.\s*/, '');
-  // 清理内嵌 "；[v]" / "；[n]" 段
-  s = s.replace(/[；;]\s*\[[^\]]*\]/g, '');
-  // 清理 "；adv." / " ;n." / "； prep." 前导词性（保留其后同段含义），以及句中独立 " n. " / " v. "
-  s = s.replace(/[；;]\s*[A-Za-z][A-Za-z/.]*\./g, '；');
-  s = s.replace(/\s+[A-Za-z][A-Za-z/.]*\.\s*/g, ' ');
-  // 折叠空段位与收尾分号
-  s = s.replace(/[；;]+\s*[；;]*/g, '；').replace(/[；;]\s*$/, '').trim();
-  return s;
-}
-
-/** 完整释义：去掉词性前缀，保留全部含义（不截取第一段） */
-function fullMeaning(m: string | null): string {
-  return stripPosPrefix(m || '');
-}
-
 /** 提取释义开头的词性标注（如 "v."、"adj."、"prep."），无标注返回 '' */
 function mainPos(meaning: string | null): string {
   const t = (meaning || '').trim();
@@ -155,21 +135,21 @@ router.get('/test', async (req, res) => {
     }
 
     const questions = sample.map((w) => {
-      const correct = fullMeaning(w.meaning);
+      const correct = (w.meaning || '').trim();
       const pos = posKey(mainPos(w.meaning));
       const samePosPool = (byPos.get(pos) || []).filter((x) => x.id !== w.id);
       // 优先同词性干扰项；不足则用整池补足
       const distractors: string[] = [];
       for (const c of shuffle(samePosPool)) {
         if (distractors.length >= 4) break;
-        const m = fullMeaning(c.meaning);
+        const m = (c.meaning || '').trim();
         if (m === correct || distractors.includes(m)) continue;
         distractors.push(m);
       }
       if (distractors.length < 4) {
         for (const c of shuffle(pool.filter((x) => x.id !== w.id))) {
           if (distractors.length >= 4) break;
-          const m = fullMeaning(c.meaning);
+          const m = (c.meaning || '').trim();
           if (m === correct || distractors.includes(m)) continue;
           distractors.push(m);
         }
@@ -243,7 +223,7 @@ router.post('/test/submit', async (req, res) => {
       const lv = meta && LEVELS.includes(meta.level) ? meta.level : 'base';
       perLevel[lv].sample++;
       const corr = meta ? meta.meaning : '';
-      if (a.chosen && fullMeaning(corr) === String(a.chosen).trim()) {
+      if (a.chosen && String(corr).trim() === String(a.chosen).trim()) {
         perLevel[lv].correct++;
       }
     }
