@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, RefreshControl, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, RefreshControl, Modal, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -26,6 +26,9 @@ export default function ClassWorkScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<Submission | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const TYPES = ['全部', '小作文', '读后续写'];
 
@@ -98,37 +101,33 @@ export default function ClassWorkScreen() {
   };
 
   const handleDelete = (item: Submission) => {
-    const meta = getMeta(item);
-    Alert.alert(
-      '删除作业',
-      `确定删除 ${meta.studentName}（${meta.className}）的这份作业吗？此操作不可恢复。`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '删除',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const apiBase = getApiBaseUrl();
-              const res = await fetch(`${apiBase}/api/v1/submissions/${item.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${user?.token}` },
-              });
-              const data = await res.json();
-              if (data.success) {
-                Alert.alert('已删除', '作业已删除', [{ text: '确定' }]);
-                fetchSubmissions();
-              } else {
-                Alert.alert('删除失败', data.message || '请重试');
-              }
-            } catch (error) {
-              console.error('删除作业失败:', error);
-              Alert.alert('删除失败', '网络异常，请重试');
-            }
-          },
-        },
-      ],
-    );
+    setConfirmTarget(item);
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmTarget) return;
+    setDeleting(true);
+    try {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/api/v1/submissions/${confirmTarget.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${user?.token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setConfirmTarget(null);
+        fetchSubmissions();
+      } else {
+        setConfirmTarget(null);
+        setErrorMessage(data.message || '删除失败，请重试');
+      }
+    } catch (error) {
+      console.error('删除作业失败:', error);
+      setConfirmTarget(null);
+      setErrorMessage('网络异常，请重试');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const renderItem = ({ item }: { item: Submission }) => {
@@ -257,6 +256,50 @@ export default function ClassWorkScreen() {
           contentContainerStyle={styles.listContent}
         />
       </View>
+
+      {errorMessage ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{errorMessage}</Text>
+          <TouchableOpacity onPress={() => setErrorMessage('')} style={styles.errorClose}>
+            <Text style={styles.errorCloseText}>知道了</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      <Modal
+        visible={!!confirmTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmTarget(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>删除作业</Text>
+            <Text style={styles.modalMsg}>
+              {confirmTarget
+                ? `确定删除 ${getMeta(confirmTarget).studentName}（${getMeta(confirmTarget).className}）的这份作业吗？此操作不可恢复。`
+                : ''}
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalCancel]}
+                onPress={() => setConfirmTarget(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalDanger]}
+                onPress={confirmDelete}
+                activeOpacity={0.7}
+                disabled={deleting}
+              >
+                <Text style={styles.modalDangerText}>{deleting ? '删除中…' : '删除'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -442,5 +485,85 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9CA3AF',
     marginTop: 16,
+  },
+  errorBanner: {
+    position: 'absolute',
+    bottom: 24,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#B91C1C',
+  },
+  errorClose: {
+    marginLeft: 12,
+  },
+  errorCloseText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#B91C1C',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 10,
+  },
+  modalMsg: {
+    fontSize: 15,
+    color: '#4B5563',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancel: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  modalDanger: {
+    backgroundColor: '#DC2626',
+  },
+  modalDangerText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });
