@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { authMiddleware, type AuthRequest } from '../middleware/auth';
 
@@ -65,7 +66,7 @@ router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Re
     const userId = req.userId;
     const { oldPassword, newPassword } = req.body;
 
-    if (!userId || !oldPassword || !newPassword) {
+    if (!userId || !newPassword) {
       return res.json({ success: false, error: '参数不完整' });
     }
 
@@ -86,8 +87,34 @@ router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Re
       return res.json({ success: false, error: '用户不存在' });
     }
 
-    if (user.password !== oldPassword) {
-      return res.json({ success: false, error: '当前密码错误' });
+    // 未设置过密码（首次设置）：跳过旧密码校验
+    if (user.password) {
+      let storedPassword = user.password as string;
+      if (storedPassword && typeof storedPassword === 'object' && (storedPassword as any).hash) {
+        storedPassword = (storedPassword as any).hash;
+      } else if (typeof storedPassword === 'string') {
+        try {
+          const parsed = JSON.parse(storedPassword);
+          if (parsed && parsed.hash) {
+            storedPassword = parsed.hash;
+          }
+        } catch {
+          // 普通 bcrypt hash 字符串，无需解析
+        }
+      }
+      let ok = false;
+      try {
+        if (typeof storedPassword === 'string' && storedPassword.startsWith('$2')) {
+          ok = await bcrypt.compare(oldPassword, storedPassword);
+        } else {
+          ok = storedPassword === oldPassword;
+        }
+      } catch {
+        ok = storedPassword === oldPassword;
+      }
+      if (!ok) {
+        return res.json({ success: false, error: '当前密码错误' });
+      }
     }
 
     // 更新密码
@@ -97,12 +124,36 @@ router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Re
       .eq('id', userId);
 
     if (updateError) {
+      console.error('change-password updateError:', JSON.stringify(updateError));
       return res.json({ success: false, error: '密码更新失败' });
     }
 
-    res.json({ success: true, message: '密码修改成功' });
+    res.json({ success: true, message: user.password ? '密码修改成功' : '密码设置成功' });
   } catch (error) {
     console.error('修改密码错误:', error);
+    res.json({ success: false, error: '服务器错误' });
+  }
+});
+
+// 查询当前用户是否已设置密码
+router.get('/password-status', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.json({ success: false, error: '未登录' });
+    }
+    const supabase = getSupabaseClient();
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('password')
+      .eq('id', userId)
+      .single();
+    if (userError || !user) {
+      return res.json({ success: false, error: '用户不存在' });
+    }
+    res.json({ success: true, hasPassword: !!user.password });
+  } catch (error) {
+    console.error('查询密码状态错误:', error);
     res.json({ success: false, error: '服务器错误' });
   }
 });

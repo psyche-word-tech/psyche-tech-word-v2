@@ -5,10 +5,30 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiBaseUrl } from '@/utils/apiConfig';
+import { useEffect, useState } from 'react';
 
 export default function AccountSettingsScreen() {
   const router = useSafeRouter();
   const { user, logout } = useAuth();
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/v1/user/password-status`, {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        });
+        const data = await res.json();
+        if (mounted) setHasPassword(!!data.hasPassword);
+      } catch (e) {
+        if (mounted) setHasPassword(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.token]);
 
   const handleChangePassword = () => {
     router.push('/change-password');
@@ -33,8 +53,8 @@ export default function AccountSettingsScreen() {
   const menuItems = [
     {
       icon: 'lock-closed',
-      title: '修改密码',
-      subtitle: '定期修改密码保护账号安全',
+      title: hasPassword ? '修改密码' : '设置密码',
+      subtitle: hasPassword ? '定期修改密码保护账号安全' : '首次设置密码，保护账号安全',
       onPress: handleChangePassword,
     },
     {

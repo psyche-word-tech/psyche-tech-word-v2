@@ -4,18 +4,39 @@ import { Header } from '@/components/Header';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiBaseUrl } from '@/utils/apiConfig';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function ChangePasswordScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/v1/user/password-status`, {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        });
+        const data = await res.json();
+        setHasPassword(!!data.hasPassword);
+      } catch (e) {
+        setHasPassword(false);
+      }
+    })();
+  }, [user?.token]);
+
   const handleChangePassword = async () => {
-    if (!oldPassword || !newPassword || !confirmPassword) {
+    if (hasPassword !== false) {
+      if (!oldPassword) {
+        Alert.alert('提示', '请输入当前密码');
+        return;
+      }
+    }
+    if (!newPassword || !confirmPassword) {
       Alert.alert('提示', '请填写所有字段');
       return;
     }
@@ -32,17 +53,18 @@ export default function ChangePasswordScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/change-password`, {
+      const body: any = {
+        userId: user?.id,
+        oldPassword: hasPassword === false ? '' : oldPassword,
+        newPassword,
+      };
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/user/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user?.token}`,
         },
-        body: JSON.stringify({
-          userId: user?.id,
-          oldPassword,
-          newPassword,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -63,7 +85,7 @@ export default function ChangePasswordScreen() {
 
   return (
     <Screen>
-      <Header title="修改密码" />
+      <Header title={hasPassword === false ? '设置密码' : '修改密码'} />
       <View style={{ flex: 1, backgroundColor: '#f5f5f5', padding: 16 }}>
         <View
           style={{
@@ -73,21 +95,29 @@ export default function ChangePasswordScreen() {
             marginBottom: 16,
           }}
         >
-          <Text style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>当前密码</Text>
-          <TextInput
-            style={{
-              borderWidth: 1,
-              borderColor: '#e0e0e0',
-              borderRadius: 8,
-              padding: 12,
-              fontSize: 16,
-              marginBottom: 16,
-            }}
-            placeholder="请输入当前密码"
-            secureTextEntry
-            value={oldPassword}
-            onChangeText={setOldPassword}
-          />
+          {hasPassword === false ? (
+            <Text style={{ fontSize: 13, color: '#999', marginBottom: 12 }}>
+              你尚未设置密码，请设置一个新密码来保护账号安全。
+            </Text>
+          ) : (
+            <>
+              <Text style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>当前密码</Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16,
+                  marginBottom: 16,
+                }}
+                placeholder="请输入当前密码"
+                secureTextEntry
+                value={oldPassword}
+                onChangeText={setOldPassword}
+              />
+            </>
+          )}
 
           <Text style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>新密码</Text>
           <TextInput
@@ -135,12 +165,16 @@ export default function ChangePasswordScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>确认修改</Text>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+              {hasPassword === false ? '确认设置' : '确认修改'}
+            </Text>
           )}
         </TouchableOpacity>
 
         <Text style={{ fontSize: 12, color: '#999', textAlign: 'center', marginTop: 16 }}>
-          修改密码后，其他设备需要重新登录
+          {hasPassword === false
+            ? '设置密码后，可通过密码方式登录账号'
+            : '修改密码后，其他设备需要重新登录'}
         </Text>
       </View>
     </Screen>
