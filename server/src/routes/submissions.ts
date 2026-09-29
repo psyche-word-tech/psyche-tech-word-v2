@@ -67,10 +67,13 @@ router.post('/', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const imageUrl = urlData.publicUrl;
 
     const studentId = '00000000-0000-0000-0000-000000000000';
-    const meta = {
+    const meta: Record<string, any> = {
       className: allowedClass,
       studentName: String(name || '匿名').trim(),
     };
+    if (req.userId) {
+      meta.userId = req.userId;
+    }
 
     const { data, error } = await supabase
       .from('submissions')
@@ -112,7 +115,14 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       }
       query = query.order('created_at', { ascending: false });
     } else {
-      query = query.eq('student_id', '00000000-0000-0000-0000-000000000000').order('created_at', { ascending: false });
+      // 学生「已提交」：按登录用户查自己的提交；无 userId 的匿名提交归到占位学生
+      const key = req.userId ? String(req.userId) : '00000000-0000-0000-0000-000000000000';
+      if (req.userId) {
+        query = query.eq('annotations->>userId', key);
+      } else {
+        query = query.eq('student_id', '00000000-0000-0000-0000-000000000000');
+      }
+      query = query.order('created_at', { ascending: false });
     }
 
     const { data, error } = await query;

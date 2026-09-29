@@ -69,6 +69,8 @@ export default function RootLayout() {
           <Stack.Screen name="word-book" options={{ title: "" }} />
           <Stack.Screen name="progress" options={{ title: "" }} />
           <Stack.Screen name="achievements" options={{ title: "" }} />
+          <Stack.Screen name="my-submissions" options={{ title: "" }} />
+          <Stack.Screen name="my-favorites" options={{ title: "" }} />
           <Stack.Screen name="account-settings" options={{ title: "" }} />
           <Stack.Screen name="reminder" options={{ title: "" }} />
           <Stack.Screen name="display-settings" options={{ title: "" }} />

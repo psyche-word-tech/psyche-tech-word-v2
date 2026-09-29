@@ -448,6 +448,10 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - `teacher-review.tsx` - 教师批改列表（待批改/已批改统计）
 - `review-detail.tsx` - 教师批改详情（图片标注 + 评分 + 评语）
 - `class-work.tsx` - 教师作业查看（班级 tab + 学生原图列表 + 下载班级学情报告 docx）
+- `my-submissions.tsx` - 学生「已提交」（个人中心入口，查看自己提交的作业：按登录用户 `annotations->>userId` 过滤）
+- `my-favorites.tsx` - 学生「我的收藏」（个人中心入口，按学科分组查看收藏题目）
+
+个人中心菜单：`我的词汇书→已提交(/my-submissions)`、`生词本→我的收藏(/my-favorites)`。学生提交时若已登录（带 Bearer token），后端把 `req.userId` 写入 `annotations.userId`，供「已提交」按用户隔离；匿名提交归占位 uuid（只能教师/班级视图看到）。
 
 ### 后端 API
 - `POST /api/v1/submissions` - 提交作业（base64 图片上传，含 name/className）

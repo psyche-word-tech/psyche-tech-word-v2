@@ -1,0 +1,171 @@
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, RefreshControl, ActivityIndicator, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Screen } from '@/components/Screen';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { useAuth } from '@/contexts/AuthContext';
+import { useState, useCallback, useEffect } from 'react';
+import { getApiBaseUrl } from '@/utils/apiConfig';
+
+interface Favorite {
+  id: string;
+  question_text: string;
+  subject?: string | null;
+  answer?: string | null;
+  analysis?: string | null;
+  solution?: string | null;
+  image_url?: string | null;
+  created_at: string;
+}
+
+export default function MyFavoritesScreen() {
+  const router = useSafeRouter();
+  const { user } = useAuth();
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeSubject, setActiveSubject] = useState<string | null>(null);
+
+  const fetchFavorites = useCallback(async () => {
+    try {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/api/v1/favorites`, {
+        headers: { 'Authorization': `Bearer ${user?.token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFavorites(data.data || []);
+      }
+    } catch (error) {
+      console.error('获取收藏失败:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user?.token]);
+
+  useEffect(() => { fetchFavorites(); }, [fetchFavorites]);
+
+  // 按学科分组
+  const grouped = favorites.reduce<Record<string, Favorite[]>>((acc, f) => {
+    const s = f.subject || '其他';
+    (acc[s] = acc[s] || []).push(f);
+    return acc;
+  }, {});
+  const subjects = Object.keys(grouped);
+  const shownSubjects = activeSubject ? [activeSubject] : subjects;
+  const listData = shownSubjects.map((s) => ({ subject: s, items: grouped[s] }));
+
+  const stripHtml = (text: string) =>
+    text.replace(/<[^>]*>/g, '').replace(/\\\(|\\\[|\\\)|\\\]/g, '').slice(0, 60);
+
+  return (
+    <Screen>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>我的收藏</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        {/* 学科过滤 */}
+        {subjects.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subjectBar} contentContainerStyle={styles.subjectBarContent}>
+            <TouchableOpacity
+              style={[styles.subjectChip, activeSubject === null && styles.subjectChipActive]}
+              onPress={() => setActiveSubject(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.subjectChipText, activeSubject === null && styles.subjectChipTextActive]}>全部</Text>
+            </TouchableOpacity>
+            {subjects.map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.subjectChip, activeSubject === s && styles.subjectChipActive]}
+                onPress={() => setActiveSubject(s)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.subjectChipText, activeSubject === s && styles.subjectChipTextActive]}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        <FlatList
+          data={listData}
+          keyExtractor={(item) => item.subject}
+          renderItem={({ item }) => (
+            <View style={styles.group}>
+              <Text style={styles.groupTitle}>{item.subject}（{item.items.length}）</Text>
+              {item.items.map((f) => (
+                <TouchableOpacity key={f.id} style={styles.favItem} activeOpacity={0.7} onPress={() => {
+                  // 打开收藏详情（用文字题干即可，可扩展为详情页）
+                  alert(f.question_text ? stripHtml(f.question_text) : '（图片题目，暂不支持文字预览）');
+                }}>
+                  {f.image_url ? (
+                    <Image source={{ uri: f.image_url }} style={styles.favThumb} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.favThumb, styles.favThumbPlaceholder]}>
+                      <Ionicons name="document-text-outline" size={28} color="#D1D5DB" />
+                    </View>
+                  )}
+                  <View style={styles.favContent}>
+                    <Text style={styles.favTitle} numberOfLines={2}>
+                      {f.question_text ? stripHtml(f.question_text) : '（图片题目）'}
+                    </Text>
+                    <Text style={styles.favDate}>{new Date(f.created_at).toLocaleDateString('zh-CN')}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#CCC" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchFavorites(); }} />}
+          ListEmptyComponent={
+            loading ? (
+              <View style={styles.empty}><ActivityIndicator color="#3B82F6" /></View>
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="star-outline" size={64} color="#D1D5DB" />
+                <Text style={styles.emptyText}>还没有收藏题目</Text>
+              </View>
+            )
+          }
+          contentContainerStyle={styles.listContent}
+        />
+      </View>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
+  },
+  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: '#1F2937' },
+  placeholder: { width: 40 },
+  subjectBar: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  subjectBarContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
+  subjectChip: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
+  subjectChipActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  subjectChipText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  subjectChipTextActive: { color: '#FFFFFF' },
+  listContent: { padding: 16 },
+  group: { marginBottom: 20 },
+  groupTitle: { fontSize: 15, fontWeight: '700', color: '#1F2937', marginBottom: 10 },
+  favItem: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12,
+    padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#F3F4F6',
+  },
+  favThumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#F3F4F6' },
+  favThumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  favContent: { flex: 1, marginLeft: 12 },
+  favTitle: { fontSize: 14, fontWeight: '600', color: '#1F2937', lineHeight: 20 },
+  favDate: { fontSize: 12, color: '#9CA3AF', marginTop: 6 },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+  emptyText: { fontSize: 16, color: '#9CA3AF', marginTop: 16 },
+});

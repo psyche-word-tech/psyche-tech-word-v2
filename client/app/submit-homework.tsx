@@ -5,11 +5,13 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
+import { useAuth } from '@/contexts/AuthContext';
 
 const CLASSES = ['308班', '201班'];
 
 export default function SubmitHomeworkScreen() {
   const router = useSafeRouter();
+  const { user } = useAuth();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [className, setClassName] = useState<string>('');
@@ -66,9 +68,11 @@ export default function SubmitHomeworkScreen() {
 
       // 上传到服务器
       const apiBase = getApiBaseUrl();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (user?.token) headers['Authorization'] = `Bearer ${user.token}`;
       const res = await fetch(`${apiBase}/api/v1/submissions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           image: base64,
           type: 'student',

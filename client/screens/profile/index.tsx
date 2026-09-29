@@ -185,20 +185,20 @@ export default function ProfileScreen() {
 
   const menuItems = [
     {
-      id: 'vocabulary',
-      title: '我的词汇书',
-      icon: 'book',
+      id: 'submitted',
+      title: '已提交',
+      icon: 'paper-plane',
       iconType: 'fontawesome',
       color: '#FF6B35',
-      route: '/vocabulary-books',
+      route: '/my-submissions',
     },
     {
-      id: 'notebook',
-      title: '生词本',
-      icon: 'edit',
+      id: 'favorites',
+      title: '我的收藏',
+      icon: 'star',
       iconType: 'fontawesome',
       color: '#4A90D9',
-      route: '/word-book',
+      route: '/my-favorites',
     },
     {
       id: 'progress',
