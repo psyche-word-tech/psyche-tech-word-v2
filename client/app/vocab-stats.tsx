@@ -16,19 +16,10 @@ interface UserStat {
   incomplete?: boolean;
 }
 
-interface Summary {
-  users: number;
-  base: number;
-  required: number;
-  elective: number;
-  total: number;
-}
-
 export default function VocabStatsScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
   const [list, setList] = useState<UserStat[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -46,7 +37,6 @@ export default function VocabStatsScreen() {
       const data = await res.json();
       if (data.list) {
         setList(data.list);
-        setSummary(data.summary || null);
         setErrorMessage('');
       } else {
         setErrorMessage(data.error || '加载失败');
@@ -76,31 +66,6 @@ export default function VocabStatsScreen() {
         <Text style={styles.headerTitle}>词汇量统计</Text>
         <View style={styles.placeholder} />
       </View>
-
-      {/* 概要卡片 */}
-      {summary && !loading && (
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>已测试用户 {summary.users} 人</Text>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryValue}>{summary.base}</Text>
-              <Text style={styles.summaryLabel}>基础词</Text>
-            </View>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryValue}>{summary.required}</Text>
-              <Text style={styles.summaryLabel}>必修词</Text>
-            </View>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryValue}>{summary.elective}</Text>
-              <Text style={styles.summaryLabel}>选修词</Text>
-            </View>
-            <View style={styles.summaryCell}>
-              <Text style={[styles.summaryValue, styles.summaryValueTotal]}>{summary.total}</Text>
-              <Text style={styles.summaryLabel}>总词汇量</Text>
-            </View>
-          </View>
-        </View>
-      )}
 
       {/* 错误提示 */}
       {errorMessage !== '' && !loading && (
@@ -156,17 +121,6 @@ export default function VocabStatsScreen() {
               </View>
             ))
           )}
-
-          {/* 汇总行 */}
-          {list.length > 0 && summary && (
-            <View style={[styles.row, styles.totalRow]}>
-              <Text style={[styles.cell, styles.cellName, styles.totalText]}>合计</Text>
-              <Text style={[styles.cell, styles.totalText]}>{summary.base}</Text>
-              <Text style={[styles.cell, styles.totalText]}>{summary.required}</Text>
-              <Text style={[styles.cell, styles.totalText]}>{summary.elective}</Text>
-              <Text style={[styles.cell, styles.cellTotal, styles.totalText]}>{summary.total}</Text>
-            </View>
-          )}
         </ScrollView>
       )}
     </Screen>
@@ -195,42 +149,6 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
-  },
-  summaryCard: {
-    margin: 16,
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  summaryTitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 12,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-  },
-  summaryCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  summaryValueTotal: {
-    color: '#6D28D9',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
   },
   errorBox: {
     marginHorizontal: 16,
@@ -304,14 +222,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#6B7280',
-  },
-  totalRow: {
-    backgroundColor: '#EDE9FE',
-    marginTop: 4,
-  },
-  totalText: {
-    fontWeight: '800',
-    color: '#5B21B6',
   },
   emptyBox: {
     alignItems: 'center',
