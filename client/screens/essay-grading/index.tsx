@@ -50,6 +50,8 @@ export default function EssayGradingScreen() {
   const [loading, setLoading] = useState(false);
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
   const [markedImages, setMarkedImages] = useState<string[]>([]);
+  // 自动导入的作业图片对应的 submission 关联（id + studentName），与 selectedImages 索引一一对应（手动添加的为 null）
+  const [autoSubs, setAutoSubs] = useState<({ id: string; studentName: string } | null)[]>([]);
 
   // 从「作业查看」进入批改时，自动导入该班已提交的作业图片，无需再手动选图
   const { cls, type } = useSafeSearchParams<{ cls?: string; type?: string }>();
@@ -68,13 +70,15 @@ export default function EssayGradingScreen() {
           { headers },
         );
         const json = await res.json();
-        const list: Array<{ image_url?: string }> = json?.data || [];
+        const list: Array<{ id?: string; image_url?: string; annotations?: any }> = json?.data || [];
         const urls = list.filter((s) => s.image_url).map((s) => s.image_url!);
         if (!urls.length) return;
         const dataUris: string[] = [];
-        for (const url of urls.slice(0, MAX_PAGES)) {
+        const ids: ({ id: string; studentName: string } | null)[] = [];
+        for (const item of list.slice(0, MAX_PAGES)) {
+          if (!item.image_url) continue;
           try {
-            const imgRes = await fetch(url);
+            const imgRes = await fetch(item.image_url);
             const blob = await imgRes.blob();
             const base64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
@@ -83,12 +87,18 @@ export default function EssayGradingScreen() {
               reader.readAsDataURL(blob);
             });
             dataUris.push(base64);
+            ids.push(
+              item.id
+                ? { id: item.id, studentName: String(item.annotations?.studentName || '') }
+                : null,
+            );
           } catch {
             // 单张失败跳过，不影响其它图片
           }
         }
         if (!cancelled && dataUris.length) {
           setSelectedImages((prev) => [...prev, ...dataUris].slice(0, MAX_PAGES));
+          setAutoSubs((prev) => [...prev, ...ids].slice(0, MAX_PAGES));
         }
       } catch {
         // 自动导入失败不阻塞页面
@@ -169,12 +179,14 @@ export default function EssayGradingScreen() {
     const toAdd = newUris.slice(0, remaining);
     if (!toAdd.length) return;
     setSelectedImages((prev) => [...prev, ...toAdd].slice(0, maxAllowedPages));
+    setAutoSubs((prev) => [...prev, ...toAdd.map(() => null)].slice(0, maxAllowedPages));
     setGradingResult(null);
     setMarkedImages([]);
   };
 
   const removeImage = (index: number) => {
     setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+    setAutoSubs((prev) => prev.filter((_, i) => i !== index));
     setGradingResult(null);
     setMarkedImages([]);
   };
@@ -260,6 +272,14 @@ export default function EssayGradingScreen() {
           subject,
           grading_standard: isContinuation ? (gradingStandard || CONTINUATION_STANDARD) : gradingStandard,
           continuation: isContinuationMode,
+          // 只关联自动导入且属于同一学生的提交，避免把批改结果写错人
+          submission_ids: (() => {
+            const linked = autoSubs.filter((x): x is { id: string; studentName: string } => !!x && !!x.id);
+            if (!linked.length) return [];
+            const names = new Set(linked.map((x) => x.studentName).filter(Boolean));
+            // 同学生多页合并批改 → 全写回；不同学生混合 → 保守只写回第一张
+            return names.size <= 1 ? linked.map((x) => x.id) : [linked[0].id];
+          })(),
         }),
         signal: AbortSignal.timeout(180000), // 180 秒超时（千问 API 需要 50-60 秒）
       });

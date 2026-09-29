@@ -150,7 +150,11 @@ interface GradingResult {
 router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId;
-    const { images, image, reference_answer, grading_standard = '', max_score = 15, subject = 'english', continuation = false } = req.body;
+    const { images, image, reference_answer, grading_standard = '', max_score = 15, subject = 'english', continuation = false, submission_ids } = req.body;
+    // 关联的作业提交（教师从作业查看进入批改时传），批改成功后写回给学生
+    const submissionIds: string[] = Array.isArray(submission_ids)
+      ? submission_ids.map((x: unknown) => String(x)).filter(Boolean)
+      : [];
     console.log('[grade] 收到请求 subject=', subject, 'max_score=', max_score, 'continuation=', !!continuation, 'grading_standard=', (grading_standard || '(空)').slice(0, 200));
 
     // 兼容单图（image）与多张（images[]）入参
@@ -369,6 +373,39 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
 
     if (error) {
       console.error('保存批改结果失败:', error);
+    }
+
+    // 写回关联的作业提交（status=graded + 分数/评语 + 批改内容），供学生「已提交」查看
+    if (submissionIds.length && !error) {
+      const gradingPayload = {
+        total_score: gradingResult?.total_score,
+        max_score,
+        comments: gradingResult?.comments || '',
+        strengths: gradingResult?.strengths || [],
+        improvements: gradingResult?.improvements || [],
+        errors: gradingResult?.errors || [],
+        tier: gradingResult?.tier || null,
+        marked_images: markedImages,
+        graded_at: new Date().toISOString(),
+        grading_id: data?.id,
+      };
+      for (const sid of submissionIds) {
+        // PostgREST 不合并 jsonb，需先读出现有 annotations 再在 JS 层合并后写回
+        const { data: existing } = await supabase.from('submissions').select('annotations').eq('id', sid).maybeSingle();
+        const base = (existing?.annotations && typeof existing.annotations === 'object' && !Array.isArray(existing.annotations)) ? existing.annotations : {};
+        const merged = { ...base, grading: gradingPayload };
+        const { error: updErr } = await supabase
+          .from('submissions')
+          .update({
+            status: 'graded',
+            grade: String(gradingResult?.total_score ?? ''),
+            feedback: (gradingResult?.comments || '').slice(0, 2000),
+            annotations: merged,
+          })
+          .eq('id', sid);
+        if (updErr) console.error('写回批改结果到提交失败:', sid, updErr);
+      }
+      console.log('已写回批改结果到', submissionIds.length, '条提交');
     }
 
     res.json({
