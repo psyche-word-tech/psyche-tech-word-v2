@@ -332,7 +332,6 @@ export default function ProfileScreen() {
             <Text style={styles.roleText}>{userData.role}</Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={20} color="#ccc" />
       </TouchableOpacity>
 
       {/* Stats Section */}
