@@ -714,6 +714,7 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     padding: 16,
+    marginTop: 80,
   },
   bottomRow: {
     height: 150,
