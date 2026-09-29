@@ -55,13 +55,17 @@ export default function EssayGradingScreen() {
   const { cls, type } = useSafeSearchParams<{ cls?: string; type?: string }>();
 
   useEffect(() => {
-    if (!cls) return;
+    if (!cls || !user?.token) return;
     let cancelled = false;
     (async () => {
       try {
         const typeParam = type && type !== '全部' ? `&type=${encodeURIComponent(type)}` : '';
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${user.token}`,
+        };
         const res = await fetch(
           `${getApiBaseUrl()}/api/v1/submissions/class/${encodeURIComponent(cls)}?${typeParam}`,
+          { headers },
         );
         const json = await res.json();
         const list: Array<{ image_url?: string }> = json?.data || [];
@@ -94,7 +98,7 @@ export default function EssayGradingScreen() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cls, type]);
+  }, [cls, type, user?.token]);
 
   // 读后续写识别：用户显式开启开关，或评分标准文本带续写特征（两步法/档位/续写），都视为读后续写模式。
   // 与后端自动识别保持一致：只显示总分，不显示内容/语言/结构/书写四维小分。
