@@ -248,6 +248,29 @@ router.get('/class/:className/summary', optionalAuthMiddleware, async (req: Auth
  * 更新批改结果（合并 annotations，保留 meta）
  * PUT /api/v1/submissions/:id
  */
+/**
+ * 删除单个提交（仅教师）
+ * DELETE /api/v1/submissions/:id
+ */
+router.delete('/:id', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    if (!isTeacher(req)) {
+      return res.status(403).json({ success: false, message: '无权限' });
+    }
+    const { id } = req.params;
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from('submissions').delete().eq('id', id);
+    if (error) {
+      console.error('删除作业失败:', error);
+      return res.status(500).json({ success: false, message: '删除失败' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('删除作业错误:', error);
+    res.status(500).json({ success: false, message: '服务器错误' });
+  }
+});
+
 router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;

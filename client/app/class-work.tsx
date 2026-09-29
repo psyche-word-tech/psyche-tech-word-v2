@@ -97,6 +97,40 @@ export default function ClassWorkScreen() {
     }
   };
 
+  const handleDelete = (item: Submission) => {
+    const meta = getMeta(item);
+    Alert.alert(
+      '删除作业',
+      `确定删除 ${meta.studentName}（${meta.className}）的这份作业吗？此操作不可恢复。`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '删除',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const apiBase = getApiBaseUrl();
+              const res = await fetch(`${apiBase}/api/v1/submissions/${item.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${user?.token}` },
+              });
+              const data = await res.json();
+              if (data.success) {
+                Alert.alert('已删除', '作业已删除', [{ text: '确定' }]);
+                fetchSubmissions();
+              } else {
+                Alert.alert('删除失败', data.message || '请重试');
+              }
+            } catch (error) {
+              console.error('删除作业失败:', error);
+              Alert.alert('删除失败', '网络异常，请重试');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const renderItem = ({ item }: { item: Submission }) => {
     const meta = getMeta(item);
     return (
@@ -118,6 +152,14 @@ export default function ClassWorkScreen() {
           <Text style={styles.itemDate}>
             {new Date(item.created_at).toLocaleString('zh-CN')}
           </Text>
+          <TouchableOpacity
+            style={styles.itemDeleteBtn}
+            onPress={() => handleDelete(item)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={14} color="#DC2626" />
+            <Text style={styles.itemDeleteText}>删除作业</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -375,6 +417,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 6,
+  },
+  itemDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+  },
+  itemDeleteText: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginLeft: 4,
   },
   empty: {
     alignItems: 'center',
