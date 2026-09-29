@@ -70,9 +70,7 @@ export default function ChangePasswordScreen() {
       const data = await response.json();
 
       if (data.success) {
-        Alert.alert('成功', '密码修改成功', [
-          { text: '确定', onPress: () => router.back() },
-        ]);
+        router.back();
       } else {
         Alert.alert('错误', data.error || '密码修改失败');
       }

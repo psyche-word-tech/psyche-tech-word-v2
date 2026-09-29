@@ -120,7 +120,7 @@ router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Re
     // 更新密码
     const { error: updateError } = await supabase
       .from('users')
-      .update({ password: newPassword, updated_at: new Date().toISOString() })
+      .update({ password: newPassword })
       .eq('id', userId);
 
     if (updateError) {
