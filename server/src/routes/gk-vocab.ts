@@ -108,7 +108,7 @@ router.get('/stats', async (_req, res) => {
  */
 router.get('/test', async (req, res) => {
   try {
-    const limit = Math.min(Math.max(Number(req.query.limit) || 120, 10), 200);
+    const perLevel = Math.min(Math.max(Number(req.query.per_level) || 40, 5), 80);
     const all = await fetchAllWords();
     // 出题池 = 已有释义的词
     const pool = all.filter((w) => w.meaning && w.meaning.trim());
@@ -116,7 +116,19 @@ router.get('/test', async (req, res) => {
       res.status(404).json({ error: '可出题的词不足（缺少中文释义）' });
       return;
     }
-    const sample = shuffle(pool).slice(0, Math.min(limit, pool.length));
+    // 按 level 分组，每类随机抽 perLevel 个
+    const byLevel: Record<string, GkWord[]> = { base: [], required: [], elective: [] };
+    for (const w of pool) {
+      if (w.level && byLevel[w.level]) byLevel[w.level].push(w);
+    }
+    const sample: GkWord[] = [];
+    const perLevelCounts: Record<string, number> = { base: 0, required: 0, elective: 0 };
+    for (const lv of LEVELS) {
+      const arr = shuffle(byLevel[lv] || []);
+      const take = arr.slice(0, perLevel);
+      sample.push(...take);
+      perLevelCounts[lv] = take.length;
+    }
 
     // 预建按主导词性分组的词池：同词性词作为干扰项候选
     const byPos = new Map<string, GkWord[]>();
@@ -156,17 +168,34 @@ router.get('/test', async (req, res) => {
       };
     });
 
-    res.json({ total: pool.length, sampleCount: questions.length, questions });
+    res.json({ total: pool.length, sampleCount: questions.length, perLevelCounts, questions });
   } catch (err: any) {
     console.error('[GkVocab] test error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 
+/** 分等级统计有释义的词池大小 */
+async function fetchLevelPoolCounts(): Promise<Record<string, number>> {
+  const client = getSupabaseClient();
+  const out: Record<string, number> = {};
+  for (const lv of LEVELS) {
+    const { count, error } = await client
+      .from('gk_vocab')
+      .select('id', { count: 'exact', head: true })
+      .eq('level', lv)
+      .not('meaning', 'is', null)
+      .neq('meaning', '');
+    if (error) throw error;
+    out[lv] = count || 0;
+  }
+  return out;
+}
+
 /**
  * POST /api/v1/gk-vocab/test/submit
  * body: { answers: [{ id, chosen }], user_id? }
- * chosen 是用户选定的中文选项文本；后端按 word 的正确释义比对，选对才算对。
+ * 按 level（base/required/elective）分别计算识别率，并依据各等级词池大小估算总体词汇量。
  */
 router.post('/test/submit', async (req, res) => {
   try {
@@ -180,24 +209,50 @@ router.post('/test/submit', async (req, res) => {
     const client = getSupabaseClient();
     const { data, error } = await client
       .from('gk_vocab')
-      .select('id, meaning')
+      .select('id, meaning, level')
       .in('id', ids.length ? ids : [0]);
     if (error) throw error;
-    const meaningMap = new Map<number, string>(
-      ((data || []) as { id: number; meaning: string | null }[]).map((r) => [r.id, (r.meaning || '')])
+    const metaMap = new Map<number, { meaning: string; level: string }>(
+      ((data || []) as { id: number; meaning: string | null; level: string | null }[]).map((r) => [
+        r.id,
+        { meaning: r.meaning || '', level: r.level || 'base' },
+      ])
     );
 
-    let correctCount = 0;
+    // 分等级统计
+    const perLevel: Record<string, { sample: number; correct: number }> = {};
+    for (const lv of LEVELS) perLevel[lv] = { sample: 0, correct: 0 };
     for (const a of answers) {
-      const corr = meaningMap.get(Number(a.id)) || '';
+      const meta = metaMap.get(Number(a.id));
+      const lv = meta && LEVELS.includes(meta.level) ? meta.level : 'base';
+      perLevel[lv].sample++;
+      const corr = meta ? meta.meaning : '';
       if (a.chosen && firstMeaning(corr) === String(a.chosen).trim()) {
-        correctCount++;
+        perLevel[lv].correct++;
       }
     }
-    const sampleCount = answers.length;
 
-    const totalWords = await fetchPoolSize();
-    const estimated = totalWords > 0 ? Math.round((correctCount / sampleCount) * totalWords) : 0;
+    // 各等级词池大小
+    const poolCounts = await fetchLevelPoolCounts();
+
+    // 各等级识别率
+    const levelResult: Record<string, { sample: number; correct: number; total: number; rate: number }> = {};
+    let correctCount = 0;
+    let sampleCount = 0;
+    for (const lv of LEVELS) {
+      const s = perLevel[lv];
+      const total = poolCounts[lv] || 0;
+      const rate = s.sample > 0 ? s.correct / s.sample : 0;
+      levelResult[lv] = { sample: s.sample, correct: s.correct, total, rate };
+      correctCount += s.correct;
+      sampleCount += s.sample;
+    }
+
+    // 总体词汇量 = Σ(该等级识别率 × 该等级词池大小)
+    const estimated = Math.round(levelResult.base.rate * levelResult.base.total
+      + levelResult.required.rate * levelResult.required.total
+      + levelResult.elective.rate * levelResult.elective.total);
+    const totalWords = poolCounts.base + poolCounts.required + poolCounts.elective;
 
     const { error: insertErr } = await client.from('vocab_test_records').insert({
       user_id: user_id ? Number(user_id) : null,
@@ -213,6 +268,7 @@ router.post('/test/submit', async (req, res) => {
       sample_count: sampleCount,
       total: totalWords,
       estimated_vocab: estimated,
+      levels: levelResult,
     });
   } catch (err: any) {
     console.error('[GkVocab] submit error:', err);

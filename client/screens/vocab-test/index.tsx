@@ -5,6 +5,7 @@ import { Screen } from '@/components/Screen';
 import { fetchWithRetry } from '@/utils/apiClient';
 
 const TEST_LIMIT = 120;
+const PER_LEVEL = 40;
 
 interface Question {
   id: number;
@@ -37,7 +38,7 @@ export default function VocabTestPage() {
     reqRef.current = controller;
     setPhase('loading');
     try {
-      const res = await fetchWithRetry(`/api/v1/gk-vocab/test?limit=${TEST_LIMIT}`, { signal: controller.signal });
+      const res = await fetchWithRetry(`/api/v1/gk-vocab/test?per_level=${PER_LEVEL}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const test = await res.json();
       if (!test.questions || test.questions.length === 0) throw new Error('词库为空');
@@ -88,9 +89,10 @@ export default function VocabTestPage() {
   const renderIdle = () => (
     <View style={styles.center}>
       <Text style={styles.introTitle}>高中英语 · 词汇量测试</Text>
-      <Text style={styles.introText}>随机抽取 {TEST_LIMIT} 个高中课标英语单词，</Text>
+      <Text style={styles.introText}>按基础 / 必修 / 选修三类分别抽取词汇，</Text>
+      <Text style={styles.introText}>每类各 {PER_LEVEL} 个，共 {TEST_LIMIT} 题。</Text>
       <Text style={styles.introText}>每题从 5 个中文意思中选出正确的一个，</Text>
-      <Text style={styles.introText}>选对才算对，据此估算你的词汇量。</Text>
+      <Text style={styles.introText}>选对才算对，分项估算各类识别率与总体词汇量。</Text>
       <Text style={styles.introText}>（词表共 {total || '--'} 词）</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <TouchableOpacity style={styles.primaryBtn} onPress={startTest}>
@@ -153,29 +155,42 @@ export default function VocabTestPage() {
     </View>
   );
 
-  const renderDone = () => (
-    <ScrollView style={styles.resultWrap} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={styles.resultTitle}>测试完成</Text>
-      <View style={styles.resultCard}>
-        <Text style={styles.resultEstimate}>{result?.estimated_vocab ?? '--'}</Text>
-        <Text style={styles.resultLabel}>估算词汇量（词）</Text>
-      </View>
-      <View style={styles.resultRow}>
-        <Text style={styles.resultRowText}>词库总量：{result?.total ?? total} 词</Text>
-      </View>
-      <View style={styles.resultRow}>
-        <Text style={styles.resultRowText}>抽样 {result?.sample_count ?? 0} 词，答对 {result?.correct_count ?? 0} 词</Text>
-      </View>
-      <Text style={styles.resultTip}>正确率 {result?.sample_count ? Math.round((result.correct_count / result.sample_count) * 100) : 0}%，按比例估算全部词库。</Text>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <TouchableOpacity style={styles.primaryBtn} onPress={startTest}>
-        <Text style={styles.primaryBtnText}>再测一次</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.replace('/my-vocabulary')}>
-        <Text style={styles.secondaryBtnText}>返回词汇书</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
+  const renderDone = () => {
+    const levels = result?.levels || {};
+    const rate = (lv: any) => (lv?.sample ? Math.round(lv.rate * 100) : 0);
+    return (
+      <ScrollView style={styles.resultWrap} contentContainerStyle={{ paddingBottom: 40 }}>
+        <Text style={styles.resultTitle}>测试报告</Text>
+        <View style={styles.resultCard}>
+          <Text style={styles.resultEstimate}>{result?.estimated_vocab ?? '--'}</Text>
+          <Text style={styles.resultLabel}>总体词汇量（词）</Text>
+        </View>
+        <View style={styles.levelCard}>
+          <Text style={styles.levelName}>基础词识别率</Text>
+          <Text style={styles.levelRate}>{rate(levels.base)}%</Text>
+          <Text style={styles.levelSub}>答对 {levels.base?.correct ?? 0} / {levels.base?.sample ?? 0}（词池 {levels.base?.total ?? 0}）</Text>
+        </View>
+        <View style={styles.levelCard}>
+          <Text style={styles.levelName}>必修词识别率</Text>
+          <Text style={styles.levelRate}>{rate(levels.required)}%</Text>
+          <Text style={styles.levelSub}>答对 {levels.required?.correct ?? 0} / {levels.required?.sample ?? 0}（词池 {levels.required?.total ?? 0}）</Text>
+        </View>
+        <View style={styles.levelCard}>
+          <Text style={styles.levelName}>选修词识别率</Text>
+          <Text style={styles.levelRate}>{rate(levels.elective)}%</Text>
+          <Text style={styles.levelSub}>答对 {levels.elective?.correct ?? 0} / {levels.elective?.sample ?? 0}（词池 {levels.elective?.total ?? 0}）</Text>
+        </View>
+        <Text style={styles.resultTip}>总体词汇量 = 基础 / 必修 / 选修识别率分别乘各词池大小后求和估算。</Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <TouchableOpacity style={styles.primaryBtn} onPress={startTest}>
+          <Text style={styles.primaryBtnText}>再测一次</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.replace('/my-vocabulary')}>
+          <Text style={styles.secondaryBtnText}>返回词汇书</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  };
 
   return (
     <Screen>
@@ -252,4 +267,11 @@ const styles = StyleSheet.create({
   resultRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
   resultRowText: { fontSize: 14, color: '#333333', fontFamily: 'serif' },
   resultTip: { fontSize: 12, color: '#999999', fontFamily: 'serif', marginTop: 8, marginBottom: 16, lineHeight: 18 },
+  levelCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E0E0E0',
+    paddingVertical: 16, paddingHorizontal: 18, marginBottom: 12,
+  },
+  levelName: { fontSize: 15, color: '#333333', fontFamily: 'serif', fontWeight: '600' },
+  levelRate: { fontSize: 28, color: '#4CAF50', fontFamily: 'serif', fontWeight: '700', marginTop: 6 },
+  levelSub: { fontSize: 12, color: '#999999', fontFamily: 'serif', marginTop: 6 },
 });
