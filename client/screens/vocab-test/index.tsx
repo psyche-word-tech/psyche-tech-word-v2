@@ -1,8 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Modal } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { fetchWithRetry } from '@/utils/apiClient';
+import { getApiBaseUrl } from '@/utils/apiConfig';
+import { useAuth } from '@/contexts/AuthContext';
 
 const TEST_LIMIT = 120;
 const PER_LEVEL = 40;
@@ -22,7 +24,8 @@ interface Answer {
 
 export default function VocabTestPage() {
   const router = useSafeRouter();
-  const [phase, setPhase] = useState<'idle' | 'loading' | 'testing' | 'submitting' | 'done'>('idle');
+  const { user, updateUser } = useAuth();
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'testing' | 'submitting' | 'name' | 'done'>('idle');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [total, setTotal] = useState(0);
   const [index, setIndex] = useState(0);
@@ -30,6 +33,8 @@ export default function VocabTestPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const reqRef = useRef<AbortController | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameError, setNameError] = useState('');
 
   const startTest = async () => {
     setError('');
@@ -79,12 +84,65 @@ export default function VocabTestPage() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setResult(await res.json());
-      setPhase('done');
+      if (user?.token && (!user.username || !user.username.trim())) {
+        setNameDraft('');
+        setNameError('');
+        setPhase('name');
+      } else {
+        setPhase('done');
+      }
     } catch (e: any) {
       setError(e?.message || '提交失败，请重试');
       setPhase('testing');
     }
   };
+
+  const saveName = async () => {
+    const name = nameDraft.trim();
+    if (!name) {
+      setNameError('请输入你的姓名');
+      return;
+    }
+    if (name.length > 30) {
+      setNameError('姓名最多 30 个字符');
+      return;
+    }
+    setNameError('');
+    setError('');
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/user/update-username`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user?.token}` },
+        body: JSON.stringify({ username: name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        updateUser({ username: name });
+        setPhase('done');
+      } else {
+        setNameError(data.error || '姓名保存失败，请重试');
+      }
+    } catch (e: any) {
+      setNameError('姓名保存失败，请重试');
+    }
+  };
+
+  const renderName = () => (
+    <View style={styles.center}>
+      <Text style={styles.introTitle}>请输入你的姓名</Text>
+      <TextInput
+        style={styles.nameInput}
+        placeholder="你的姓名"
+        placeholderTextColor="#BBBBBB"
+        value={nameDraft}
+        onChangeText={(t) => setNameDraft(t)}
+      />
+      {nameError ? <Text style={styles.error}>{nameError}</Text> : null}
+      <TouchableOpacity style={styles.primaryBtn} onPress={saveName}>
+        <Text style={styles.primaryBtnText}>查看测试结果</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const renderIdle = () => (
     <View style={styles.center}>
@@ -206,6 +264,7 @@ export default function VocabTestPage() {
         {phase === 'loading' && renderLoading()}
         {phase === 'testing' && renderTesting()}
         {phase === 'submitting' && renderSubmitting()}
+        {phase === 'name' && renderName()}
         {phase === 'done' && renderDone()}
       </View>
     </Screen>
@@ -229,6 +288,10 @@ const styles = StyleSheet.create({
   secondaryBtn: { marginTop: 12, paddingHorizontal: 24, paddingVertical: 10 },
   secondaryBtnText: { fontSize: 14, color: '#4CAF50', fontFamily: 'serif' },
   loadingText: { fontSize: 14, color: '#999999', fontFamily: 'serif', marginTop: 12 },
+  nameInput: {
+    borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 10,
+    width: '80%', marginTop: 20, fontSize: 16, color: '#333333', fontFamily: 'serif',
+  },
   testScroll: { flex: 1 },
   testWrap: { padding: 20, alignItems: 'center' },
   progress: { fontSize: 13, color: '#999999', fontFamily: 'serif', marginBottom: 12 },
