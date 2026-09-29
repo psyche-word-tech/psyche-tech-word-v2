@@ -13,6 +13,7 @@ interface UserStat {
   required: number;
   elective: number;
   total: number;
+  incomplete?: boolean;
 }
 
 interface Summary {
@@ -127,6 +128,9 @@ export default function VocabStatsScreen() {
               <Text style={[styles.cell, styles.cellTotal, styles.headText]}>总词汇量</Text>
             </View>
           )}
+          {list.some((it) => it.incomplete) && (
+            <Text style={styles.legendNote}>注：带「—」的用户为旧版单次测试记录，仅保留总量，请让其重新测试以获取基础/必修/选修分项。</Text>
+          )}
 
           {list.length === 0 && !loading ? (
             <View style={styles.emptyBox}><Text style={styles.emptyText}>暂无做过词汇量测试的用户</Text></View>
@@ -134,10 +138,21 @@ export default function VocabStatsScreen() {
             list.map((item, i) => (
               <View key={item.user_id} style={[styles.row, i % 2 === 1 && styles.rowAlt]}>
                 <Text style={[styles.cell, styles.cellName]} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.cell}>{item.base}</Text>
-                <Text style={styles.cell}>{item.required}</Text>
-                <Text style={styles.cell}>{item.elective}</Text>
-                <Text style={[styles.cell, styles.cellTotal]}>{item.total}</Text>
+                {item.incomplete ? (
+                  <>
+                    <Text style={[styles.cell, styles.cellDash]}>—</Text>
+                    <Text style={[styles.cell, styles.cellDash]}>—</Text>
+                    <Text style={[styles.cell, styles.cellDash]}>—</Text>
+                    <Text style={[styles.cell, styles.cellHint]}>{item.total}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.cell}>{item.base}</Text>
+                    <Text style={styles.cell}>{item.required}</Text>
+                    <Text style={styles.cell}>{item.elective}</Text>
+                    <Text style={[styles.cell, styles.cellTotal]}>{item.total}</Text>
+                  </>
+                )}
               </View>
             ))
           )}
@@ -271,6 +286,19 @@ const styles = StyleSheet.create({
   cellTotal: {
     fontWeight: '700',
     color: '#6D28D9',
+  },
+  cellDash: {
+    color: '#D1D5DB',
+  },
+  cellHint: {
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  legendNote: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    fontSize: 12,
+    color: '#B45309',
   },
   headText: {
     fontSize: 12,

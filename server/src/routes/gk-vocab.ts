@@ -333,16 +333,23 @@ router.get('/stats/users', optionalAuthMiddleware, (_req, res) => {
       nameMap.set(Number(u.id), (u as any).username || (u as any).phone || `用户${u.id}`);
     }
 
-    const list = Array.from(users.entries()).map(([uid, rec]) => ({
-      user_id: uid,
-      name: nameMap.get(uid) || `用户${uid}`,
-      base: rec.base ?? 0,
-      required: rec.required ?? 0,
-      elective: rec.elective ?? 0,
-      total: rec.total ?? ((rec.base ?? 0) + (rec.required ?? 0) + (rec.elective ?? 0)),
-    })).sort((a, b) => b.total - a.total);
+    const list = Array.from(users.entries()).map(([uid, rec]) => {
+      const hasAll = ['base', 'required', 'elective'].every((lv) => rec[lv as 'base'] !== undefined);
+      const hasTotal = rec.total !== undefined;
+      const base = rec.base ?? 0, required = rec.required ?? 0, elective = rec.elective ?? 0;
+      return {
+        user_id: uid,
+        name: nameMap.get(uid) || `用户${uid}`,
+        base,
+        required,
+        elective,
+        total: rec.total ?? (base + required + elective),
+        // 只有历史 all 记录、无分等级行：标记为「仅总量」历史数据，前端提示重新测试
+        incomplete: !hasAll && hasTotal,
+      };
+    }).sort((a, b) => b.total - a.total);
 
-    // 汇总行
+    // 汇总行（分等级缺失的历史用户不计入分项合计，避免与总量口径混算）
     const summary = {
       users: list.length,
       base: list.reduce((s, r) => s + r.base, 0),
