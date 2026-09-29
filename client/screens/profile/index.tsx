@@ -385,6 +385,16 @@ export default function ProfileScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color="#ccc" />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingsItem, styles.settingsItemLast]}
+            onPress={() => router.push('/vocab-stats')}
+          >
+            <View style={styles.settingsLeft}>
+              <Ionicons name="stats-chart" size={20} color="#8E44AD" />
+              <Text style={[styles.settingsText, { color: '#8E44AD' }]}>词汇量统计</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          </TouchableOpacity>
         </View>
       )}
 

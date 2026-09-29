@@ -1,5 +1,6 @@
 import express from 'express';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
+import { optionalAuthMiddleware } from '@/middleware/auth';
 
 const router = express.Router();
 
@@ -254,13 +255,17 @@ router.post('/test/submit', async (req, res) => {
       + levelResult.elective.rate * levelResult.elective.total);
     const totalWords = poolCounts.base + poolCounts.required + poolCounts.elective;
 
-    const { error: insertErr } = await client.from('vocab_test_records').insert({
-      user_id: user_id ? Number(user_id) : null,
-      level: 'all',
-      sample_count: sampleCount,
-      known_count: correctCount,
-      estimated_vocab: estimated,
+    // 多行插入：每个等级一行 + 总体一行，便于教师按用户统计分项词汇量
+    const uid = user_id ? Number(user_id) : null;
+    const rows: { user_id: number | null; level: string; sample_count: number; known_count: number; estimated_vocab: number }[] = LEVELS.map((lv) => {
+      const s = perLevel[lv];
+      const total = poolCounts[lv] || 0;
+      const est = Math.round((s.sample > 0 ? s.correct / s.sample : 0) * total);
+      return { user_id: uid, level: lv, sample_count: s.sample, known_count: s.correct, estimated_vocab: est };
     });
+    rows.push({ user_id: uid, level: 'all', sample_count: sampleCount, known_count: correctCount, estimated_vocab: estimated });
+
+    const { error: insertErr } = await client.from('vocab_test_records').insert(rows);
     if (insertErr) throw insertErr;
 
     res.json({
@@ -274,6 +279,84 @@ router.post('/test/submit', async (req, res) => {
     console.error('[GkVocab] submit error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
+});
+
+/**
+ * GET /api/v1/gk-vocab/stats/users
+ * 教师查看所有做过词汇量测试的用户的词汇量统计。
+ * 每个用户取最近一次测试，返回 基础词/必修词/选修词/总体词汇量，末尾附汇总行。
+ */
+router.get('/stats/users', optionalAuthMiddleware, (_req, res) => {
+  void (async () => {
+  try {
+    const req = _req as any;
+    if (!req.userId || req.userId !== 116) {
+      res.status(403).json({ error: '无权限：仅限教师查看' });
+      return;
+    }
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from('vocab_test_records')
+      .select('user_id, level, sample_count, known_count, estimated_vocab, created_at')
+      .not('user_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(2000);
+    if (error) throw error;
+    const rows = data || [];
+
+    // 对每个 (用户, 等级) 独立取其最新一条（created_at 已 desc，首次赋值即最新）
+    const latest = new Map<string, { est: number; time?: string }>();
+    for (const r of rows) {
+      const uid = Number(r.user_id);
+      if (!r.level) continue;
+      const key = `${uid}:${r.level}`;
+      if (!latest.has(key)) latest.set(key, { est: Number(r.estimated_vocab) });
+    }
+
+    const users = new Map<number, { base?: number; required?: number; elective?: number; total?: number }>();
+    for (const [key, v] of latest) {
+      const i = key.lastIndexOf(':');
+      const uid = Number(key.slice(0, i));
+      const lv = key.slice(i + 1);
+      if (!users.has(uid)) users.set(uid, {});
+      const rec = users.get(uid)!;
+      if (lv === 'base') rec.base = v.est;
+      else if (lv === 'required') rec.required = v.est;
+      else if (lv === 'elective') rec.elective = v.est;
+      else if (lv === 'all') rec.total = v.est;
+    }
+
+    // 用户名（users 表）
+    const { data: urows } = await client.from('users').select('id, username, phone');
+    const nameMap = new Map<number, string>();
+    for (const u of (urows || [])) {
+      nameMap.set(Number(u.id), (u as any).username || (u as any).phone || `用户${u.id}`);
+    }
+
+    const list = Array.from(users.entries()).map(([uid, rec]) => ({
+      user_id: uid,
+      name: nameMap.get(uid) || `用户${uid}`,
+      base: rec.base ?? 0,
+      required: rec.required ?? 0,
+      elective: rec.elective ?? 0,
+      total: rec.total ?? ((rec.base ?? 0) + (rec.required ?? 0) + (rec.elective ?? 0)),
+    })).sort((a, b) => b.total - a.total);
+
+    // 汇总行
+    const summary = {
+      users: list.length,
+      base: list.reduce((s, r) => s + r.base, 0),
+      required: list.reduce((s, r) => s + r.required, 0),
+      elective: list.reduce((s, r) => s + r.elective, 0),
+      total: list.reduce((s, r) => s + r.total, 0),
+    };
+
+    res.json({ list, summary });
+  } catch (err: any) {
+    console.error('[GkVocab] stats users error:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+  })();
 });
 
 export default router;

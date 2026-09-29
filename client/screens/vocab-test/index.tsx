@@ -80,7 +80,7 @@ export default function VocabTestPage() {
       const res = await fetchWithRetry(`/api/v1/gk-vocab/test/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers, user_id: user?.id }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setResult(await res.json());
