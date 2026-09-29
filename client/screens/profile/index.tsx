@@ -83,7 +83,10 @@ export default function ProfileScreen() {
     try {
       const response = await fetch(`${getApiBaseUrl()}/api/v1/user/update-username`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.token}`,
+        },
         body: JSON.stringify({ username: name }),
       });
       const data = await response.json();
