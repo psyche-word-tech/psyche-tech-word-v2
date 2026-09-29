@@ -63,6 +63,7 @@ export default function RootLayout() {
           <Stack.Screen name="subject-radar" options={{ title: "" }} />
           <Stack.Screen name="submit-homework" options={{ title: "" }} />
           <Stack.Screen name="teacher-review" options={{ title: "" }} />
+          <Stack.Screen name="class-work" options={{ title: "" }} />
           <Stack.Screen name="review-detail" options={{ title: "" }} />
           <Stack.Screen name="vocabulary-books" options={{ title: "" }} />
           <Stack.Screen name="word-book" options={{ title: "" }} />

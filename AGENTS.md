@@ -436,16 +436,27 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 ### Storage Bucket
 - `submissions` - 存储学生上传的作业图片（公开访问）
 
+### 班级分工（308班/201班）
+学生提交时选择班级并填写姓名，班级+姓名存在 `annotations`（JSONB）的 `className`/`studentName` 字段（`submissions` 线上表无 student_name/class_name 列，且 server 的 Supabase 仅有 Data API 无 DDL，故复用 annotations，勿试图加列）。过滤用 `annotations->>className`。学生 `student_id` 用占位 UUID `00000000-0000-0000-0000-000000000000`（用户表非 uuid、学生未登录也需可提交）。
+
+- **唯一教师** = userId `116`（手机号 `13995589952`），后端 `isTeacher` = req.userId===116。前端个人中心判断 `user.phone==='13995589952' || user.id===116`，仅教师显示「作业查看」入口。
+- 学生提交走 `POST /api/v1/submissions`（`optionalAuthMiddleware`，无需登录，body 传 `{image,name,className,type:'student'}`）。
+- 教师班级查询用 `GET /api/v1/submissions/class/:className`（必带 `Authorization: Bearer <token>`，非教师 403）；`/class/*` 路由必须挂 `optionalAuthMiddleware` 先解析 req.userId，否则 isTeacher 恒 false。`req.params` 为 `string|string[]`，需 `String(req.params.className)` 强转。
+
 ### 前端页面
-- `submit-homework.tsx` - 学生提交作业（拍照/相册选择）
+- `submit-homework.tsx` - 学生提交作业（班级选择 308班/201班 + 姓名输入 + 拍照/相册选择）
 - `teacher-review.tsx` - 教师批改列表（待批改/已批改统计）
 - `review-detail.tsx` - 教师批改详情（图片标注 + 评分 + 评语）
+- `class-work.tsx` - 教师作业查看（班级 tab + 学生原图列表 + 下载班级学情报告 docx）
 
 ### 后端 API
-- `POST /api/submissions` - 提交作业（base64 图片上传）
-- `GET /api/submissions?role=teacher` - 获取提交列表
-- `PUT /api/submissions/:id` - 更新批改结果
-- `GET /api/submissions/:id` - 获取单个提交详情
+- `POST /api/v1/submissions` - 提交作业（base64 图片上传，含 name/className）
+- `GET /api/v1/submissions?role=teacher` - 获取提交列表
+- `PUT /api/v1/submissions/:id` - 更新批改结果
+- `GET /api/v1/submissions/:id` - 获取单个提交详情
+- `GET /api/v1/submissions/class/:className` - 教师按班级查询
+- `GET /api/v1/submissions/class/:className/summary` - 班级学情汇总
+- `POST /api/v1/submissions/class/:className/report` - 生成班级学情报告 Word（docx 库；`Content-Disposition` filename 必须纯 ASCII 如 `class-report.docx`，不能含中文）
 
 ### 主页入口
 右上角加号图标：

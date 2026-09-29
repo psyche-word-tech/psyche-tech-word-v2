@@ -54,6 +54,8 @@ export const favorites = pgTable("favorites", {
 export const submissions = pgTable("submissions", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	studentId: uuid("student_id").notNull(),
+	studentName: text("student_name"),
+	className: text("class_name"),
 	teacherId: uuid("teacher_id"),
 	imageUrl: text("image_url").notNull(),
 	status: text().default('pending').notNull(),

@@ -42,6 +42,7 @@ export default function ProfileScreen() {
   }, [user]);
 
   const roleLabel = user?.role === 'teacher' ? '教师' : '学生';
+  const isTeacher = user?.phone === '13995589952' || user?.id === 116;
 
   // 用户数据（实际应从API获取）
   const userData = {
@@ -320,6 +321,23 @@ export default function ProfileScreen() {
           ))}
         </View>
       </View>
+
+      {/* Teacher Work Entry */}
+      {isTeacher && (
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>教师工作台</Text>
+          <TouchableOpacity
+            style={styles.settingsItem}
+            onPress={() => router.push('/class-work')}
+          >
+            <View style={styles.settingsLeft}>
+              <Ionicons name="briefcase" size={20} color="#8E44AD" />
+              <Text style={[styles.settingsText, { color: '#8E44AD' }]}>作业查看</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Settings List */}
       <View style={styles.settingsSection}>

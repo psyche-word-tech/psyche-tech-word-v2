@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -6,10 +6,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 
+const CLASSES = ['308班', '201班'];
+
 export default function SubmitHomeworkScreen() {
   const router = useSafeRouter();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [className, setClassName] = useState<string>('');
+  const [studentName, setStudentName] = useState<string>('');
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -35,6 +39,14 @@ export default function SubmitHomeworkScreen() {
   };
 
   const handleSubmit = async () => {
+    if (!className) {
+      Alert.alert('提示', '请选择班级');
+      return;
+    }
+    if (!studentName.trim()) {
+      Alert.alert('提示', '请填写姓名');
+      return;
+    }
     if (!selectedImage) {
       Alert.alert('提示', '请先选择或拍摄图片');
       return;
@@ -54,12 +66,14 @@ export default function SubmitHomeworkScreen() {
 
       // 上传到服务器
       const apiBase = getApiBaseUrl();
-      const res = await fetch(`${apiBase}/api/submissions`, {
+      const res = await fetch(`${apiBase}/api/v1/submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: base64,
           type: 'student',
+          name: studentName.trim(),
+          className,
         }),
       });
 
@@ -95,6 +109,31 @@ export default function SubmitHomeworkScreen() {
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+          <View style={styles.formCard}>
+            <Text style={styles.label}>选择班级</Text>
+            <View style={styles.classRow}>
+              {CLASSES.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  style={[styles.classChip, className === c && styles.classChipActive]}
+                  onPress={() => setClassName(c)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.classChipText, className === c && styles.classChipTextActive]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.label, { marginTop: 16 }]}>姓名</Text>
+            <TextInput
+              style={styles.nameInput}
+              value={studentName}
+              onChangeText={setStudentName}
+              placeholder="请输入你的姓名"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
           {selectedImage ? (
             <View style={styles.imageContainer}>
               <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="contain" />
@@ -177,6 +216,54 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 24,
     alignItems: 'center',
+  },
+  formCard: {
+    width: '100%',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  classRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  classChip: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  classChipActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  classChipText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  classChipTextActive: {
+    color: '#FFFFFF',
+  },
+  nameInput: {
+    width: '100%',
+    height: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#1F2937',
   },
   uploadArea: {
     width: '100%',
