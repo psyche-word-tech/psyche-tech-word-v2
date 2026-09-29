@@ -1,11 +1,11 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ActivityIndicator, TextInput, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
-import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 
 interface GradingResult {
@@ -50,6 +50,51 @@ export default function EssayGradingScreen() {
   const [loading, setLoading] = useState(false);
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
   const [markedImages, setMarkedImages] = useState<string[]>([]);
+
+  // 从「作业查看」进入批改时，自动导入该班已提交的作业图片，无需再手动选图
+  const { cls, type } = useSafeSearchParams<{ cls?: string; type?: string }>();
+
+  useEffect(() => {
+    if (!cls) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const typeParam = type && type !== '全部' ? `&type=${encodeURIComponent(type)}` : '';
+        const res = await fetch(
+          `${getApiBaseUrl()}/api/v1/submissions/class/${encodeURIComponent(cls)}?${typeParam}`,
+        );
+        const json = await res.json();
+        const list: Array<{ image_url?: string }> = json?.data || [];
+        const urls = list.filter((s) => s.image_url).map((s) => s.image_url!);
+        if (!urls.length) return;
+        const dataUris: string[] = [];
+        for (const url of urls.slice(0, MAX_PAGES)) {
+          try {
+            const imgRes = await fetch(url);
+            const blob = await imgRes.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result));
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            dataUris.push(base64);
+          } catch {
+            // 单张失败跳过，不影响其它图片
+          }
+        }
+        if (!cancelled && dataUris.length) {
+          setSelectedImages((prev) => [...prev, ...dataUris].slice(0, MAX_PAGES));
+        }
+      } catch {
+        // 自动导入失败不阻塞页面
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cls, type]);
 
   // 读后续写识别：用户显式开启开关，或评分标准文本带续写特征（两步法/档位/续写），都视为读后续写模式。
   // 与后端自动识别保持一致：只显示总分，不显示内容/语言/结构/书写四维小分。

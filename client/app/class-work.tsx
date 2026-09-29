@@ -167,7 +167,11 @@ export default function ClassWorkScreen() {
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.gradeBtn]}
-            onPress={() => router.push('/essay-grading')}
+            onPress={() =>
+              router.push('/essay-grading', {
+                cls: activeClass,
+                type: activeType,
+              })}
             activeOpacity={0.7}
           >
             <Ionicons name="create-outline" size={18} color="#fff" />
