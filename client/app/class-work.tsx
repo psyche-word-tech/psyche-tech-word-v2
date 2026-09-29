@@ -145,22 +145,32 @@ export default function ClassWorkScreen() {
           ))}
         </View>
 
-        {/* 下载报告 */}
-        <TouchableOpacity
-          style={styles.reportBtn}
-          onPress={handleDownloadReport}
-          disabled={reporting}
-          activeOpacity={0.7}
-        >
-          {reporting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="download" size={18} color="#fff" />
-              <Text style={styles.reportBtnText}>下载《{activeClass} 学情报告》</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {/* 操作按钮：批改 + 下载报告 */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.gradeBtn]}
+            onPress={() => router.push('/essay-grading')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="create-outline" size={18} color="#fff" />
+            <Text style={styles.actionBtnText}>批改</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.reportBtn]}
+            onPress={handleDownloadReport}
+            disabled={reporting}
+            activeOpacity={0.7}
+          >
+            {reporting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="download" size={18} color="#fff" />
+                <Text style={styles.actionBtnText}>下载学情报告</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* 列表 */}
         <FlatList
@@ -242,17 +252,34 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   reportBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: '#3B82F6',
     borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
     paddingVertical: 12,
   },
-  reportBtnText: {
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  gradeBtn: {
+    backgroundColor: '#8B5CF6',
+  },
+  actionBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
