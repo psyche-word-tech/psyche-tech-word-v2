@@ -174,8 +174,8 @@ export default function RecordingGradingScreen() {
 
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         {/* 1. 上传卷子 */}
-        <View className="bg-white rounded-xl p-4 mb-4">
-          <Text className="text-base font-semibold text-gray-800 mb-3">1. 上传卷子图片</Text>
+        <View className="mb-6">
+          <Text className="text-base font-semibold text-gray-900 mb-3">1. 上传卷子图片</Text>
           {selectedImages.length > 0 && (
             <View className="flex-row flex-wrap mb-3">
               {selectedImages.map((uri, idx) => (
@@ -194,61 +194,65 @@ export default function RecordingGradingScreen() {
               ))}
             </View>
           )}
-          <View className="flex-row">
-            {canAddMore && (
-              <TouchableOpacity
-                className="flex-1 mr-2 h-24 rounded-lg border-2 border-dashed border-green-500 items-center justify-center"
-                onPress={takePhoto}
-              >
-                <Ionicons name="camera-outline" size={28} color="#16A34A" />
-                <Text className="mt-1 text-sm text-green-600">拍照</Text>
-              </TouchableOpacity>
-            )}
-            {canAddMore && (
-              <TouchableOpacity
-                className="flex-1 ml-2 h-24 rounded-lg border-2 border-dashed border-green-500 items-center justify-center"
-                onPress={pickImage}
-              >
-                <Ionicons name="images-outline" size={28} color="#16A34A" />
-                <Text className="mt-1 text-sm text-green-600">从相册选择</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {canAddMore && (
+            <TouchableOpacity
+              className="flex-row items-center py-2.5"
+              onPress={takePhoto}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="camera-outline" size={22} color="#16A34A" />
+              <Text className="ml-3 text-base text-gray-900">拍照</Text>
+            </TouchableOpacity>
+          )}
+          {canAddMore && (
+            <TouchableOpacity
+              className="flex-row items-center py-2.5"
+              onPress={pickImage}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="images-outline" size={22} color="#16A34A" />
+              <Text className="ml-3 text-base text-gray-900">从相册选择</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* 2. 判分设置 */}
-        <View className="bg-white rounded-xl p-4 mb-4">
-          <Text className="text-base font-semibold text-gray-800 mb-3">2. 判分设置</Text>
+        <View className="mb-6">
+          <Text className="text-base font-semibold text-gray-900 mb-3">2. 判分设置</Text>
 
           {/* 语言 */}
-          <Text className="text-sm text-gray-600 mb-1">答案语言</Text>
+          <Text className="text-sm text-gray-600 mb-2">答案语言</Text>
           <View className="flex-row mb-3">
             {(['en', 'ch'] as const).map((l) => (
-              <TouchableOpacity
-                key={l}
-                className={`flex-1 py-2 rounded-lg mr-2 items-center ${lang === l ? 'bg-blue-500' : 'bg-gray-100'}`}
-                onPress={() => setLang(l)}
-              >
-                <Text className={`text-sm font-medium ${lang === l ? 'text-white' : 'text-gray-700'}`}>
+              <TouchableOpacity key={l} className="mr-4 py-1" onPress={() => setLang(l)} activeOpacity={0.6}>
+                <Text className={`text-base ${lang === l ? 'font-semibold text-green-600' : 'text-gray-700'}`}>
                   {l === 'en' ? '英文答案' : '中文答案'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+          <View className="flex-row mb-4">
+            {(['en', 'ch'] as const).map((l) => (
+              <View key={l} className={`mr-4 h-0.5 rounded-full ${lang === l ? 'bg-green-500' : 'bg-transparent'}`} style={{ width: lang === l ? 44 : 0 }} />
+            ))}
+          </View>
 
           {/* 满分 */}
-          <Text className="text-sm text-gray-600 mb-1">卷面总分</Text>
-          <TextInput
-            className="h-11 border border-gray-300 rounded-lg px-3 mb-3 bg-white text-gray-900"
-            value={maxScore}
-            onChangeText={setMaxScore}
-            keyboardType="numeric"
-            placeholder="例如 60"
-            placeholderTextColor="#9CA3AF"
-          />
+          <Text className="text-sm text-gray-600 mb-2">卷面总分</Text>
+          <View className="flex-row items-center mb-4">
+            <TextInput
+              className="text-2xl font-bold text-gray-900 w-20"
+              value={maxScore}
+              onChangeText={setMaxScore}
+              keyboardType="numeric"
+              placeholder="60"
+              placeholderTextColor="#9CA3AF"
+            />
+            <Text className="ml-1 text-sm text-gray-400">分</Text>
+          </View>
 
           {/* 参考答案 */}
-          <Text className="text-sm text-gray-600 mb-1">标准答案（可留空，模型按题干推断）</Text>
+          <Text className="text-sm text-gray-600 mb-2">标准答案（可留空，模型按题干推断）</Text>
           <TextInput
             className="min-h-[100px] border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 text-left"
             value={referenceAnswer}
@@ -269,19 +273,20 @@ export default function RecordingGradingScreen() {
           </View>
         ) : (
           <TouchableOpacity
-            className="h-12 rounded-full bg-green-500 items-center justify-center"
+            className="py-4 flex-row items-center justify-center"
             onPress={handleGrade}
             disabled={!selectedImages.length}
-            style={{ opacity: selectedImages.length ? 1 : 0.5 }}
+            style={{ opacity: selectedImages.length ? 1 : 0.4 }}
           >
-            <Text className="text-white font-semibold text-base">开始录题判分</Text>
+            <Text className="text-base font-semibold text-gray-800">开始录题判分</Text>
+            <Text className="text-base font-semibold text-gray-800 ml-1">→</Text>
           </TouchableOpacity>
         )}
 
         {/* 结果 */}
         {result && (
           <View className="mt-6">
-            <View className="bg-white rounded-xl p-4 mb-4 flex-row items-center justify-between border border-gray-200">
+            <View className="mb-4 flex-row items-center justify-between">
               <Text className="text-gray-600">总分</Text>
               <Text className="text-3xl font-bold text-green-600">
                 {result.total_score}
@@ -291,7 +296,7 @@ export default function RecordingGradingScreen() {
 
             {result.blanks.length > 0 && (
               <View className="mb-4">
-                <View className="bg-white rounded-xl p-4 mb-4">
+                <View className="mb-4">
                   <Text className="text-base font-semibold text-gray-800 mb-3">卷面标注（点击可查看批注位置）</Text>
                   {markedImages.length > 0 ? (
                     markedImages.map((img, idx) => (
@@ -305,12 +310,12 @@ export default function RecordingGradingScreen() {
             )}
 
             {result.comments ? (
-              <View className="bg-white rounded-xl p-4 mb-4">
+              <View className="mb-4">
                 <Text className="text-sm text-gray-600">{result.comments}</Text>
               </View>
             ) : null}
 
-            <View className="bg-white rounded-xl p-4 mb-4">
+            <View className="mb-4">
               <Text className="text-base font-semibold text-gray-800 mb-3">逐空判分（{result.blanks.length} 空）</Text>
               {result.blanks.map((b, idx) => (
                 <View
