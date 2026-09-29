@@ -134,7 +134,7 @@ export default function ClassWorkScreen() {
   const renderItem = ({ item }: { item: Submission }) => {
     const meta = getMeta(item);
     return (
-      <TouchableOpacity style={styles.item} activeOpacity={0.7}>
+      <View style={styles.item}>
         <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" />
         <View style={styles.itemContent}>
           <Text style={styles.itemName}>{meta.studentName}</Text>
@@ -161,7 +161,7 @@ export default function ClassWorkScreen() {
             <Text style={styles.itemDeleteText}>删除作业</Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
