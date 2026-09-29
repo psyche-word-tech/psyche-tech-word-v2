@@ -19,6 +19,16 @@ export default function QwenChatPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  // 用户是否正在手动上滚查看（true 时暂停自动跟随底部）
+  const userScrollingUpRef = useRef(false);
+
+  const detectScroll = (e: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - layoutMeasurement.height - contentOffset.y;
+    // 距底部超过一定阈值视为"在看上面"，否则视为已回到底部
+    userScrollingUpRef.current = distanceFromBottom > 200;
+  };
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -91,7 +101,10 @@ export default function QwenChatPage() {
   }, [input, loading, messages]);
 
   useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
+    // 流式输出期间，仅当用户没有主动上滚查看时才自动跟随底部
+    if (!userScrollingUpRef.current) {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    }
   }, [messages, loading]);
 
   // 首次进入立即滚到底，让完整引导语可见（动画版可能因首帧未就绪而停在顶部）
@@ -119,6 +132,8 @@ export default function QwenChatPage() {
           ref={scrollRef}
           style={styles.msgList}
           contentContainerStyle={styles.msgContent}
+          onScroll={detectScroll}
+          scrollEventThrottle={60}
         >
           {messages.map((m, i) => (
             <View key={i} style={[styles.bubbleRow, m.role === 'user' ? styles.userRow : styles.aiRow]}>
