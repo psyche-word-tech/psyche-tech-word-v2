@@ -27,6 +27,21 @@ function firstMeaning(m: string | null): string {
   return (m || '').split('；')[0].split(';')[0].trim();
 }
 
+/** 提取释义开头的词性标注（如 "v."、"adj."、"prep."），无标注返回 '' */
+function mainPos(meaning: string | null): string {
+  const t = (meaning || '').trim();
+  const m = t.match(/^\[\s*([a-z/.]+)\s*\]?\./i) || t.match(/^([A-Za-z/.]+)\./);
+  if (!m) return '';
+  // v./n. → v；取第一个子词性作为主导词性
+  return m[1].split('/')[0].trim().toLowerCase();
+}
+
+/** 语义相近的词性归并，避免 n./adj./adv. 混用 */
+function posKey(p: string): string {
+  const map: Record<string, string> = { v: 'verb', verb: 'verb', n: 'noun', noun: 'noun', adj: 'adj', adjective: 'adj', adv: 'adv', adverb: 'adv', prep: 'prep', preposition: 'prep', conj: 'conj', conjunction: 'conj', pron: 'pron', pronoun: 'pron' };
+  return map[p] || ('other_' + p);
+}
+
 /** 分页取全量高中词（含释义） */
 async function fetchAllWords(): Promise<GkWord[]> {
   const client = getSupabaseClient();
@@ -103,16 +118,33 @@ router.get('/test', async (req, res) => {
     }
     const sample = shuffle(pool).slice(0, Math.min(limit, pool.length));
 
+    // 预建按主导词性分组的词池：同词性词作为干扰项候选
+    const byPos = new Map<string, GkWord[]>();
+    for (const w of pool) {
+      const key = posKey(mainPos(w.meaning));
+      if (!byPos.has(key)) byPos.set(key, []);
+      byPos.get(key)!.push(w);
+    }
+
     const questions = sample.map((w) => {
       const correct = firstMeaning(w.meaning);
-      // 从整池中随机取 4 个不同释义作干扰项
+      const pos = posKey(mainPos(w.meaning));
+      const samePosPool = (byPos.get(pos) || []).filter((x) => x.id !== w.id);
+      // 优先同词性干扰项；不足则用整池补足
       const distractors: string[] = [];
-      const candidates = shuffle(pool.filter((x) => x.id !== w.id));
-      for (const c of candidates) {
+      for (const c of shuffle(samePosPool)) {
         if (distractors.length >= 4) break;
         const m = firstMeaning(c.meaning);
         if (m === correct || distractors.includes(m)) continue;
         distractors.push(m);
+      }
+      if (distractors.length < 4) {
+        for (const c of shuffle(pool.filter((x) => x.id !== w.id))) {
+          if (distractors.length >= 4) break;
+          const m = firstMeaning(c.meaning);
+          if (m === correct || distractors.includes(m)) continue;
+          distractors.push(m);
+        }
       }
       const options = shuffle([correct, ...distractors].slice(0, 5));
       return {
