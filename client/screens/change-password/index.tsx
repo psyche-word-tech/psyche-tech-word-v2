@@ -14,6 +14,7 @@ export default function ChangePasswordScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errMsg, setErrMsg] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -51,6 +52,7 @@ export default function ChangePasswordScreen() {
       return;
     }
 
+    setErrMsg('');
     setLoading(true);
     try {
       const body: any = {
@@ -72,10 +74,10 @@ export default function ChangePasswordScreen() {
       if (data.success) {
         router.back();
       } else {
-        Alert.alert('错误', data.error || '密码修改失败');
+        setErrMsg(data.error || '密码修改失败');
       }
     } catch (error) {
-      Alert.alert('错误', '网络错误，请稍后重试');
+      setErrMsg('网络错误，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -148,6 +150,10 @@ export default function ChangePasswordScreen() {
             onChangeText={setConfirmPassword}
           />
         </View>
+
+        {errMsg ? (
+          <Text style={{ fontSize: 13, color: '#e53935', marginBottom: 12 }}>{errMsg}</Text>
+        ) : null}
 
         <TouchableOpacity
           style={{
