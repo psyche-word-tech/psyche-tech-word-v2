@@ -632,7 +632,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 
 ## 新增功能：录题判分（recording-grading，填空/词块/变形/翻译等逐空卷）
 
-- **定位**：批改页（essay-grading）顶部加"录题"文字按钮 → `router.push('/recording-grading')`。用于批量判分"有多个填空"的卷子（重点单词/词块/变形/句子翻译，中英答案皆可）。
+- **定位**：录题入口已从批改页顶部迁移到**首页（study）右上角图标排最左侧**（create-outline 圆形按钮，风格与其他右上角图标一致，跳 `recording-grading`）；批改页顶部不再显示"录题"文字按钮。原批改进度：
 - **前端** `client/screens/recording-grading/index.tsx` + 路由 `client/app/recording-grading.tsx`（已加 `_layout.tsx` Stack.Screen）。
   - 上传最多 6 页卷子图（拍照/相册），上传前 `manipulateAsync` 压到宽 1200、质量 0.7 JPEG（避免 base64 过大）。
   - 设置：答案语言 `en`/`ch`、卷面总分（默认 60）、标准答案（可留空，模型按题干推断）。
