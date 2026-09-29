@@ -21,10 +21,13 @@ export default function ClassWorkScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
   const [activeClass, setActiveClass] = useState(CLASSES[0]);
+  const [activeType, setActiveType] = useState('全部');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reporting, setReporting] = useState(false);
+
+  const TYPES = ['全部', '小作文', '读后续写'];
 
   const getMeta = (s: Submission) => {
     return {
@@ -36,7 +39,8 @@ export default function ClassWorkScreen() {
   const fetchSubmissions = useCallback(async () => {
     try {
       const apiBase = getApiBaseUrl();
-      const res = await fetch(`${apiBase}/api/v1/submissions/class/${encodeURIComponent(activeClass)}`, {
+      const typeParam = activeType === '全部' ? '' : `&type=${encodeURIComponent(activeType)}`;
+      const res = await fetch(`${apiBase}/api/v1/submissions/class/${encodeURIComponent(activeClass)}?${typeParam}`, {
         headers: { 'Authorization': `Bearer ${user?.token}` },
       });
       if (res.status === 403) {
@@ -53,7 +57,7 @@ export default function ClassWorkScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeClass, user?.token]);
+  }, [activeClass, activeType, user?.token]);
 
   useEffect(() => {
     fetchSubmissions();
@@ -141,6 +145,20 @@ export default function ClassWorkScreen() {
               activeOpacity={0.7}
             >
               <Text style={[styles.classChipText, activeClass === c && styles.classChipTextActive]}>{c}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* 作业类型筛选 */}
+        <View style={styles.classRow}>
+          {TYPES.map((t) => (
+            <TouchableOpacity
+              key={t}
+              style={[styles.classChip, activeType === t && styles.classChipActive]}
+              onPress={() => setActiveType(t)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.classChipText, activeType === t && styles.classChipTextActive]}>{t}</Text>
             </TouchableOpacity>
           ))}
         </View>

@@ -74,6 +74,10 @@ router.post('/', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     if (req.userId) {
       meta.userId = req.userId;
     }
+    const homeworkType = String(req.body.homeworkType || '').trim();
+    if (homeworkType) {
+      meta.homeworkType = homeworkType;
+    }
 
     const { data, error } = await supabase
       .from('submissions')
@@ -157,11 +161,17 @@ router.get('/class/:className', optionalAuthMiddleware, async (req: AuthRequest,
     }
 
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from('submissions')
       .select('*')
-      .eq('annotations->>className', className)
-      .order('created_at', { ascending: false });
+      .eq('annotations->>className', className);
+
+    const type = String(req.query.type || '');
+    if (type === '小作文' || type === '读后续写') {
+      query = query.eq('annotations->>homeworkType', type);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('班级查询失败:', error);

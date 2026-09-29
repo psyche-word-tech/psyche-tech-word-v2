@@ -8,6 +8,7 @@ import { getApiBaseUrl } from '@/utils/apiConfig';
 import { useAuth } from '@/contexts/AuthContext';
 
 const CLASSES = ['308班', '201班'];
+const TYPES = ['小作文', '读后续写'];
 
 export default function SubmitHomeworkScreen() {
   const router = useSafeRouter();
@@ -16,6 +17,7 @@ export default function SubmitHomeworkScreen() {
   const [uploading, setUploading] = useState(false);
   const [className, setClassName] = useState<string>('');
   const [studentName, setStudentName] = useState<string>('');
+  const [homeworkType, setHomeworkType] = useState<string>('');
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -43,6 +45,10 @@ export default function SubmitHomeworkScreen() {
   const handleSubmit = async () => {
     if (!className) {
       Alert.alert('提示', '请选择班级');
+      return;
+    }
+    if (!homeworkType) {
+      Alert.alert('提示', '请选择作业类型');
       return;
     }
     if (!studentName.trim()) {
@@ -78,6 +84,7 @@ export default function SubmitHomeworkScreen() {
           type: 'student',
           name: studentName.trim(),
           className,
+          homeworkType,
         }),
       });
 
@@ -124,6 +131,20 @@ export default function SubmitHomeworkScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.classChipText, className === c && styles.classChipTextActive]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.label, { marginTop: 16 }]}>作业类型</Text>
+            <View style={styles.classRow}>
+              {TYPES.map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.classChip, homeworkType === t && styles.classChipActive]}
+                  onPress={() => setHomeworkType(t)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.classChipText, homeworkType === t && styles.classChipTextActive]}>{t}</Text>
                 </TouchableOpacity>
               ))}
             </View>
