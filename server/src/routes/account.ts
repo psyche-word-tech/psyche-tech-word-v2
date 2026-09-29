@@ -197,6 +197,36 @@ router.post('/send-verification-code', async (req: Request, res: Response) => {
   }
 });
 
+// 修改用户名
+router.post('/update-username', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.json({ success: false, error: '未登录' });
+    }
+    const username = String(req.body?.username ?? '').trim();
+    if (!username) {
+      return res.json({ success: false, error: '用户名不能为空' });
+    }
+    if (username.length > 30) {
+      return res.json({ success: false, error: '用户名最多 30 个字符' });
+    }
+    const supabase = getSupabaseClient();
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ username })
+      .eq('id', userId);
+    if (updateError) {
+      console.error('update-username error:', JSON.stringify(updateError));
+      return res.json({ success: false, error: '用户名更新失败' });
+    }
+    return res.json({ success: true, username });
+  } catch (error) {
+    console.error('update-username error:', error);
+    return res.json({ success: false, error: '用户名更新失败' });
+  }
+});
+
 // 修改手机号
 router.post('/change-phone', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

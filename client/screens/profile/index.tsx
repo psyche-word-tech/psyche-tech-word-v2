@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, Modal, TextInput } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 
 export default function ProfileScreen() {
   const router = useSafeRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [stats, setStats] = useState({ learningDays: 0, learnedWords: 0, masteredWords: 0 });
 
@@ -46,7 +46,7 @@ export default function ProfileScreen() {
 
   // 用户数据（实际应从API获取）
   const userData = {
-    username: user?.username || '学习达人',
+    username: user?.username || '设置用户名',
     phone: user?.phone ? user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未登录',
     role: roleLabel,
     avatar: null,
@@ -55,6 +55,50 @@ export default function ProfileScreen() {
       totalWords: stats.learnedWords, // 已学单词 = 已会+不会+模糊
       masteredWords: stats.masteredWords, // 已掌握 = 已会
     },
+  };
+
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [isSavingUsername, setIsSavingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
+
+  const openUsernameModal = () => {
+    setUsernameInput(user?.username || '');
+    setUsernameError('');
+    setShowUsernameModal(true);
+  };
+
+  const saveUsername = async () => {
+    const name = usernameInput.trim();
+    if (!name) {
+      setUsernameError('用户名不能为空');
+      return;
+    }
+    if (name.length > 30) {
+      setUsernameError('用户名最多 30 个字符');
+      return;
+    }
+    setUsernameError('');
+    setIsSavingUsername(true);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/user/update-username`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: name }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        updateUser({ username: name });
+        setShowUsernameModal(false);
+      } else {
+        setUsernameError(data.error || '用户名更新失败');
+      }
+    } catch (error) {
+      console.error('更新用户名失败:', error);
+      setUsernameError('更新失败，请重试');
+    } finally {
+      setIsSavingUsername(false);
+    }
   };
 
   const handleLogout = () => {
@@ -276,7 +320,10 @@ export default function ProfileScreen() {
           </View>
         </View>
         <View style={styles.userInfo}>
-          <Text style={styles.username}>{userData.username}</Text>
+          <TouchableOpacity style={styles.usernameRow} onPress={openUsernameModal}>
+            <Text style={styles.username}>{userData.username || '设置用户名'}</Text>
+            <Ionicons name="create-outline" size={16} color="#999" style={{ marginLeft: 6 }} />
+          </TouchableOpacity>
           <Text style={styles.phone}>{userData.phone}</Text>
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>{userData.role}</Text>
@@ -468,6 +515,50 @@ export default function ProfileScreen() {
           </View>
         </View>
       )}
+
+      {/* 用户名编辑弹窗 */}
+      {showUsernameModal && (
+        <Modal
+          visible={showUsernameModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowUsernameModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>修改用户名</Text>
+              <TextInput
+                style={styles.usernameInput}
+                value={usernameInput}
+                onChangeText={setUsernameInput}
+                placeholder="请输入用户名"
+                placeholderTextColor="#999"
+                maxLength={30}
+              />
+              {usernameError ? (
+                <Text style={styles.usernameError}>{usernameError}</Text>
+              ) : null}
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalCancel]}
+                  onPress={() => setShowUsernameModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>取消</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalConfirm]}
+                  onPress={saveUsername}
+                  disabled={isSavingUsername}
+                >
+                  <Text style={styles.modalConfirmText}>
+                    {isSavingUsername ? '保存中...' : '保存'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </Screen>
   );
 }
@@ -538,6 +629,58 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  usernameInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#333',
+    marginTop: 16,
+  },
+  usernameError: {
+    color: '#FF3B30',
+    fontSize: 13,
+    marginTop: 8,
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 20,
+  },
+  modalBtn: {
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginLeft: 12,
+  },
+  modalCancel: {
+    backgroundColor: '#F0F0F0',
+  },
+  modalCancelText: {
+    color: '#666',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalConfirm: {
+    backgroundColor: '#4F46E5',
+  },
+  modalConfirmText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   phone: {
     fontSize: 13,
