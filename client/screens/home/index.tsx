@@ -87,7 +87,7 @@ export default function HomeScreen() {
                 style={styles.iconImage}
                 resizeMode="contain"
               />
-              <Text style={styles.cardText}>我的词汇书</Text>
+              <Text style={styles.cardText}>词汇学习</Text>
             </TouchableOpacity>
           </View>
         </View>

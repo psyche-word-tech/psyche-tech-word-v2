@@ -56,7 +56,7 @@ export default function VocabularyBooksScreen() {
 
   return (
     <Screen>
-      <Header title="我的词汇书" />
+      <Header title="词汇学习" />
       <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ padding: 16 }}>
         {books.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 60 }}>

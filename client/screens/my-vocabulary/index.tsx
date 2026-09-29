@@ -121,7 +121,7 @@ export default function MyVocabularyPage() {
           <TouchableOpacity onPress={() => router.replace('/')}>
             <Text style={styles.backText}>← back</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>我的词汇书</Text>
+          <Text style={styles.title}>词汇学习</Text>
           <View style={{ width: 60 }} />
         </View>
 
