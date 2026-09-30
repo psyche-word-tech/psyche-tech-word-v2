@@ -7,7 +7,7 @@ import { getApiBaseUrl } from '@/utils/apiConfig';
 import { useAuth } from '@/contexts/AuthContext';
 
 const TEST_LIMIT = 120;
-const PER_LEVEL = 40;
+const PER_RATIOS = '基础30% · 必修35% · 选必35%';
 
 interface Question {
   id: number;
@@ -43,7 +43,7 @@ export default function VocabTestPage() {
     reqRef.current = controller;
     setPhase('loading');
     try {
-      const res = await fetchWithRetry(`/api/v1/gk-vocab/test?per_level=${PER_LEVEL}`, { signal: controller.signal });
+      const res = await fetchWithRetry(`/api/v1/gk-vocab/test?total=${TEST_LIMIT}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const test = await res.json();
       if (!test.questions || test.questions.length === 0) throw new Error('词库为空');
@@ -148,7 +148,7 @@ export default function VocabTestPage() {
     <View style={styles.center}>
       <Text style={styles.introTitle}>高中英语 · 词汇量测试</Text>
       <Text style={styles.introText}>按基础 / 必修 / 选修三类分别抽取词汇，</Text>
-      <Text style={styles.introText}>每类各 {PER_LEVEL} 个，共 {TEST_LIMIT} 题。</Text>
+      <Text style={styles.introText}>基础 {PER_RATIOS} · 共 {TEST_LIMIT} 题。</Text>
       <Text style={styles.introText}>每题从 5 个中文意思中选出正确的一个，</Text>
       <Text style={styles.introText}>选对才算对，分项估算各类识别率与总体词汇量。</Text>
       <Text style={styles.introText}>（词表共 {total || '--'} 词）</Text>

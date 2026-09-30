@@ -98,13 +98,14 @@ router.get('/stats', async (_req, res) => {
 });
 
 /**
- * GET /api/v1/gk-vocab/test?limit=120
- * 随机抽样 N 个单词，每个给出 5 个中文选项（1 正确 + 4 干扰项，乱序）。
+ * GET /api/v1/gk-vocab/test?total=120
+ * 随机抽样单词：按 基础词30% / 必修35% / 选择必35% 的比例分配总题数，每词给出 5 个中文选项（1 正确 + 4 干扰项，乱序）。
  * 响应不含正确项信息，前端只能提交选中项，由 /submit 按 word 正确释义比对判对。
  */
+const RATIOS: Record<string, number> = { base: 0.3, required: 0.35, elective: 0.35 };
 router.get('/test', async (req, res) => {
   try {
-    const perLevel = Math.min(Math.max(Number(req.query.per_level) || 40, 5), 80);
+    const total = Math.min(Math.max(Number(req.query.total) || 120, 15), 240);
     const all = await fetchAllWords();
     // 出题池 = 已有释义的词
     const pool = all.filter((w) => w.meaning && w.meaning.trim());
@@ -112,16 +113,18 @@ router.get('/test', async (req, res) => {
       res.status(404).json({ error: '可出题的词不足（缺少中文释义）' });
       return;
     }
-    // 按 level 分组，每类随机抽 perLevel 个
+    // 按 level 分组
     const byLevel: Record<string, GkWord[]> = { base: [], required: [], elective: [] };
     for (const w of pool) {
       if (w.level && byLevel[w.level]) byLevel[w.level].push(w);
     }
+    // 按比例计算每类目标数，超出该等级词池时取词池实际大小
     const sample: GkWord[] = [];
     const perLevelCounts: Record<string, number> = { base: 0, required: 0, elective: 0 };
     for (const lv of LEVELS) {
+      const target = Math.round(total * (RATIOS[lv] ?? 0.3));
       const arr = shuffle(byLevel[lv] || []);
-      const take = arr.slice(0, perLevel);
+      const take = arr.slice(0, Math.min(target, arr.length));
       sample.push(...take);
       perLevelCounts[lv] = take.length;
     }
