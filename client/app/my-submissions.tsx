@@ -20,6 +20,7 @@ interface GradingData {
   total_score?: number;
   max_score?: number;
   comments?: string;
+  teacher_comment?: string;
   strengths?: string[];
   improvements?: string[];
   errors?: Array<{ original?: string; correction?: string; explanation?: string }>;
@@ -195,6 +196,12 @@ export default function MySubmissionsScreen() {
                     <Text style={styles.detailSectionText}>{g.comments}</Text>
                   </View>
                 ) : null}
+                {g?.teacher_comment ? (
+                  <View style={styles.teacherNoteSection}>
+                    <Text style={styles.teacherNoteTitle}>老师寄语</Text>
+                    <Text style={styles.teacherNoteText}>{g.teacher_comment}</Text>
+                  </View>
+                ) : null}
                 {!!g?.strengths?.length && (
                   <View style={styles.detailSection}>
                     <Text style={styles.detailSectionTitle}>优点</Text>
@@ -313,6 +320,16 @@ const styles = StyleSheet.create({
   detailSection: { marginBottom: 16 },
   detailSectionTitle: { fontSize: 15, fontWeight: '700', color: '#1F2937', marginBottom: 8 },
   detailSectionText: { fontSize: 14, color: '#4B5563', lineHeight: 21, flex: 1 },
+  teacherNoteSection: {
+    marginBottom: 16,
+    backgroundColor: '#FFF7ED',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+    borderRadius: 8,
+    padding: 12,
+  },
+  teacherNoteTitle: { fontSize: 14, fontWeight: '700', color: '#B45309', marginBottom: 6 },
+  teacherNoteText: { fontSize: 14, color: '#7C2D12', lineHeight: 21 },
   detailBulletRow: { flexDirection: 'row', marginBottom: 4 },
   detailBullet: { fontSize: 14, color: '#9CA3AF', marginRight: 6 },
   errorRow: { marginBottom: 8, backgroundColor: '#F9FAFB', borderRadius: 8, padding: 10 },

@@ -2069,10 +2069,11 @@ router.post('/export', optionalAuthMiddleware, async (req: AuthRequest, res) => 
 // 教师确认发布：把指定提交的批改结果设为「已发布」，学生端才可见
 router.post('/publish', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { submission_ids = [] } = (req.body as any) || {};
+    const { submission_ids = [], teacher_comment } = (req.body as any) || {};
     if (!Array.isArray(submission_ids) || submission_ids.length === 0) {
       return res.status(400).json({ success: false, error: '缺少要发布的 submission_ids' });
     }
+    const teacherComment = typeof teacher_comment === 'string' ? teacher_comment.trim().slice(0, 2000) : '';
     const supabase = getSupabaseClient();
     let updated = 0;
     for (const sid of submission_ids) {
@@ -2080,6 +2081,8 @@ router.post('/publish', optionalAuthMiddleware, async (req: AuthRequest, res) =>
       const { data: existing } = await supabase.from('submissions').select('annotations').eq('id', sid).maybeSingle();
       const base = (existing?.annotations && typeof existing.annotations === 'object' && !Array.isArray(existing.annotations)) ? existing.annotations : {};
       const grading = base.grading && typeof base.grading === 'object' ? { ...base.grading, published: true } : { published: true };
+      // 教师可选评语：写了才覆盖，不写则保留原值（避免清空）
+      if (teacherComment) grading.teacher_comment = teacherComment;
       const merged = { ...base, grading };
       const { error: updErr } = await supabase
         .from('submissions')

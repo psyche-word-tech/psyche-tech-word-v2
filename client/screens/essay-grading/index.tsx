@@ -56,6 +56,8 @@ export default function EssayGradingScreen() {
   const [gradedSubmissionIds, setGradedSubmissionIds] = useState<string[]>([]);
   const [published, setPublished] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // 教师可选写的发布评语（不写则不传），随发布一并带给学生
+  const [teacherComment, setTeacherComment] = useState('');
 
   // 从「作业查看」进入批改时，自动导入该班已提交的作业图片，无需再手动选图
   // names：逗号分隔的学生姓名；为空表示批改全部作业，否则只导入选中学生
@@ -509,7 +511,10 @@ export default function EssayGradingScreen() {
       const res = await fetch(`${getApiBaseUrl()}/api/v1/essay-grading/publish`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ submission_ids: gradedSubmissionIds }),
+        body: JSON.stringify({
+          submission_ids: gradedSubmissionIds,
+          ...(teacherComment.trim() ? { teacher_comment: teacherComment.trim() } : {}),
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -837,17 +842,28 @@ export default function EssayGradingScreen() {
                   : '批改完成。未关联到作业提交，无法发布。'}
             </Text>
             {gradedSubmissionIds.length > 0 && !published && (
-              <TouchableOpacity
-                style={styles.publishButton}
-                onPress={handlePublish}
-                disabled={publishing}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="send-outline" size={18} color="#fff" />
-                <Text style={styles.publishButtonText}>
-                  {publishing ? '发布中…' : '确认发布'}
-                </Text>
-              </TouchableOpacity>
+              <>
+                <TextInput
+                  style={styles.teacherCommentInput}
+                  placeholder="教师评语（选填）：可给学生写一句鼓励或提醒，不写则不展示"
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                  value={teacherComment}
+                  onChangeText={setTeacherComment}
+                />
+                <TouchableOpacity
+                  style={styles.publishButton}
+                  onPress={handlePublish}
+                  disabled={publishing}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="send-outline" size={18} color="#fff" />
+                  <Text style={styles.publishButtonText}>
+                    {publishing ? '发布中…' : '确认发布'}
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         )}
@@ -1187,6 +1203,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     lineHeight: 20,
+    marginBottom: 12,
+  },
+  teacherCommentInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#1F2937',
+    minHeight: 72,
+    textAlignVertical: 'top',
     marginBottom: 12,
   },
   publishButton: {
