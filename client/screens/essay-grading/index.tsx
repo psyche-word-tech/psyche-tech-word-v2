@@ -58,8 +58,9 @@ export default function EssayGradingScreen() {
   const [publishing, setPublishing] = useState(false);
 
   // 从「作业查看」进入批改时，自动导入该班已提交的作业图片，无需再手动选图
-  // names：逗号分隔的学生姓名；为空表示批改全部待批改作业，否则只导入选中学生
-  const { cls, type, names } = useSafeSearchParams<{ cls?: string; type?: string; names?: string }>();
+  // names：逗号分隔的学生姓名；为空表示批改全部作业，否则只导入选中学生
+  // sid：指定单份提交 id（重新批改入口），只导入该份，结果精确覆盖该份原结果
+  const { cls, type, names, sid } = useSafeSearchParams<{ cls?: string; type?: string; names?: string; sid?: string }>();
 
   useEffect(() => {
     if (!cls || !user?.token) return;
@@ -77,7 +78,7 @@ export default function EssayGradingScreen() {
         const json = await res.json();
         const list: Array<{ id?: string; image_url?: string; status?: string; annotations?: any }> =
           json?.data || [];
-        // 只导入待批改的作业
+        // 导入该班已提交的作业（含已批改/graded/published），支持二次批改并覆盖原结果
         const leadSet = new Set(
           (names || '')
             .split(',')
@@ -85,7 +86,11 @@ export default function EssayGradingScreen() {
             .filter(Boolean),
         );
         const filtered = list.filter((s) => {
-          if (s.status && s.status !== 'pending') return false;
+          // 指定单份提交（重新批改）：只导入该份，避免同学生多份被一并覆盖
+          if (sid) {
+            return String(s.id) === String(sid);
+          }
+          // 不限 status：pending/graded/published 均可导入，已批改的作文再次批改会覆盖原结果
           if (leadSet.size > 0) {
             return leadSet.has(String(s.annotations?.studentName || ''));
           }
@@ -149,7 +154,7 @@ export default function EssayGradingScreen() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cls, type, names, user?.token]);
+  }, [cls, type, names, sid, user?.token]);
 
   // 读后续写识别：用户显式开启开关，或评分标准文本带续写特征（两步法/档位/续写），都视为读后续写模式。
   // 与后端自动识别保持一致：只显示总分，不显示内容/语言/结构/书写四维小分。

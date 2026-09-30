@@ -11,7 +11,7 @@ const CLASSES = ['318班', '201班'];
 interface Submission {
   id: string;
   image_url: string;
-  status: 'pending' | 'graded';
+  status: 'pending' | 'graded' | 'published';
   grade?: string;
   annotations?: { studentName?: string; className?: string };
   created_at: string;
@@ -133,6 +133,8 @@ export default function ClassWorkScreen() {
 
   const renderItem = ({ item }: { item: Submission }) => {
     const meta = getMeta(item);
+    const isGraded = item.status === 'graded' || item.status === 'published';
+    const badgeLabel = item.status === 'published' ? '已发布' : item.status === 'graded' ? '已批改' : '待批改';
     const isSelected = selectedNames.has(meta.studentName) || (meta.studentName === '未填姓名' && selectedNames.has('__unnamed__'));
     const toggleSelect = () => {
       const key = meta.studentName !== '未填姓名' ? meta.studentName : '__unnamed__';
@@ -157,26 +159,38 @@ export default function ClassWorkScreen() {
           </View>
           <Text style={styles.itemClass}>{meta.className}</Text>
           <View style={styles.itemMeta}>
-            <View style={[styles.statusBadge, item.status === 'graded' ? styles.statusGraded : styles.statusPending]}>
-              <Text style={[styles.statusText, item.status === 'graded' ? styles.statusTextGraded : styles.statusTextPending]}>
-                {item.status === 'graded' ? '已批改' : '待批改'}
+            <View style={[styles.statusBadge, isGraded ? styles.statusGraded : styles.statusPending]}>
+              <Text style={[styles.statusText, isGraded ? styles.statusTextGraded : styles.statusTextPending]}>
+                {badgeLabel}
               </Text>
             </View>
-            {item.status === 'graded' && item.grade && (
+            {isGraded && item.grade && (
               <Text style={styles.itemGrade}>分数：{item.grade}</Text>
             )}
           </View>
           <Text style={styles.itemDate}>
             {new Date(item.created_at).toLocaleString('zh-CN')}
           </Text>
-          <TouchableOpacity
-            style={styles.itemDeleteBtn}
-            onPress={() => handleDelete(item)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="trash-outline" size={14} color="#DC2626" />
-            <Text style={styles.itemDeleteText}>删除作业</Text>
-          </TouchableOpacity>
+          <View style={styles.itemActionRow}>
+            {isGraded && (
+              <TouchableOpacity
+                style={styles.itemRegradeBtn}
+                onPress={() => handleRegrade(item)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="refresh-outline" size={14} color="#3B82F6" />
+                <Text style={styles.itemRegradeText}>重新批改</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.itemDeleteBtn}
+              onPress={() => handleDelete(item)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={14} color="#DC2626" />
+              <Text style={styles.itemDeleteText}>删除作业</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -190,6 +204,15 @@ export default function ClassWorkScreen() {
       cls: activeClass,
       type: activeType,
       ...(namesParam ? { names: namesParam } : {}),
+    });
+  };
+
+  // 重新批改某份已批改作业：按提交 id 精确导入该份，批改结果直接覆盖该生之前的结果
+  const handleRegrade = (item: Submission) => {
+    router.push('/essay-grading', {
+      cls: activeClass,
+      type: activeType,
+      sid: item.id,
     });
   };
 
@@ -237,7 +260,7 @@ export default function ClassWorkScreen() {
         <Text style={styles.selectHint}>
           {selectedNames.size
             ? `已选 ${selectedNames.size} 位学生，点「批改」仅批改选中学生`
-            : '点击学生姓名可多选；不选直接点「批改」则批改全部待批改'}
+            : '点击学生姓名可多选；不选直接点「批改」则批改全部。已批改的作文可点「重新批改」，新结果直接覆盖原结果'}
         </Text>
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -508,11 +531,28 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 6,
   },
+  itemActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  itemRegradeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+  },
+  itemRegradeText: {
+    fontSize: 12,
+    color: '#3B82F6',
+    marginLeft: 4,
+  },
   itemDeleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginTop: 10,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
