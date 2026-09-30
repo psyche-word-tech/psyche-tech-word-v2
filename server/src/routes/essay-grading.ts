@@ -275,6 +275,14 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       gradingResult.scores.structure = 0;
       gradingResult.scores.handwriting = 0;
       gradingResult.max_score = max_score;
+      // 【从 9 分起评】程序化兜底：内容完整（转录词数≥100 且非纯占位）即总分从 9 起评，
+      // 独立于模型纪律，杜绝"完整作文却判 0/个位数"。仅当明确判定离题/未写内容才不禁用。
+      const text = (joinedTranscription || '');
+      const hasContent = /[\u4e00-\u9fa5A-Za-z]{3,}/.test(text);
+      const wordCount = (text.match(/[A-Za-z]+/g) || []).length;
+      if (hasContent && wordCount >= 100 && gradingResult.total_score < 9) {
+        gradingResult.total_score = 9;
+      }
     }
     gradingResult.total_score = Math.max(0, Math.min(max_score, roundToStep(gradingResult.total_score)));
 
@@ -585,7 +593,8 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
    把三项估算结果按 0.5 步长合成一个综合总分填到 total_score。
 5. 若提供了【评分标准/档次/扣分规则】，先按档次逐档对照定档、总分落在所定档区间内，再按扣分规则在档内扣分，并在评语中说明定档与扣分依据。
 6. 只填写 total_score 综合分；content/language/structure/handwriting 各子维度分一律不填（留空或 0）。
-7. 给出评语和建议。其中【改进建议】必须做到：（a）先指出最需要改进的 1-3 个错误/薄弱点并说明为什么；（b）给出**2-4 条可直接替换原文的【高级词汇/地道短语】替换示例**（低分词 → 高分表达，附含义与使用场景）；（c）给出**2-4 个【高分句型】示范**（如同位语、非谓语、倒装、强调句、复合从句、对比、插入语等），每条附可直接套用进原文的改写句；（d）建议要具体可执行、贴合学生原文，不要空泛套话。`;
+7. **total_score 必须填写你最终的真实综合分，绝不允许填 0**（除非作文完全离题/空白）。内容完整且字数≥100 词时，total_score 至少 9 分。
+8. 给出评语和建议。其中【改进建议】必须做到：（a）先指出最需要改进的 1-3 个错误/薄弱点并说明为什么；（b）给出**2-4 条可直接替换原文的【高级词汇/地道短语】替换示例**（低分词 → 高分表达，附含义与使用场景）；（c）给出**2-4 个【高分句型】示范**（如同位语、非谓语、倒装、强调句、复合从句、对比、插入语等），每条附可直接套用进原文的改写句；（d）建议要具体可执行、贴合学生原文，不要空泛套话。`;
 
   const CONT = continuation
     ? `## 【读后续写 · 情节/衔接主轴判档 —— 最高优先级，禁止走四维给分】
