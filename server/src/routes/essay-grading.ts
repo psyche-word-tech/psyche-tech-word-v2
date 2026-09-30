@@ -265,14 +265,15 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       gradingResult.total_score = sumPoints(gradingResult.points);
       gradingResult.max_score = max_score;
     } else {
-      const scoreKeys = ['content', 'language', 'structure', 'handwriting'] as const;
-      const weights = { content: 0.4, language: 0.3, structure: 0.2, handwriting: 0.1 } as const;
-      const caps: Record<(typeof scoreKeys)[number], number> = { content: 0, language: 0, structure: 0, handwriting: 0 };
-      let capSum = 0;
-      for (const k of scoreKeys) { caps[k] = Math.round(max_score * weights[k]); capSum += caps[k]; }
-      if (capSum !== max_score) caps[scoreKeys[0]] += max_score - capSum; // 修正每维度舍入误差，使各上限求和恰为 max_score
-      for (const k of scoreKeys) gradingResult.scores[k] = Math.max(0, Math.min(caps[k], roundToStep(gradingResult.scores[k])));
-      gradingResult.total_score = gradingResult.scores.content + gradingResult.scores.language + gradingResult.scores.structure + gradingResult.scores.handwriting;
+      // 小作文（英文，非续写，无采分点）：综合评分、不给子维度分。
+      // 模型已按要求给出单一 total_score（内容完整+字数≥100 → 9 分起评）。
+      // 直接采用模型综合分；若模型未给分则置 0 并清空四维子分（不做四维加和）。
+      const t = Number(gradingResult.total_score);
+      gradingResult.total_score = Number.isFinite(t) ? t : 0;
+      gradingResult.scores.content = 0;
+      gradingResult.scores.language = 0;
+      gradingResult.scores.structure = 0;
+      gradingResult.scores.handwriting = 0;
       gradingResult.max_score = max_score;
     }
     gradingResult.total_score = Math.max(0, Math.min(max_score, roundToStep(gradingResult.total_score)));
@@ -575,11 +576,16 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
 5. 给出评语和建议`
     : `## 要求
 1. 识别作文原文（transcription）
-2. 找出所有错误（语法、拼写、标点、用词、句式）
-3. 打分（满分${maxScore}分）：内容 40%、语言 30%、结构 20%、书写 10%（各维度满分依次为：内容${Math.round(maxScore * 0.4)}、语言${Math.round(maxScore * 0.3)}、结构${Math.round(maxScore * 0.2)}、书写${Math.round(maxScore * 0.1)}，请在各自满分内估分，评分步长为 0.5 分（例如 5、4.5、3、2.5，各维度打分实际值需为 0.5 的倍数））
-4. 若提供了【评分标准/档次/扣分规则】，先按档次逐档对照定档、总分落在所定档区间内，再按扣分规则在档内扣分，把结果落实到各维度分，并在评语中说明定档与扣分依据
-5. 【读后续写/任务型作文情节主线——必须执行】若这是读后续写或带明确任务要求的作文（如要求两段、约 150 字、与给定开头语/原文衔接、情节完整），**以续写情节的完整度与衔接质量为第一权重**（情节断链/半途而废/未写出结局 → 适当降档；二段没写但第一段情节完整、语言尚可 → 最高可二档），同时核对字数是否与原文情节相关、是否达到要求、是否合理衔接所给开头语；情节严重缺失时评语须明确点出"情节不完整/字数不足/未写满两段"。
-6. 给出评语和建议。其中【改进建议】必须做到：（a）先指出最需要改进的 1-3 个错误/薄弱点并说明为什么；（b）给出**2-4 条可直接替换原文的【高级词汇/地道短语】替换示例**（低分词 → 高分表达，附含义与使用场景）；（c）给出**2-4 个【高分句型】示范**（如同位语、非谓语、倒装、强调句、复合从句、对比、插入语等），每条附可直接套用进原文的改写句；（d）建议要具体可执行、贴合学生原文，不要空泛套话。`;
+2. 找出所有错误：**单词拼写错误、语法错误**计为错误并扣分；**标点符号问题不计入错误、不因标点扣分**（忽略标点）。
+3. 打分（满分${maxScore}分，默认 15）：**综合评分，只给一个总分（total_score），不要分"内容/语言/结构/书写"等对外子维度**。评分步长为 0.5 分。
+4. **内部计分构成（仅用于你对总分的估算，不对外输出子分数）**：总分 = 内容分(满分 9) + 词汇语法分(满分 4) + 书写分(满分 2)，三项合计 15。评判如下：
+   - **内容 9 分**：只要内容完整（覆盖题目全部要点、结构完整、围绕任务展开）且**字数不少于 100 词**，内容即按满分 9 分起评；不足则按要点缺失与词数逐档给 0–9 分。
+   - **词汇语法 4 分**：依据拼写错误与语法错误的数量与严重度扣分——**单词拼写错误、语法错误计为错误**；**标点符号问题不计为错误、不因此扣分**。基本无错给满分，错处越多分越低。
+   - **书写 2 分**：依据卷面字迹工整、清晰程度给 0–2 分。
+   把三项估算结果按 0.5 步长合成一个综合总分填到 total_score。
+5. 若提供了【评分标准/档次/扣分规则】，先按档次逐档对照定档、总分落在所定档区间内，再按扣分规则在档内扣分，并在评语中说明定档与扣分依据。
+6. 只填写 total_score 综合分；content/language/structure/handwriting 各子维度分一律不填（留空或 0）。
+7. 给出评语和建议。其中【改进建议】必须做到：（a）先指出最需要改进的 1-3 个错误/薄弱点并说明为什么；（b）给出**2-4 条可直接替换原文的【高级词汇/地道短语】替换示例**（低分词 → 高分表达，附含义与使用场景）；（c）给出**2-4 个【高分句型】示范**（如同位语、非谓语、倒装、强调句、复合从句、对比、插入语等），每条附可直接套用进原文的改写句；（d）建议要具体可执行、贴合学生原文，不要空泛套话。`;
 
   const CONT = continuation
     ? `## 【读后续写 · 情节/衔接主轴判档 —— 最高优先级，禁止走四维给分】

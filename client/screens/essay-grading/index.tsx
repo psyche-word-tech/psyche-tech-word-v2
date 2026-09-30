@@ -640,7 +640,7 @@ export default function EssayGradingScreen() {
                     </View>
                   ))}
                 </View>
-              ) : subject !== 'other' && !isContinuationMode ? (
+              ) : subject !== 'other' && !isContinuationMode && (gradingResult.scores?.content || gradingResult.scores?.language || gradingResult.scores?.structure || gradingResult.scores?.handwriting) ? (
                 <View style={styles.scoreDetails}>
                   <View style={styles.scoreItem}>
                     <Text style={styles.scoreItemLabel}>内容</Text>
