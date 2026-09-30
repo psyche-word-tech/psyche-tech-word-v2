@@ -272,13 +272,9 @@ export default function StudyScreen() {
         />
         {/* 右上角功能按钮（保留） */}
         <View style={styles.topRightButtons}>
-          <TouchableOpacity
-            style={styles.searchButton}
-            activeOpacity={0.7}
-            onPress={() => router.push('/recording-grading')}
-          >
+          <View style={styles.searchButton}>
             <Ionicons name="create-outline" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+          </View>
           <TouchableOpacity 
             style={styles.searchButton}
             activeOpacity={0.7}
