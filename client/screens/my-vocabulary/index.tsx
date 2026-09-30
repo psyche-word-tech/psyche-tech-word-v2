@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Ale
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { useApiConfig } from '@/contexts/ApiConfigContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { fetchWithRetry } from '@/utils/apiClient';
 
 interface WordBook {
@@ -17,6 +18,7 @@ let globalBooksCache: WordBook[] | null = null;
 export default function MyVocabularyPage() {
   const router = useSafeRouter();
   const { apiBaseUrl, isConfigLoaded } = useApiConfig();
+  const { user } = useAuth();
   const [boughtBooks, setBoughtBooks] = useState<WordBook[]>(globalBooksCache || []);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
@@ -166,7 +168,16 @@ export default function MyVocabularyPage() {
 
           {/* 功能按钮（上下排列，置于词书网格下方） */}
           <View style={styles.functionButtons}>
-            <TouchableOpacity style={styles.vocabTestButton} onPress={() => router.push('/vocab-test')}>
+            <TouchableOpacity
+              style={styles.vocabTestButton}
+              onPress={() => {
+                if (!user?.username) {
+                  Alert.alert('提示', '请至个人中心设置用户名');
+                  return;
+                }
+                router.push('/vocab-test');
+              }}
+            >
               <Text style={styles.vocabTestText} numberOfLines={1}>词汇量测试</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.oldSchoolButton} onPress={() => router.push('/tree-diagram')}>
