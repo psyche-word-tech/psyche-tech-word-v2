@@ -320,6 +320,18 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
       } else if (gradingResult.total_score > tierMax) {
         gradingResult.total_score = tierMax;          // 超上限压回本档上限
       }
+      // —— 评语 ↔ 分数 档内位置一致（小作文，用户规则）——
+      // 评分要根据评语来：评语说"中等偏上/较好"不能打档内下限(7)；内容完整至少 8 分。
+      const cmt = String(gradingResult.comments || '');
+      const upperMid = /中等偏上|中上|偏上|较好|良好|中上游/.test(cmt);
+      const contentComplete = /内容完整|内容较完整|内容充实|内容全面|要点齐全|要点完整/.test(cmt);
+      let floor = 0;
+      if (contentComplete) floor = Math.max(floor, 8);   // 内容完整至少 8
+      if (upperMid) floor = Math.max(floor, 8);          // 中上/偏上不贴下沿
+      if (floor > 0) {
+        const capped = Math.min(floor, tierMax);         // 不越出本档上限
+        if (gradingResult.total_score < capped) gradingResult.total_score = capped;
+      }
     }
     gradingResult.total_score = Math.max(0, Math.min(max_score, roundToStep(gradingResult.total_score)));
 
@@ -632,7 +644,7 @@ ${ocrWords.map(w => `${w.index}. ${w.text}`).join('\n')}
    - **2 档（3–6）**：只有少量内容、字数不多（如 ≤60 词）；有 3–4 个正确句子可给 3 分起，正确句子越多分越高。给 3–6。
    - **1 档（0–3）**：内容很少、字数严重不足（如 ≤30 词）；按单词正确率给分，最多 3 分。
    - **0 分**：空白卷，或内容完全与要求无关。
-   判档要点：**先判断最能套中的最高档，再在该档内依据衔接、用词、错误多寡等给具体分**；避免"内容达标就在中间档打转"，质量明显高的要敢给 13–15，明显差、字数不足就往 3–6 甚至 0–3 压，拉开区分度。
+   判档要点：**先判断最能套中的最高档，再在该档内依据衔接、用词、错误多寡等给具体分**；避免"内容达标就在中间档打转"，质量明显高的要敢给 13–15，明显差、字数不足就往 3–6 甚至 0–3 压，拉开区分度。**档内给分必须与评语口吻一致：评语说"中等偏上/较好/良好"或"内容完整"时，总分至少 8 分（3 档取 8–9），绝不贴 7 分下限；只有评语明确批评"内容不全/错误较多/中等偏下"才可给 7 或更低。**
 5. 若提供了【评分标准/档次/扣分规则】，先按档次逐档对照定档、总分落在所定档区间内，再按扣分规则在档内扣分，并在评语中说明定档与扣分依据。
 6. 只填写 total_score 综合分；content/language/structure/handwriting 各子维度分一律不填（留空或 0）。
 7. **total_score 必须填写你最终判档的档内真实分，绝不允许填 0**（除非作文空白卷或完全跑题）。有实质内容就至少落在 1–3 档内：内容完整且无明显语法硬伤 → 10 分以上，语言出色 → 13–15；字数不足/错误密集逐档降。**严禁所有作文都停在同一个分数段，必须拉开明显区分度。**
