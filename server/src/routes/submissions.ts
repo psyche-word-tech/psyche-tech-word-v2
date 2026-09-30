@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import sharp from 'sharp';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import type { AuthRequest } from '../middleware/auth';
 import { optionalAuthMiddleware } from '../middleware/auth';
@@ -48,7 +49,21 @@ router.post('/', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const supabase = getSupabaseClient();
 
     const base64Data = image.split(',')[1] || image;
-    const buffer = Buffer.from(base64Data, 'base64');
+    const rawBuffer = Buffer.from(base64Data, 'base64');
+
+    // 狠狠压缩手写照片：限制最长边并压质量，5~7MB 原图 → 几百 KB，加快班级列表与批改加载
+    let buffer = rawBuffer;
+    try {
+      buffer = await sharp(rawBuffer)
+        .rotate()
+        .resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 62, mozjpeg: true })
+        .toBuffer();
+    } catch (e) {
+      console.error('提交图压缩失败,使用原图:', (e as Error).message);
+      buffer = rawBuffer;
+    }
+
     const fileName = `submissions/${Date.now()}-${Math.random().toString(36).substring(2, 11)}.jpg`;
 
     const { error: uploadError } = await supabase.storage

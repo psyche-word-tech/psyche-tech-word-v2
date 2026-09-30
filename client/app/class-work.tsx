@@ -8,6 +8,9 @@ import { getApiBaseUrl } from '@/utils/apiConfig';
 
 const CLASSES = ['318班', '201班'];
 
+// 绕过存储 CDN 对旧大图的缓存（max-age=3600），强制加载压缩后的新图
+const bust = (u?: string) => (u ? u + (u.includes('?') ? '&' : '?') + 'v=2' : '');
+
 interface Submission {
   id: string;
   image_url: string;
@@ -151,7 +154,7 @@ export default function ClassWorkScreen() {
         onPress={toggleSelect}
         activeOpacity={0.7}
       >
-        <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" />
+        <Image source={{ uri: bust(item.image_url) }} style={styles.image} resizeMode="cover" />
         <View style={styles.itemContent}>
           <View style={styles.itemNameRow}>
             <Text style={styles.itemName}>{meta.studentName}</Text>

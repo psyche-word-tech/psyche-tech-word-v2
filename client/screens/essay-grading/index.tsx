@@ -104,7 +104,7 @@ export default function EssayGradingScreen() {
         for (const item of filtered) {
           if (!item.image_url) continue;
           try {
-            const imgRes = await fetch(item.image_url);
+            const imgRes = await fetch(item.image_url + (item.image_url.includes('?') ? '&' : '?') + 'v=2');
             const blob = await imgRes.blob();
             // 压缩大图（原图可达 7MB+），避免超大 base64 拖垮页面渲染与上传
             const objectUrl = URL.createObjectURL(blob);
