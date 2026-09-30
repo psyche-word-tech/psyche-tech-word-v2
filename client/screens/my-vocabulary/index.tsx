@@ -171,8 +171,12 @@ export default function MyVocabularyPage() {
             <TouchableOpacity
               style={styles.vocabTestButton}
               onPress={() => {
-                if (!user?.username) {
-                  Alert.alert('提示', '请至个人中心设置用户名');
+                if (!user) {
+                  Alert.alert('提示', '请至个人中心登录并设置姓名');
+                  return;
+                }
+                if (!user.username) {
+                  Alert.alert('提示', '请至个人中心设置姓名');
                   return;
                 }
                 router.push('/vocab-test');
