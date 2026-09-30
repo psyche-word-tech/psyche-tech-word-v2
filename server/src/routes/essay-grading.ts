@@ -434,12 +434,14 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
         marked_images: markedImages,
         graded_at: new Date().toISOString(),
         grading_id: data?.id,
+        published: false, // 教师点「确认发布」后才对学生可见
       };
       for (const sid of submissionIds) {
         // PostgREST 不合并 jsonb，需先读出现有 annotations 再在 JS 层合并后写回
         const { data: existing } = await supabase.from('submissions').select('annotations').eq('id', sid).maybeSingle();
         const base = (existing?.annotations && typeof existing.annotations === 'object' && !Array.isArray(existing.annotations)) ? existing.annotations : {};
         const merged = { ...base, grading: gradingPayload };
+        // graded = 已批改待教师发布；status 仍在 graded，学生端按 published 判断是否展示
         const { error: updErr } = await supabase
           .from('submissions')
           .update({
@@ -451,7 +453,7 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
           .eq('id', sid);
         if (updErr) console.error('写回批改结果到提交失败:', sid, updErr);
       }
-      console.log('已写回批改结果到', submissionIds.length, '条提交');
+      console.log('已写回批改结果到', submissionIds.length, '条提交（待发布）');
     }
 
     res.json({
@@ -2049,6 +2051,38 @@ router.post('/export', optionalAuthMiddleware, async (req: AuthRequest, res) => 
     res.send(Buffer.from(buffer));
   } catch (e: any) {
     res.status(500).json({ success: false, error: '生成 Word 失败：' + String(e?.message || e) });
+  }
+});
+
+// 教师确认发布：把指定提交的批改结果设为「已发布」，学生端才可见
+router.post('/publish', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { submission_ids = [] } = (req.body as any) || {};
+    if (!Array.isArray(submission_ids) || submission_ids.length === 0) {
+      return res.status(400).json({ success: false, error: '缺少要发布的 submission_ids' });
+    }
+    const supabase = getSupabaseClient();
+    let updated = 0;
+    for (const sid of submission_ids) {
+      if (!sid) continue;
+      const { data: existing } = await supabase.from('submissions').select('annotations').eq('id', sid).maybeSingle();
+      const base = (existing?.annotations && typeof existing.annotations === 'object' && !Array.isArray(existing.annotations)) ? existing.annotations : {};
+      const grading = base.grading && typeof base.grading === 'object' ? { ...base.grading, published: true } : { published: true };
+      const merged = { ...base, grading };
+      const { error: updErr } = await supabase
+        .from('submissions')
+        .update({ status: 'published', annotations: merged })
+        .eq('id', sid);
+      if (updErr) {
+        console.error('发布失败:', sid, updErr);
+      } else {
+        updated++;
+      }
+    }
+    res.json({ success: true, data: { updated } });
+  } catch (e: any) {
+    console.error('发布批改结果失败:', e);
+    res.status(500).json({ success: false, error: e?.message || '发布失败' });
   }
 });
 

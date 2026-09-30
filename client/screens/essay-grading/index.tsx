@@ -52,6 +52,10 @@ export default function EssayGradingScreen() {
   const [markedImages, setMarkedImages] = useState<string[]>([]);
   // 自动导入的作业图片对应的 submission 关联（id + studentName），与 selectedImages 索引一一对应（手动添加的为 null）
   const [autoSubs, setAutoSubs] = useState<({ id: string; studentName: string } | null)[]>([]);
+  // 本次批改关联的 submission_id（发布时用）+ 发布状态
+  const [gradedSubmissionIds, setGradedSubmissionIds] = useState<string[]>([]);
+  const [published, setPublished] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   // 从「作业查看」进入批改时，自动导入该班已提交的作业图片，无需再手动选图
   // names：逗号分隔的学生姓名；为空表示批改全部待批改作业，否则只导入选中学生
@@ -331,6 +335,13 @@ export default function EssayGradingScreen() {
       if (data.success) {
         setGradingResult(data.data.grading);
         setMarkedImages(data.data.marked_images || (data.data.marked_image ? [data.data.marked_image] : []));
+        setGradedSubmissionIds((() => {
+          const linked = autoSubs.filter((x): x is { id: string; studentName: string } => !!x && !!x.id);
+          if (!linked.length) return [];
+          const names = new Set(linked.map((x) => x.studentName).filter(Boolean));
+          return names.size <= 1 ? linked.map((x) => x.id) : [linked[0].id];
+        })());
+        setPublished(false);
       } else {
         const errorMsg = data.error || '未知错误';
         if (Platform.OS === 'web') {
@@ -482,6 +493,33 @@ export default function EssayGradingScreen() {
         </View>
       );
     });
+  };
+
+  const handlePublish = async () => {
+    if (!gradedSubmissionIds.length) return;
+    setPublishing(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (user?.token) headers['Authorization'] = `Bearer ${user.token}`;
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/essay-grading/publish`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ submission_ids: gradedSubmissionIds }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPublished(true);
+        const msg = '已发布，学生现在可以查看反馈';
+        if (Platform.OS === 'web') alert(msg); else Alert.alert('发布成功', msg);
+      } else {
+        throw new Error(data.error || '发布失败');
+      }
+    } catch (e: any) {
+      const msg = e?.message || '发布失败';
+      if (Platform.OS === 'web') alert(msg); else Alert.alert('发布失败', msg);
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
@@ -781,6 +819,31 @@ export default function EssayGradingScreen() {
                 </View>
               ) : null}
             </View>
+          </View>
+        )}
+
+        {gradingResult && autoSubs.length > 0 && (
+          <View style={styles.publishCard}>
+            <Text style={styles.publishHint}>
+              {published
+                ? `已向 ${autoSubs.filter(Boolean).map((x) => x?.studentName).filter(Boolean).join('、')} 发布反馈`
+                : gradedSubmissionIds.length
+                  ? '批改完成，尚未发布。确认后学生才能收到本次反馈。'
+                  : '批改完成。未关联到作业提交，无法发布。'}
+            </Text>
+            {gradedSubmissionIds.length > 0 && !published && (
+              <TouchableOpacity
+                style={styles.publishButton}
+                onPress={handlePublish}
+                disabled={publishing}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="send-outline" size={18} color="#fff" />
+                <Text style={styles.publishButtonText}>
+                  {publishing ? '发布中…' : '确认发布'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1105,6 +1168,35 @@ const styles = StyleSheet.create({
   totalScoreMax: {
     fontSize: 18,
     color: '#999',
+  },
+  publishCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  publishHint: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  publishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  publishButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   scoreDetails: {
     flexDirection: 'row',

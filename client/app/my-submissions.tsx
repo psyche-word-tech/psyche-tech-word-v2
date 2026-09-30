@@ -9,7 +9,7 @@ import { getApiBaseUrl } from '@/utils/apiConfig';
 interface Submission {
   id: string;
   image_url: string;
-  status: 'pending' | 'graded';
+  status: 'pending' | 'graded' | 'published';
   grade?: string;
   feedback?: string;
   annotations?: { className?: string; studentName?: string; grading?: GradingData };
@@ -68,27 +68,37 @@ export default function MySubmissionsScreen() {
   const renderItem = ({ item }: { item: Submission }) => {
     const meta = getMeta(item);
     const grading = item.annotations?.grading;
-    const isGraded = item.status === 'graded';
+    // 已发布（published）才对学生可见；graded = 老师已批改但未确认发布
+    const isPublished = item.status === 'published';
+    const isPendingPublish = item.status === 'graded';
     const score = grading?.total_score != null ? grading.total_score : item.grade;
     const maxScore = grading?.max_score;
     return (
       <TouchableOpacity
         activeOpacity={0.7}
-        disabled={!isGraded}
-        onPress={() => isGraded && setGradedModal({ visible: true, submission: item })}
+        disabled={!isPublished}
+        onPress={() => isPublished && setGradedModal({ visible: true, submission: item })}
         style={styles.item}
       >
         <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" />
         <View style={styles.itemContent}>
           <View style={styles.itemTop}>
             <Text style={styles.itemClass}>{meta.className}</Text>
-            <View style={[styles.statusBadge, isGraded ? styles.statusGraded : styles.statusPending]}>
-              <Text style={[styles.statusText, isGraded ? styles.statusTextGraded : styles.statusTextPending]}>
-                {isGraded ? '已批改' : '待批改'}
-              </Text>
-            </View>
+            {isPublished ? (
+              <View style={[styles.statusBadge, styles.statusGraded]}>
+                <Text style={[styles.statusText, styles.statusTextGraded]}>已发布</Text>
+              </View>
+            ) : isPendingPublish ? (
+              <View style={[styles.statusBadge, styles.statusPending]}>
+                <Text style={[styles.statusText, styles.statusTextPending]}>待老师发布</Text>
+              </View>
+            ) : (
+              <View style={[styles.statusBadge, styles.statusPending]}>
+                <Text style={[styles.statusText, styles.statusTextPending]}>待批改</Text>
+              </View>
+            )}
           </View>
-          {isGraded && (
+          {isPublished && (
             <>
               {score != null && (
                 <View style={styles.gradeRow}>
@@ -128,7 +138,12 @@ export default function MySubmissionsScreen() {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{submissions.filter(s => s.status === 'graded').length}</Text>
-            <Text style={styles.statLabel}>已批改</Text>
+            <Text style={styles.statLabel}>待发布</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{submissions.filter(s => s.status === 'published').length}</Text>
+            <Text style={styles.statLabel}>已发布</Text>
           </View>
         </View>
 
