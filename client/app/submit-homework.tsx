@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 import { useAuth } from '@/contexts/AuthContext';
 
-const CLASSES = ['308班', '201班'];
+const CLASSES = ['318班', '201班'];
 const TYPES = ['小作文', '读后续写'];
 
 export default function SubmitHomeworkScreen() {
