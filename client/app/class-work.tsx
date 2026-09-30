@@ -29,6 +29,7 @@ export default function ClassWorkScreen() {
   const [confirmTarget, setConfirmTarget] = useState<Submission | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
 
   const TYPES = ['全部', '小作文', '读后续写'];
 
@@ -132,11 +133,28 @@ export default function ClassWorkScreen() {
 
   const renderItem = ({ item }: { item: Submission }) => {
     const meta = getMeta(item);
+    const isSelected = selectedNames.has(meta.studentName) || (meta.studentName === '未填姓名' && selectedNames.has('__unnamed__'));
+    const toggleSelect = () => {
+      const key = meta.studentName !== '未填姓名' ? meta.studentName : '__unnamed__';
+      setSelectedNames((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    };
     return (
-      <View style={styles.item}>
+      <TouchableOpacity
+        style={[styles.item, isSelected && styles.itemSelected]}
+        onPress={toggleSelect}
+        activeOpacity={0.7}
+      >
         <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" />
         <View style={styles.itemContent}>
-          <Text style={styles.itemName}>{meta.studentName}</Text>
+          <View style={styles.itemNameRow}>
+            <Text style={styles.itemName}>{meta.studentName}</Text>
+            {isSelected && <Ionicons name="checkmark-circle" size={18} color="#3B82F6" />}
+          </View>
           <Text style={styles.itemClass}>{meta.className}</Text>
           <View style={styles.itemMeta}>
             <View style={[styles.statusBadge, item.status === 'graded' ? styles.statusGraded : styles.statusPending]}>
@@ -160,8 +178,19 @@ export default function ClassWorkScreen() {
             <Text style={styles.itemDeleteText}>删除作业</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
+  };
+
+  const handleGrade = () => {
+    const namesParam = [...selectedNames]
+      .map((n) => (n === '__unnamed__' ? '未填姓名' : n))
+      .join(',');
+    router.push('/essay-grading', {
+      cls: activeClass,
+      type: activeType,
+      ...(namesParam ? { names: namesParam } : {}),
+    });
   };
 
   return (
@@ -182,7 +211,7 @@ export default function ClassWorkScreen() {
             <TouchableOpacity
               key={c}
               style={[styles.classChip, activeClass === c && styles.classChipActive]}
-              onPress={() => setActiveClass(c)}
+              onPress={() => { setActiveClass(c); setSelectedNames(new Set()); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.classChipText, activeClass === c && styles.classChipTextActive]}>{c}</Text>
@@ -196,7 +225,7 @@ export default function ClassWorkScreen() {
             <TouchableOpacity
               key={t}
               style={[styles.classChip, activeType === t && styles.classChipActive]}
-              onPress={() => setActiveType(t)}
+              onPress={() => { setActiveType(t); setSelectedNames(new Set()); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.classChipText, activeType === t && styles.classChipTextActive]}>{t}</Text>
@@ -205,18 +234,19 @@ export default function ClassWorkScreen() {
         </View>
 
         {/* 操作按钮：批改 + 下载报告 */}
+        <Text style={styles.selectHint}>
+          {selectedNames.size
+            ? `已选 ${selectedNames.size} 位学生，点「批改」仅批改选中学生`
+            : '点击学生姓名可多选；不选直接点「批改」则批改全部待批改'}
+        </Text>
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.gradeBtn]}
-            onPress={() =>
-              router.push('/essay-grading', {
-                cls: activeClass,
-                type: activeType,
-              })}
+            onPress={handleGrade}
             activeOpacity={0.7}
           >
             <Ionicons name="create-outline" size={18} color="#fff" />
-            <Text style={styles.actionBtnText}>批改</Text>
+            <Text style={styles.actionBtnText}>批改{selectedNames.size ? `(${selectedNames.size})` : ''}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, styles.reportBtn]}
@@ -403,6 +433,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#F3F4F6',
+  },
+  itemSelected: {
+    borderColor: '#3B82F6',
+    borderWidth: 2,
+    backgroundColor: '#EFF6FF',
+  },
+  selectHint: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  itemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   image: {
     width: 72,

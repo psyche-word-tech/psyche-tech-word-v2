@@ -625,6 +625,13 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 - **不要开响应 gzip**：AGENTS.md 白屏历史明确——WebView 的 fetch 无法解压响应 gzip；压缩响应会重蹈白屏覆辙。响应端 `marked_images` 已被后端 compressImage(900px/65%) 压过，体积可控。
 - **验证**：重导产物后必须在 `server/public` 补 KaTeX 字体（见上一条经验），并 sync 到 server/public + git 提交推送，Railway 才生效。tsc 注意本项目有既有未修复错误 `word-detail(280) fetchMindmapCountsRef.current().catch`，与本次无关（pipeline `lint:all --quiet` 仍能通过）。
 
+## 教师批改：按学生多选，或整班全部待批改（class-work → essay-grading）
+- **需求**：作业查看页（`client/app/class-work.tsx`）教师可点击学生卡片多选，选中后点「批改」只批改选中学生；不选直接点「批改」则默认批改该班全部待批改作业。
+- **实现**：
+  - `class-work.tsx`：加 `selectedNames: Set<string>` 状态；学生卡片改为 `TouchableOpacity`，`onPress` 切换选中（meta.studentName 或 `__unnamed__` 占位代表"未填姓名"）；选中卡片 `itemSelected` 高亮 + 名称旁 `checkmark-circle` 图标；批改按钮 `handleGrade()` 把选中姓名 `join(',')` 作为 `names` 路由参数传给 `/essay-grading`（不选则不带 names）；按钮文案 `批改(N)`；`selectHint` 提示"点击学生姓名可多选/不选则批改全部"；切换班级或类型时 `setSelectedNames(new Set())` 清空选中。
+  - `essay-grading/index.tsx`（自动导入，useEffect）：读取 `useSafeSearchParams<{cls?,type?,names?}>()` 的 `names`；拉 `/api/v1/submissions/class/{cls}` 后：① 过滤 `status==='pending'`（**修复了原先自动导入不过滤已批改、会把已批改作业也重新喂进批改**）；② 若 `names` 非空则只保留 `annotations.studentName` 命中选中集合的；③ **移除 `list.slice(0, MAX_PAGES)` 截断**（原只导入前3条会漏掉后面的学生，批改"全部"时丢人）；④ `setSelectedImages`/`setAutoSubs` 不再 `.slice(0, MAX_PAGES)`（MAX_PAGES 仍用于单篇最多3页/单篇页数 `maxAllowedPages`，本处不再限制总张数）。后端 `/class` 接口已验证 `select('*')` 返回完整 `status`+`annotations`，前端过滤字段均可读。
+- **验证**：`npx tsc --noEmit` 无报错（`lint:all` 的 4.3 万 error 全是 dist 编译产物 `__d/__r` 被 ESLint 扫码，非源文件引入）；导前端 + sync server/public + 重启后，首页/class-work 返回 200、`/api/v1/health` db connected、`lint:all --quiet` 通过。
+
 ## Token Plan（阿里云百炼订阅）Key 接入
 - **付费方式**：用户从百炼"免费"换到 **Token Plan 订阅**（`sk-sp-` 开头专属 Key），换取直接调用 `qwen3.8-max` 且免按量费。
 - **必须配套专用 Base URL**：Token Plan 的 `sk-sp-` Key **不能配官方向量通用端点**，要配 `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`。模型 ID 用 `qwen3.8-max`（套餐内）。

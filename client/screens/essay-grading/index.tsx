@@ -54,7 +54,8 @@ export default function EssayGradingScreen() {
   const [autoSubs, setAutoSubs] = useState<({ id: string; studentName: string } | null)[]>([]);
 
   // 从「作业查看」进入批改时，自动导入该班已提交的作业图片，无需再手动选图
-  const { cls, type } = useSafeSearchParams<{ cls?: string; type?: string }>();
+  // names：逗号分隔的学生姓名；为空表示批改全部待批改作业，否则只导入选中学生
+  const { cls, type, names } = useSafeSearchParams<{ cls?: string; type?: string; names?: string }>();
 
   useEffect(() => {
     if (!cls || !user?.token) return;
@@ -70,12 +71,26 @@ export default function EssayGradingScreen() {
           { headers },
         );
         const json = await res.json();
-        const list: Array<{ id?: string; image_url?: string; annotations?: any }> = json?.data || [];
-        const urls = list.filter((s) => s.image_url).map((s) => s.image_url!);
-        if (!urls.length) return;
+        const list: Array<{ id?: string; image_url?: string; status?: string; annotations?: any }> =
+          json?.data || [];
+        // 只导入待批改的作业
+        const leadSet = new Set(
+          (names || '')
+            .split(',')
+            .map((n) => n.trim())
+            .filter(Boolean),
+        );
+        const filtered = list.filter((s) => {
+          if (s.status && s.status !== 'pending') return false;
+          if (leadSet.size > 0) {
+            return leadSet.has(String(s.annotations?.studentName || ''));
+          }
+          return true;
+        });
+        if (!filtered.some((s) => s.image_url)) return;
         const dataUris: string[] = [];
         const ids: ({ id: string; studentName: string } | null)[] = [];
-        for (const item of list.slice(0, MAX_PAGES)) {
+        for (const item of filtered) {
           if (!item.image_url) continue;
           try {
             const imgRes = await fetch(item.image_url);
@@ -97,8 +112,8 @@ export default function EssayGradingScreen() {
           }
         }
         if (!cancelled && dataUris.length) {
-          setSelectedImages((prev) => [...prev, ...dataUris].slice(0, MAX_PAGES));
-          setAutoSubs((prev) => [...prev, ...ids].slice(0, MAX_PAGES));
+          setSelectedImages((prev) => [...prev, ...dataUris]);
+          setAutoSubs((prev) => [...prev, ...ids]);
         }
       } catch {
         // 自动导入失败不阻塞页面
@@ -108,7 +123,7 @@ export default function EssayGradingScreen() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cls, type, user?.token]);
+  }, [cls, type, names, user?.token]);
 
   // 读后续写识别：用户显式开启开关，或评分标准文本带续写特征（两步法/档位/续写），都视为读后续写模式。
   // 与后端自动识别保持一致：只显示总分，不显示内容/语言/结构/书写四维小分。
