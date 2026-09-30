@@ -95,12 +95,34 @@ export default function EssayGradingScreen() {
           try {
             const imgRes = await fetch(item.image_url);
             const blob = await imgRes.blob();
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(String(reader.result));
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
+            // 压缩大图（原图可达 7MB+），避免超大 base64 拖垮页面渲染与上传
+            const objectUrl = URL.createObjectURL(blob);
+            let base64: string;
+            try {
+              const compressed = await manipulateAsync(
+                objectUrl,
+                [{ resize: { width: 1600 } }],
+                { compress: 0.8, format: SaveFormat.JPEG },
+              );
+              const cRes = await fetch(compressed.uri);
+              const cBlob = await cRes.blob();
+              base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.onerror = reject;
+                reader.readAsDataURL(cBlob);
+              });
+            } catch {
+              // 压缩失败则退回原始图片
+              base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+            } finally {
+              URL.revokeObjectURL(objectUrl);
+            }
             dataUris.push(base64);
             ids.push(
               item.id
