@@ -166,7 +166,30 @@ export default function VocabularyPage() {
   const [collapsed, setCollapsed] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [history] = useState<LevelSnapshot[]>(() => loadHistory());
-  const rec = recommendStudent(SUBJECT_LEVELS);
+  const [subjectLevels, setSubjectLevels] = useState<Record<string, number>>(SUBJECT_LEVELS);
+  const rec = recommendStudent(subjectLevels);
+
+  // 能力图谱接入真实错题数据：调取正确/错题水平生成学科能力图谱
+  useEffect(() => {
+    (async () => {
+      try {
+        // 服务端文件：server/src/routes/wrong-questions.ts
+        // 接口：GET /api/v1/wrong-questions/stats
+        // 返回：data: [{ subject, wrongCount, level }]
+        const res = await fetchWithRetry('/api/v1/wrong-questions/stats');
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.data)) {
+          const merge: Record<string, number> = { ...SUBJECT_LEVELS };
+          for (const item of data.data) {
+            if (item?.subject && item.level) merge[item.subject] = Math.max(1, Math.min(6, Number(item.level)));
+          }
+          setSubjectLevels(merge);
+        }
+      } catch {
+        // 拉取失败时保留默认学科等级
+      }
+    })();
+  }, []);
 
   // 能力图谱灰度开放：仅对指定用户开放，其他人不可用
   useEffect(() => {
@@ -227,7 +250,7 @@ export default function VocabularyPage() {
     );
   }
 
-  const selectedValues = selected.map((s) => SUBJECT_LEVELS[s] ?? 4);
+  const selectedValues = selected.map((s) => subjectLevels[s] ?? 4);
 
   return (
     <Screen>
@@ -340,7 +363,7 @@ export default function VocabularyPage() {
             <View style={styles.list}>
               {rec.fields.map((f, i) => {
                 const open = activeField === f.field;
-                const specs = matchFieldSpecialties(SUBJECT_LEVELS, f.field);
+                const specs = matchFieldSpecialties(subjectLevels, f.field);
                 const hist = open ? specHistoryScores(history, f.field) : {};
                 return (
                   <View key={f.field}>
@@ -403,7 +426,7 @@ export default function VocabularyPage() {
         ) : (
           <View style={styles.familyContainer}>
             <View style={styles.radarWrap}>
-              <Radar labels={ABILITIES.map((a) => a.id)} values={ABILITIES.map((a) => a.level)} />
+              <Radar labels={ABILITIES.map((a) => a.id)} values={rec.ability} />
               <Text style={styles.radarHint}>能力共 6 级：L1 识记 · L2 理解 · L3 应用 · L4 分析 · L5 评价 · L6 创造</Text>
             </View>
             <View style={styles.list}>
@@ -412,7 +435,7 @@ export default function VocabularyPage() {
                   <View style={[styles.dot, { backgroundColor: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }]} />
                   <Text style={styles.idText}>{item.id}</Text>
                   <Text style={styles.nameText}>{item.name}</Text>
-                  <Text style={styles.levelText}>L{item.level}</Text>
+                  <Text style={styles.levelText}>L{rec.ability[i]}</Text>
                 </View>
               ))}
             </View>

@@ -29,6 +29,7 @@ import sijicihuiRouter from "./routes/sijicihui";
 import sijicihuiStudyRouter from "./routes/sijicihui-study";
 import gkVocabRouter from "./routes/gk-vocab";
 import qwenChatRouter from "./routes/qwen-chat";
+import wrongQuestionsRouter from "./routes/wrong-questions";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -363,6 +364,7 @@ app.use('/api/v1/gk-vocab', gkVocabRouter);
 app.use('/api/v1/sijicihui', sijicihuiRouter);
 app.use('/api/v1/sijicihui-study', sijicihuiStudyRouter);
 app.use('/api/v1/qwen-chat', qwenChatRouter);
+app.use('/api/v1/wrong-questions', wrongQuestionsRouter);
 app.use('/api/submissions', submissionsRouter);
 app.use('/api/iris', irisRouter);
 
