@@ -147,6 +147,11 @@ export default function EssayGradingScreen() {
         if (!cancelled && dataUris.length) {
           setSelectedImages((prev) => [...prev, ...dataUris]);
           setAutoSubs((prev) => [...prev, ...ids]);
+        } else if (!cancelled && !dataUris.length && filtered.some((s) => s.image_url)) {
+          // 匹配到作业但一张都没导入成功：提示手动选择，避免真机静默失败
+          if (typeof window !== 'undefined') {
+            window.alert('未能自动导入作文图片，请手动「从相册选择」');
+          }
         }
       } catch {
         // 自动导入失败不阻塞页面
