@@ -169,7 +169,9 @@ export default function RecordingGradingScreen() {
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text className="text-lg font-bold text-gray-900">录题判分</Text>
-        <View className="w-8" />
+        <TouchableOpacity onPress={() => router.push('/batch-grading')} className="p-1">
+          <Ionicons name="layers-outline" size={24} color="#4CAF50" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
