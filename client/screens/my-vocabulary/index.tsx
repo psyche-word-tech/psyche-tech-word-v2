@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Pressable } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { useApiConfig } from '@/contexts/ApiConfigContext';
@@ -172,11 +172,13 @@ export default function MyVocabularyPage() {
               style={styles.vocabTestButton}
               onPress={() => {
                 if (!user) {
-                  Alert.alert('提示', '请至个人中心登录并设置姓名');
+                  setAlertMessage('请至个人中心登录并设置姓名');
+                  setAlertVisible(true);
                   return;
                 }
                 if (!user.username) {
-                  Alert.alert('提示', '请至个人中心设置姓名');
+                  setAlertMessage('请至个人中心设置姓名');
+                  setAlertVisible(true);
                   return;
                 }
                 router.push('/vocab-test');
