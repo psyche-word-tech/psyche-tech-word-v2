@@ -772,3 +772,5 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - **playwright 注入 localStorage token 有竞态**（AuthProvider mount 后 loadUser 异步读，首次 fetch 常 `Bearer undefined`→403/空列表），必须走真实 UI 登录才能可靠复现。
   - 服务/静态均 `Cache-Control: no-store`，新 bundle 不被缓存。
   - 用户反馈"图片没传过来"若本地实验正常，优先怀疑用户连的是**线上 Railway 旧部署**而非本地。
+
+- **【批改结果展示顺序 + 评分评语一致（2026-09）】** `client/screens/essay-grading/index.tsx` 批改结果区把**总分卡从第2位移到末尾**，顺序改为：原文转录→标注图→错误列表→总体评语→优点→改进建议→**总分(末尾)**，实现"先有评语后有分数"。`server/src/routes/essay-grading.ts` 英文小作文分支(第8条)新增**评分与评语严格一致**铁律：先定死total_score再写评语、评语措辞(错误多少/内容完整度/用词优劣/衔接)必须与档位自洽、评语批评越重分数越低。读后续写分支原有铁律#2同样生效。改前端需 `npx expo export --platform web`+rm/cp+重拷KaTeX字体；改后端需 `node build.js`+pkill重启。

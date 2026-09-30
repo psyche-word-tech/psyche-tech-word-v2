@@ -647,58 +647,6 @@ export default function EssayGradingScreen() {
               </View>
             )}
 
-            {/* 分数卡片：有按标准维度的得分点则逐项展示，否则作文显示固定四维 */}
-            <View style={styles.scoreCard}>
-              <View style={styles.totalScoreContainer}>
-                <Text style={styles.totalScoreLabel}>总分</Text>
-                <Text style={styles.totalScoreValue}>
-                  {gradingResult.total_score}
-                  <Text style={styles.totalScoreMax}>/{gradingResult.max_score}</Text>
-                </Text>
-              </View>
-
-              {gradingResult.points && gradingResult.points.length > 0 ? (
-                <View style={styles.pointsContainer}>
-                  {gradingResult.points.map((point, index) => (
-                    <View key={index} style={styles.pointItem}>
-                      <View style={styles.pointHeader}>
-                        <View style={styles.pointBadge}>
-                          <Text style={styles.pointBadgeText}>{index + 1}</Text>
-                        </View>
-                        <Text style={styles.pointTitle}>{point.point}</Text>
-                        <Text style={styles.pointScore}>
-                          <Text style={styles.pointScoreValue}>{point.score}</Text>
-                          <Text style={styles.pointScoreMax}>/{point.max}</Text>
-                        </Text>
-                      </View>
-                      {point.comment ? (
-                        <Text style={styles.pointComment}>{point.comment}</Text>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-              ) : subject !== 'other' && !isContinuationMode && (gradingResult.scores?.content || gradingResult.scores?.language || gradingResult.scores?.structure || gradingResult.scores?.handwriting) ? (
-                <View style={styles.scoreDetails}>
-                  <View style={styles.scoreItem}>
-                    <Text style={styles.scoreItemLabel}>内容</Text>
-                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.content}</Text>
-                  </View>
-                  <View style={styles.scoreItem}>
-                    <Text style={styles.scoreItemLabel}>语言</Text>
-                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.language}</Text>
-                  </View>
-                  <View style={styles.scoreItem}>
-                    <Text style={styles.scoreItemLabel}>结构</Text>
-                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.structure}</Text>
-                  </View>
-                  <View style={styles.scoreItem}>
-                    <Text style={styles.scoreItemLabel}>书写</Text>
-                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.handwriting}</Text>
-                  </View>
-                </View>
-              ) : null}
-            </View>
-
             {/* 标注图片（多页左右滑）——仅作文有红笔标注 */}
             {subject !== 'other' && markedImages.length > 0 && (
               <View style={styles.markedImageContainer}>
@@ -781,6 +729,58 @@ export default function EssayGradingScreen() {
                 ))}
               </View>
             )}
+
+            {/* 总分（放在最后，先评语后分数） */}
+            <View style={styles.scoreCard}>
+              <View style={styles.totalScoreContainer}>
+                <Text style={styles.totalScoreLabel}>总分</Text>
+                <Text style={styles.totalScoreValue}>
+                  {gradingResult.total_score}
+                  <Text style={styles.totalScoreMax}>/{gradingResult.max_score}</Text>
+                </Text>
+              </View>
+
+              {gradingResult.points && gradingResult.points.length > 0 ? (
+                <View style={styles.pointsContainer}>
+                  {gradingResult.points.map((point, index) => (
+                    <View key={index} style={styles.pointItem}>
+                      <View style={styles.pointHeader}>
+                        <View style={styles.pointBadge}>
+                          <Text style={styles.pointBadgeText}>{index + 1}</Text>
+                        </View>
+                        <Text style={styles.pointTitle}>{point.point}</Text>
+                        <Text style={styles.pointScore}>
+                          <Text style={styles.pointScoreValue}>{point.score}</Text>
+                          <Text style={styles.pointScoreMax}>/{point.max}</Text>
+                        </Text>
+                      </View>
+                      {point.comment ? (
+                        <Text style={styles.pointComment}>{point.comment}</Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              ) : subject !== 'other' && !isContinuationMode && (gradingResult.scores?.content || gradingResult.scores?.language || gradingResult.scores?.structure || gradingResult.scores?.handwriting) ? (
+                <View style={styles.scoreDetails}>
+                  <View style={styles.scoreItem}>
+                    <Text style={styles.scoreItemLabel}>内容</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.content}</Text>
+                  </View>
+                  <View style={styles.scoreItem}>
+                    <Text style={styles.scoreItemLabel}>语言</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.language}</Text>
+                  </View>
+                  <View style={styles.scoreItem}>
+                    <Text style={styles.scoreItemLabel}>结构</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.structure}</Text>
+                  </View>
+                  <View style={styles.scoreItem}>
+                    <Text style={styles.scoreItemLabel}>书写</Text>
+                    <Text style={styles.scoreItemValue}>{gradingResult.scores?.handwriting}</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
           </View>
         )}
 
