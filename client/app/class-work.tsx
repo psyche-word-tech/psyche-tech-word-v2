@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl } from '@/utils/apiConfig';
 
-const CLASSES = ['308班', '201班'];
+const CLASSES = ['318班', '201班'];
 
 interface Submission {
   id: string;

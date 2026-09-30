@@ -6,7 +6,7 @@ import { optionalAuthMiddleware } from '../middleware/auth';
 const router = Router();
 
 const TEACHER_USER_ID = 116;
-const CLASSES = ['308班', '201班'];
+const CLASSES = ['318班', '201班'];
 
 function isTeacher(req: AuthRequest) {
   return req.userId === TEACHER_USER_ID;
