@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -18,6 +18,17 @@ export default function SubmitHomeworkScreen() {
   const [className, setClassName] = useState<string>('');
   const [studentName, setStudentName] = useState<string>('');
   const [homeworkType, setHomeworkType] = useState<string>('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalButton, setModalButton] = useState('确定');
+  const [modalAction, setModalAction] = useState<'none' | 'home'>('none');
+
+  const showModal = (msg: string, btn = '确定', action: 'none' | 'home' = 'none') => {
+    setModalMessage(msg);
+    setModalButton(btn);
+    setModalAction(action);
+    setModalVisible(true);
+  };
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -44,19 +55,19 @@ export default function SubmitHomeworkScreen() {
 
   const handleSubmit = async () => {
     if (!className) {
-      Alert.alert('提示', '请选择班级');
+      showModal('请选择班级');
       return;
     }
     if (!homeworkType) {
-      Alert.alert('提示', '请选择作业类型');
+      showModal('请选择作业类型');
       return;
     }
     if (!studentName.trim()) {
-      Alert.alert('提示', '请填写姓名');
+      showModal('请填写姓名');
       return;
     }
     if (!selectedImage) {
-      Alert.alert('提示', '请先选择或拍摄图片');
+      showModal('请先选择或拍摄图片');
       return;
     }
 
@@ -90,14 +101,12 @@ export default function SubmitHomeworkScreen() {
 
       const data = await res.json();
       if (data.success) {
-        Alert.alert('成功', '作业已提交，等待教师批改', [
-          { text: '确定', onPress: () => router.replace('/') },
-        ]);
+        showModal('作业已提交，等待教师批改', '确定', 'home');
       } else {
-        Alert.alert('失败', data.message || '提交失败');
+        showModal(data.message || '提交失败');
       }
     } catch (error) {
-      Alert.alert('错误', '提交失败，请重试');
+      showModal('提交失败，请重试');
     } finally {
       setUploading(false);
     }
@@ -202,6 +211,28 @@ export default function SubmitHomeworkScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        <Modal
+          visible={modalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.alertBox}>
+              <Text style={styles.alertText}>{modalMessage}</Text>
+              <TouchableOpacity
+                style={styles.alertButton}
+                onPress={() => {
+                  setModalVisible(false);
+                  if (modalAction === 'home') router.replace('/');
+                }}
+              >
+                <Text style={styles.alertButtonText}>{modalButton}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </Screen>
   );
@@ -348,6 +379,37 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alertBox: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderRadius: 12,
+    minWidth: 220,
+    alignItems: 'center',
+  },
+  alertText: {
+    fontSize: 15,
+    color: '#333333',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  alertButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 32,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  alertButtonText: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
   },
