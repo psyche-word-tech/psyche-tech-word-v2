@@ -671,7 +671,11 @@ export default function StudyScreen() {
               style={styles.menuItem}
               onPress={() => {
                 setShowSubmissionMenu(false);
-                router.push('/essay-grading');
+                if (user?.phone === '13995589952' || user?.id === 116) {
+                  router.push('/essay-grading');
+                } else {
+                  alert('主观题批改功能仅对指定教师开放');
+                }
               }}
               activeOpacity={0.7}
             >
