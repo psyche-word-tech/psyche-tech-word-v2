@@ -24,6 +24,8 @@ interface ParsedQuestion {
   status: QStatus;
   reason: string;
   knowledge_point: string;
+  core_competency: string;
+  difficulty: string;
 }
 
 interface Recognized {
@@ -85,8 +87,9 @@ async function recognizeContent(content: {
         "   - 没有批改痕迹但用户写了答案时：你必须先自己独立解出该题正确答案，再与用户答案核对：一致 → \"correct\"，不一致 → \"wrong\"，并在 reason 写清用户错在哪里、correct_answer 写正确答案。\n" +
         "   - 用户没写答案也无痕迹 → \"blank\"。\n" +
         "4. wrong/attention 题给 reason（错因/要点）与 knowledge_point（知识点）；correct 题 reason 可空。\n" +
+        "5. 每题给 core_competency（学科核心素养，简短，如 语言能力/思维品质/文化意识/学习能力/数学运算/逻辑推理/直观想象 等）与 difficulty（难度，L1-L6，L1 最易 L6 最难）。\n" +
         "只返回合法 JSON（不要 markdown 代码块），schema：" +
-        `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","knowledge_point":"知识点"}]}`,
+        `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","knowledge_point":"知识点","core_competency":"核心素养","difficulty":"L1-L6"}]}`,
     },
   ];
   const userContent: any[] = [];
@@ -174,7 +177,14 @@ function normalizeQuestion(q: any): ParsedQuestion {
     status,
     reason: String(q.reason || "").trim(),
     knowledge_point: String(q.knowledge_point || "").trim(),
+    core_competency: String(q.core_competency || "").trim().slice(0, 40),
+    difficulty: normalizeDifficulty(q.difficulty),
   };
+}
+
+function normalizeDifficulty(v: any): string {
+  const m = String(v || "").toUpperCase().match(/L?\s*([1-6])/);
+  return m ? `L${m[1]}` : "";
 }
 
 /**
@@ -257,6 +267,8 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
           status: q.status,
           user_answer: q.user_answer,
           knowledge_point: q.knowledge_point,
+          core_competency: q.core_competency,
+          difficulty: q.difficulty,
           source: "recording",
         }),
         image_url: null,

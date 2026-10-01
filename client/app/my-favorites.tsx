@@ -20,7 +20,7 @@ interface Favorite {
 
 type QStatus = 'wrong' | 'attention' | 'correct' | 'blank';
 
-function parseTips(tips?: string | null): { status?: QStatus; user_answer?: string; knowledge_point?: string } {
+function parseTips(tips?: string | null): { status?: QStatus; user_answer?: string; knowledge_point?: string; core_competency?: string; difficulty?: string } {
   try {
     return JSON.parse(tips || '{}') || {};
   } catch {
@@ -131,6 +131,8 @@ export default function MyFavoritesScreen() {
                   if (f.answer) lines.push(`正确答案：${stripHtml(String(f.answer))}`);
                   if (f.analysis) lines.push(`错因/要点：${stripHtml(String(f.analysis))}`);
                   if (tips.knowledge_point) lines.push(`知识点：${tips.knowledge_point}`);
+                  if (tips.core_competency) lines.push(`核心素养：${tips.core_competency}`);
+                  if (tips.difficulty) lines.push(`难度：${tips.difficulty}`);
                   alert(lines.join('\n'));
                 }}>
                   {f.image_url ? (
@@ -151,6 +153,20 @@ export default function MyFavoritesScreen() {
                         {f.question_text ? stripHtml(f.question_text) : '（图片题目）'}
                       </Text>
                     </View>
+                    {(tips.core_competency || tips.difficulty) && (
+                      <View style={styles.tagRow}>
+                        {tips.core_competency ? (
+                          <View style={[styles.tag, { backgroundColor: '#F5F3FF' }]}>
+                            <Text style={[styles.tagText, { color: '#7C3AED' }]}>{tips.core_competency}</Text>
+                          </View>
+                        ) : null}
+                        {tips.difficulty ? (
+                          <View style={[styles.tag, { backgroundColor: '#FFF7ED' }]}>
+                            <Text style={[styles.tagText, { color: '#EA580C' }]}>{tips.difficulty}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    )}
                     <Text style={styles.favDate} numberOfLines={1}>
                       {tips.knowledge_point ? `${tips.knowledge_point} · ` : ''}{new Date(f.created_at).toLocaleDateString('zh-CN')}
                     </Text>
@@ -213,6 +229,9 @@ const styles = StyleSheet.create({
   favTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
   statusBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginRight: 6, marginTop: 1 },
   statusBadgeText: { fontSize: 11, fontWeight: '700' },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
+  tag: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginRight: 6 },
+  tagText: { fontSize: 11, fontWeight: '600' },
   favTitle: { fontSize: 14, fontWeight: '600', color: '#1F2937', lineHeight: 20 },
   favDate: { fontSize: 12, color: '#9CA3AF', marginTop: 6 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
