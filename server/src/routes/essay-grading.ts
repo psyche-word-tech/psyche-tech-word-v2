@@ -945,6 +945,18 @@ ${noteLine}
   g.total_score = g.total_score ?? (g.scores ? (g.scores.content || 0) + (g.scores.language || 0) + (g.scores.structure || 0) + (g.scores.handwriting || 0) : 0);
   g.comments = g.comments ?? '';
   g.errors = Array.isArray(g.errors) ? g.errors : [];
+  // 过滤"伪错误"：模型把正确的词当错误列出但自己又说"没问题"，或原词=改词（无实质修改）
+  g.errors = g.errors.filter((e: any) => {
+    if (!e || typeof e !== 'object') return false;
+    const orig = String(e.original || '').trim();
+    const corr = String(e.correction || '').trim();
+    const expl = String(e.explanation || e.comment || '');
+    // 原词与改词相同 → 没有实质修改，不是错误
+    if (orig && corr && orig.toLowerCase() === corr.toLowerCase()) return false;
+    // 说明自认"没问题/无误/正确" → 不是错误
+    if (/没问题|没有问题|无误|没有错|是正确的|正确无误|可以接受|无需修改|不算错/.test(expl)) return false;
+    return true;
+  });
   g.strengths = Array.isArray(g.strengths) ? g.strengths : [];
   g.improvements = Array.isArray(g.improvements) ? g.improvements : [];
   g.scores = g.scores && typeof g.scores === 'object'
