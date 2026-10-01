@@ -333,6 +333,12 @@ router.post('/grade', optionalAuthMiddleware, async (req: AuthRequest, res) => {
         if (gradingResult.total_score < capped) gradingResult.total_score = capped;
       }
     }
+    // —— 总分严格与评语一致：评语中"定为/给分 X 分"即最终总分，覆盖后端二次判档 ——
+    const committed = (String(gradingResult.comments || '').match(/(?:定为|给分|评分为|打分为|给\s*分)\s*(\d+(?:\.\d+)?)\s*分/) || [])[1];
+    if (committed !== undefined) {
+      const cv = parseFloat(committed);
+      if (Number.isFinite(cv)) gradingResult.total_score = cv;
+    }
     gradingResult.total_score = Math.max(0, Math.min(max_score, roundToStep(gradingResult.total_score)));
 
     // —— 评语 ↔ 分数 档内位置强一致校验（读后续写专用）——
