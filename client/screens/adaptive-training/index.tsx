@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -110,87 +110,90 @@ export default function AdaptiveTraining() {
           <Text className="ml-3 text-lg font-bold text-gray-900">一键万法 · 个性化布置</Text>
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
-          <Text className="text-sm font-bold text-gray-700 mb-2">班级</Text>
-          <View className="flex-row mb-4">
-            {CLASSES.map((c) => (
-              <TouchableOpacity
-                key={c}
-                onPress={() => setClassName(c)}
-                className={`px-4 py-2 rounded-full mr-2 ${
-                  className === c ? 'bg-purple-600' : 'bg-white border border-gray-300'
-                }`}
-              >
-                <Text className={className === c ? 'text-white' : 'text-gray-700'}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text className="text-sm font-bold text-gray-700 mb-2">
-            题型（题型相同，难度按能力自适应）
-          </Text>
-          <View className="flex-row flex-wrap mb-4">
-            {TYPES.map((t) => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => toggleType(t)}
-                className={`px-3 py-2 rounded-full mr-2 mb-2 ${
-                  types.has(t) ? 'bg-purple-600' : 'bg-white border border-gray-300'
-                }`}
-              >
-                <Text className={types.has(t) ? 'text-white text-sm' : 'text-gray-700 text-sm'}>
-                  {t}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text className="text-sm font-bold text-gray-700 mb-2">训练时长</Text>
-          <View className="flex-row flex-wrap mb-4">
-            {DURATIONS.map((d) => (
-              <TouchableOpacity
-                key={d}
-                onPress={() => setDuration(d)}
-                className={`px-3 py-2 rounded-full mr-2 mb-2 ${
-                  duration === d ? 'bg-blue-600' : 'bg-white border border-gray-300'
-                }`}
-              >
-                <Text className={duration === d ? 'text-white text-sm' : 'text-gray-700 text-sm'}>
-                  {d} 分钟
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text className="text-sm font-bold text-gray-700 mb-2">学生（按能力生成不同难度）</Text>
-          {loading ? (
-            <ActivityIndicator className="my-6" />
-          ) : (
-            <View className="mb-4">
-              {students.map((s) => (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>班级</Text>
+            <View style={styles.rowWrap}>
+              {CLASSES.map((c) => (
                 <TouchableOpacity
-                  key={s.userId}
-                  onPress={() => toggleStu(s.userId)}
-                  className="flex-row items-center bg-white rounded-lg px-3 py-2 mb-2"
+                  key={c}
+                  onPress={() => setClassName(c)}
+                  style={[styles.chip, className === c ? styles.chipOnPurple : styles.chipOff]}
                 >
-                  <Ionicons
-                    name={selected.has(s.userId) ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={20}
-                    color={selected.has(s.userId) ? '#7C3AED' : '#9CA3AF'}
-                  />
-                  <Text className="ml-2 text-gray-900">{s.name}</Text>
-                  {s.isPilot && (
-                    <Text className="ml-2 text-xs text-orange-500">
-                      试点{s.phone ? `·${s.phone}` : ''}
-                    </Text>
-                  )}
-                  <View className="ml-auto bg-purple-100 rounded-full px-2 py-0.5">
-                    <Text className="text-xs text-purple-700">L{s.level}</Text>
-                  </View>
+                  <Text style={className === c ? styles.chipTextOn : styles.chipTextOff}>{c}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-          )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>题型（题型相同，难度按能力自适应）</Text>
+            <View style={styles.rowWrap}>
+              {TYPES.map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => toggleType(t)}
+                  style={[styles.chip, types.has(t) ? styles.chipOnPurple : styles.chipOff]}
+                >
+                  <Text style={types.has(t) ? styles.chipTextOn : styles.chipTextOff}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>训练时长</Text>
+            <View style={styles.rowWrap}>
+              {DURATIONS.map((d) => (
+                <TouchableOpacity
+                  key={d}
+                  onPress={() => setDuration(d)}
+                  style={[styles.chip, duration === d ? styles.chipOnBlue : styles.chipOff]}
+                >
+                  <Text style={duration === d ? styles.chipTextOn : styles.chipTextOff}>
+                    {d} 分钟
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>学生（按能力生成不同难度）</Text>
+            {loading ? (
+              <ActivityIndicator style={{ marginVertical: 24 }} />
+            ) : (
+              <View style={styles.rowWrap}>
+                {students.map((s) => (
+                  <TouchableOpacity
+                    key={s.userId}
+                    onPress={() => toggleStu(s.userId)}
+                    style={[
+                      styles.stuItem,
+                      { borderColor: selected.has(s.userId) ? '#7C3AED' : '#E5E7EB' },
+                    ]}
+                  >
+                    <View style={styles.stuRow}>
+                      <Ionicons
+                        name={selected.has(s.userId) ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={18}
+                        color={selected.has(s.userId) ? '#7C3AED' : '#9CA3AF'}
+                      />
+                      <Text style={styles.stuName} numberOfLines={1}>{s.name}</Text>
+                      <View style={styles.levelBadge}>
+                        <Text style={styles.levelText}>L{s.level}</Text>
+                      </View>
+                    </View>
+                    {s.isPilot && (
+                      <Text style={styles.pilotText} numberOfLines={1}>
+                        试点{s.phone ? `·${s.phone}` : ''}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         </ScrollView>
 
         {msg !== '' && (
@@ -215,3 +218,65 @@ export default function AdaptiveTraining() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  rowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  chipOnPurple: { backgroundColor: '#7C3AED' },
+  chipOnBlue: { backgroundColor: '#2563EB' },
+  chipOff: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#D1D5DB' },
+  chipTextOn: { color: '#fff', fontSize: 13 },
+  chipTextOff: { color: '#374151', fontSize: 13 },
+  stuItem: {
+    width: '48%',
+    marginRight: '2%',
+    marginBottom: 8,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 8,
+  },
+  stuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stuName: {
+    marginLeft: 6,
+    flex: 1,
+    fontSize: 14,
+    color: '#111827',
+  },
+  levelBadge: {
+    backgroundColor: '#EDE9FE',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  levelText: { fontSize: 11, color: '#6D28D9' },
+  pilotText: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#F97316',
+  },
+});
