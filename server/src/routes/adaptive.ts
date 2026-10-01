@@ -6,8 +6,6 @@ const router = Router();
 
 // 试点学生：学生端仅该手机号可见「我的训练」
 const PILOT_STUDENT_PHONE = '15672049317';
-// 自适应训练记录复用 submissions 表，用 status 标记区分
-const ADAPTIVE_STATUS = 'adaptive';
 
 export const QUESTION_TYPES = [
   '单选',
@@ -120,7 +118,6 @@ async function classStudents(className: string) {
   if (error) throw error;
   const byUser = new Map<string, { name: string; ratios: number[] }>();
   for (const row of data || []) {
-    if ((row as any).status === ADAPTIVE_STATUS) continue;
     const a = (row as any).annotations || {};
     if (a.className !== className) continue;
     const g = a.grading;
@@ -190,21 +187,18 @@ router.post('/assign', authMiddleware, async (req: AuthRequest, res: Response) =
     for (const stu of students) {
       try {
         const questions = await generateQuestions(Number(stu.level) || 3, questionTypes, duration);
-        const { error } = await supabase.from('submissions').insert({
-          student_id: '00000000-0000-0000-0000-000000000000',
-          image_url: '',
-          status: ADAPTIVE_STATUS,
-          annotations: {
-            adaptive: true,
-            assignmentId,
-            className,
-            userId: String(stu.userId),
-            studentName: stu.name,
-            level: Number(stu.level) || 3,
-            questionTypes,
-            durationMin: duration,
-            questions,
-          },
+        const { error } = await supabase.from('adaptive_sets').insert({
+          assignment_id: assignmentId,
+          teacher_id: Number(req.userId) || 0,
+          class_name: className,
+          user_id: String(stu.userId),
+          student_name: stu.name,
+          phone: stu.phone || '',
+          level: Number(stu.level) || 3,
+          question_types: questionTypes,
+          duration_min: duration,
+          questions,
+          status: 'assigned',
         });
         if (error) throw new Error(error.message);
         results.push({ userId: stu.userId, name: stu.name, ok: true, count: questions.length });
@@ -227,24 +221,20 @@ router.get('/my-sets', authMiddleware, async (req: AuthRequest, res: Response) =
     const phone = user?.[0]?.phone;
     if (phone !== PILOT_STUDENT_PHONE) return res.json({ success: true, data: { sets: [] } });
     const { data, error } = await supabase
-      .from('submissions')
+      .from('adaptive_sets')
       .select('*')
-      .eq('status', ADAPTIVE_STATUS)
-      .eq('annotations->>userId', String(req.userId))
+      .eq('user_id', String(req.userId))
       .order('created_at', { ascending: false });
     if (error) throw error;
-    const sets = (data || []).map((s: any) => {
-      const a = s.annotations || {};
-      return {
-        id: s.id,
-        className: a.className,
-        level: a.level,
-        questionTypes: a.questionTypes || [],
-        durationMin: a.durationMin || 30,
-        questions: a.questions || [],
-        createdAt: s.created_at,
-      };
-    });
+    const sets = (data || []).map((s: any) => ({
+      id: s.id,
+      className: s.class_name,
+      level: s.level,
+      questionTypes: s.question_types || [],
+      durationMin: s.duration_min || 30,
+      questions: s.questions || [],
+      createdAt: s.created_at,
+    }));
     res.json({ success: true, data: { sets } });
   } catch (e: any) {
     console.error('[adaptive] my-sets error:', e);
