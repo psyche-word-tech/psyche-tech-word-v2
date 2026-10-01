@@ -14,8 +14,25 @@ function isImageMime(mime: string): boolean {
   return /^image\//.test(mime || "");
 }
 
+type QStatus = "wrong" | "attention" | "correct" | "blank";
+
+interface ParsedQuestion {
+  number: string;
+  question: string;
+  user_answer: string;
+  correct_answer: string;
+  status: QStatus;
+  reason: string;
+  knowledge_point: string;
+}
+
+interface Recognized {
+  subject: string;
+  questions: ParsedQuestion[];
+}
+
 /**
- * 从 PDF / Word 文档提取纯文本（复用 solve-problem 的解析方式）
+ * 从 PDF / Word 文档提取纯文本
  */
 async function parseDocText(buffer: Buffer, mime: string, filename?: string): Promise<string | null> {
   const name = (filename || "").toLowerCase();
@@ -41,12 +58,16 @@ async function parseDocText(buffer: Buffer, mime: string, filename?: string): Pr
 }
 
 /**
- * 调用千问识别：给定图片（base64）与文档文本，识别题目科目并提取题干与参考答案。
+ * 逐题识别：学科 + 每题对错状态。
+ * 判对错规则（写入 prompt）：
+ *  - 有批改痕迹：题号/答案处画 ×/叉 → wrong；题号被圈/框（重点关注）→ attention；画 ✓/勾 → correct
+ *  - 无批改痕迹但用户写了答案：模型先独立解题，再与用户答案核对 → correct/wrong
+ *  - 用户未作答且无痕迹 → blank
  */
 async function recognizeContent(content: {
   images: { base64: string; mime: string }[];
   texts: string[];
-}): Promise<{ subject: string; question: string; answer: string; analysis: string; solution: string }> {
+}): Promise<Recognized | null> {
   const qwenApiUrl = (process.env.QWEN_API_URL || 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1').replace(/\/+$/, '');
   const chatUrl = `${qwenApiUrl}/chat/completions`;
   const apiKey = process.env.QWEN_API_KEY || '';
@@ -56,8 +77,16 @@ async function recognizeContent(content: {
     {
       role: "system",
       content:
-        "你是题目识别助手。根据用户上传的题目图片或文档文字，判定题目所属学科并提取完整题干与参考答案。只返回合法 JSON（不要 markdown 代码块），schema：" +
-        `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","question":"完整题干（含所有小题与选项）","answer":"最终答案","analysis":"简要解析","solution":"关键解题步骤"}`,
+        "你是经验丰富的批改与题目分析老师。用户上传题目/试卷照片（可能含用户手写答案与批改痕迹）。任务：\n" +
+        "1. 判定学科。\n" +
+        "2. 逐题识别：题号、完整题干（含小题与选项）、用户手写答案（没有则空串）。\n" +
+        "3. 判定每题 status：\n" +
+        "   - 有批改痕迹时：题号或答案处画了 ×、叉、打叉 → \"wrong\"；题号被圈起来/框起来（代表重点关注）→ \"attention\"；画了 ✓、勾、对号 → \"correct\"。\n" +
+        "   - 没有批改痕迹但用户写了答案时：你必须先自己独立解出该题正确答案，再与用户答案核对：一致 → \"correct\"，不一致 → \"wrong\"，并在 reason 写清用户错在哪里、correct_answer 写正确答案。\n" +
+        "   - 用户没写答案也无痕迹 → \"blank\"。\n" +
+        "4. wrong/attention 题给 reason（错因/要点）与 knowledge_point（知识点）；correct 题 reason 可空。\n" +
+        "只返回合法 JSON（不要 markdown 代码块），schema：" +
+        `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","knowledge_point":"知识点"}]}`,
     },
   ];
   const userContent: any[] = [];
@@ -70,12 +99,12 @@ async function recognizeContent(content: {
   messages.push({ role: "user", content: userContent });
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60000);
+  const timer = setTimeout(() => controller.abort(), 120000);
   try {
     const resp = await fetch(chatUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages, temperature: 0.3, enable_thinking: false, max_tokens: 4000 }),
+      body: JSON.stringify({ model, messages, temperature: 0.2, enable_thinking: false, max_tokens: 6000 }),
       signal: controller.signal,
     });
     if (!resp.ok) {
@@ -85,29 +114,75 @@ async function recognizeContent(content: {
     const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
     const contentStr = data.choices?.[0]?.message?.content || "";
     if (!contentStr) throw new Error("千问 API 返回内容为空");
-    const cleaned = contentStr.replace(/```json|```/g, "").trim();
-    const first = cleaned.indexOf("{");
-    const last = cleaned.lastIndexOf("}");
-    const jsonStr = first >= 0 && last > first ? cleaned.slice(first, last + 1) : cleaned;
-    const parsed = JSON.parse(jsonStr);
-    if (parsed.error) throw new Error(parsed.error);
-    return {
-      subject: parsed.subject || "未知",
-      question: parsed.question || "",
-      answer: parsed.answer || "",
-      analysis: parsed.analysis || "",
-      solution: parsed.solution || "",
-    };
+    const parsed = extractJson(contentStr);
+    if (!parsed) return null;
+    const rawQs = Array.isArray(parsed.questions) ? parsed.questions : [];
+    const questions: ParsedQuestion[] = rawQs
+      .filter((q: any) => q && typeof q === "object")
+      .map((q: any) => normalizeQuestion(q))
+      .filter((q: ParsedQuestion) => q.question || q.user_answer || q.number);
+    if (questions.length === 0) return null;
+    return { subject: String(parsed.subject || "未知"), questions };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function extractJson(contentStr: string): any {
+  const cleaned = contentStr.replace(/```json|```/g, "").trim();
+  const first = cleaned.indexOf("{");
+  const last = cleaned.lastIndexOf("}");
+  if (first < 0 || last <= first) return null;
+  let jsonStr = cleaned.slice(first, last + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch {
+    // 截断/尾逗号自愈：去尾逗号后补未闭合括号
+    jsonStr = jsonStr.replace(/,\s*([}\]])/g, "$1");
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      const openB = (jsonStr.match(/{/g) || []).length;
+      const closeB = (jsonStr.match(/}/g) || []).length;
+      const openS = (jsonStr.match(/\[/g) || []).length;
+      const closeS = (jsonStr.match(/]/g) || []).length;
+      let fixed = jsonStr;
+      if (/"[^"]*$/.test(fixed)) fixed += '"';
+      fixed = fixed.replace(/,\s*$/, "");
+      fixed += "]".repeat(Math.max(0, openS - closeS));
+      fixed += "}".repeat(Math.max(0, openB - closeB));
+      try {
+        return JSON.parse(fixed);
+      } catch {
+        return null;
+      }
+    }
+  }
+}
+
+function normalizeQuestion(q: any): ParsedQuestion {
+  const statusRaw = String(q.status || "").toLowerCase();
+  let status: QStatus = "blank";
+  if (statusRaw === "wrong" || statusRaw === "incorrect" || statusRaw === "error") status = "wrong";
+  else if (statusRaw === "attention" || statusRaw === "focus" || statusRaw === "review") status = "attention";
+  else if (statusRaw === "correct" || statusRaw === "right") status = "correct";
+  return {
+    number: String(q.number ?? "").trim(),
+    question: String(q.question || "").trim(),
+    user_answer: String(q.user_answer || "").trim(),
+    correct_answer: String(q.correct_answer || "").trim(),
+    status,
+    reason: String(q.reason || "").trim(),
+    knowledge_point: String(q.knowledge_point || "").trim(),
+  };
 }
 
 /**
  * 录题 / 错题上传接口
  * POST /api/v1/wrong-questions
  * Body: FormData 'files'（可多个，图片/PDF/Word）
- * 后端识别科目，并把该条作为"错题"写入 favorites（我的收藏按学科查看错题）
+ * 逐题判对错后，每题一条写入 favorites（tips 存 status/user_answer/knowledge_point），
+ * 对错数据汇入能力图谱（GET /stats 按正确率推算等级）。
  */
 router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequest, res) => {
   try {
@@ -123,7 +198,7 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     for (const f of files) {
       if (isImageMime(f.mimetype)) {
         try {
-          const compressed = await sharp(f.buffer).resize(900, 900, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 65 }).toBuffer();
+          const compressed = await sharp(f.buffer).resize(1200, 1200, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 75 }).toBuffer();
           images.push({ base64: compressed.toString("base64"), mime: "image/jpeg" });
         } catch {
           images.push({ base64: f.buffer.toString("base64"), mime: f.mimetype });
@@ -140,22 +215,55 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     }
 
     const recognized = await recognizeContent({ images, texts });
-
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("favorites")
-      .insert({
-        user_id: userId,
-        question_text: recognized.question || "(图片题目)",
-        subject: recognized.subject || "未知",
-        answer: recognized.answer || "",
-        analysis: recognized.analysis || "",
-        solution: recognized.solution || "",
-        image_url: null,
-      })
-      .select()
-      .single();
 
+    // 识别失败兜底：整单作为一条待核对记录入库
+    if (!recognized) {
+      const { error } = await supabase.from("favorites").insert({
+        user_id: userId,
+        question_text: "(待核对题目) 上传内容未能逐题解析，请人工核对",
+        subject: "未知",
+        answer: "",
+        analysis: "",
+        solution: "",
+        tips: JSON.stringify({ status: "attention", source: "recording" }),
+        image_url: null,
+      });
+      if (error) return res.status(500).json({ success: false, message: "错题保存失败" });
+      return res.json({
+        success: true,
+        message: "上传成功，但未能逐题解析，已记为待核对",
+        subject: "未知",
+        summary: { total: 0, correct: 0, wrong: 0, attention: 1, blank: 0 },
+        warn: failed > 0 ? `${failed} 个文档无法解析` : undefined,
+      });
+    }
+
+    let correct = 0, wrong = 0, attention = 0, blank = 0;
+    const rows: any[] = [];
+    for (const q of recognized.questions) {
+      if (q.status === "correct") correct++;
+      else if (q.status === "wrong") wrong++;
+      else if (q.status === "attention") attention++;
+      else blank++;
+      rows.push({
+        user_id: userId,
+        question_text: q.number ? `${q.number}. ${q.question}` : q.question || "(图片题目)",
+        subject: recognized.subject,
+        answer: q.correct_answer || "",
+        analysis: q.reason || "",
+        solution: "",
+        tips: JSON.stringify({
+          status: q.status,
+          user_answer: q.user_answer,
+          knowledge_point: q.knowledge_point,
+          source: "recording",
+        }),
+        image_url: null,
+      });
+    }
+
+    const { error } = await supabase.from("favorites").insert(rows);
     if (error) {
       console.error("[WrongQuestions] 错题入库失败:", error.message);
       return res.status(500).json({ success: false, message: "错题保存失败: " + error.message });
@@ -164,8 +272,8 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     return res.json({
       success: true,
       message: "上传成功",
-      subject: recognized.subject || "未知",
-      data,
+      subject: recognized.subject,
+      summary: { total: recognized.questions.length, correct, wrong, attention, blank },
       warn: failed > 0 ? `${failed} 个文档无法解析（暂不支持该格式）` : undefined,
     });
   } catch (e: any) {
@@ -177,7 +285,8 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
 /**
  * 错题/收藏 学科统计（供能力图谱）
  * GET /api/v1/wrong-questions/stats
- * 返回按学科分组的错题数量与推算水平（L1-L6）
+ * 按 tips.status 统计每题对错：correct 计对，wrong/attention 计错；
+ * 无 status 的旧记录按错计（兼容）。正确率推算 L1-L6。
  */
 router.get("/stats", authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -185,7 +294,7 @@ router.get("/stats", authMiddleware, async (req: AuthRequest, res) => {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("favorites")
-      .select("id, subject")
+      .select("id, subject, tips")
       .eq("user_id", userId);
 
     if (error) {
@@ -193,18 +302,34 @@ router.get("/stats", authMiddleware, async (req: AuthRequest, res) => {
       return res.status(500).json({ success: false, message: "统计失败" });
     }
 
-    const countBySubject: Record<string, number> = {};
-    (data || []).forEach((row) => {
+    const agg: Record<string, { subject: string; correct: number; wrong: number }> = {};
+    for (const row of data || []) {
       const s = row.subject || "未知";
-      countBySubject[s] = (countBySubject[s] || 0) + 1;
-    });
+      agg[s] = agg[s] || { subject: s, correct: 0, wrong: 0 };
+      let status = "";
+      try {
+        status = String(JSON.parse(row.tips || "{}").status || "");
+      } catch {
+        status = "";
+      }
+      if (status === "correct") agg[s].correct++;
+      else if (status === "blank") continue; // 未作答不计入正确率
+      else agg[s].wrong++; // wrong / attention / 旧记录无 status
+    }
 
-    // 错题越少说明水平越高：L6=几乎无错题，/每错 1-2 题降一级，最低 L1
-    const subjects = Object.keys(countBySubject).map((subject) => {
-      const wrong = countBySubject[subject];
-      const level = Math.max(1, Math.min(6, 6 - Math.floor((wrong - 1) / 2)));
-      return { subject, wrongCount: wrong, level };
-    });
+    const subjects = Object.values(agg)
+      .filter((a) => a.correct + a.wrong > 0)
+      .map((a) => {
+        const acc = a.correct / (a.correct + a.wrong);
+        const level = acc >= 0.9 ? 6 : acc >= 0.75 ? 5 : acc >= 0.6 ? 4 : acc >= 0.45 ? 3 : acc >= 0.25 ? 2 : 1;
+        return {
+          subject: a.subject,
+          wrongCount: a.wrong,
+          correctCount: a.correct,
+          accuracy: Math.round(acc * 100) / 100,
+          level,
+        };
+      });
 
     res.json({ success: true, data: subjects });
   } catch (e: any) {

@@ -130,7 +130,11 @@ export default function RecordingUploadScreen() {
       });
       const data = await res.json();
       if (data.success) {
-        setMsg({ type: 'ok', text: `上传成功，已识别学科：${data.subject || '未知'}，已记入错题。${data.warn ? data.warn : ''}` });
+        const s = data.summary;
+        const sumText = s && s.total > 0
+          ? `共 ${s.total} 题：对 ${s.correct}、错 ${s.wrong}${s.attention ? `、重点关注 ${s.attention}` : ''}${s.blank ? `、未作答 ${s.blank}` : ''}，已计入能力图谱。`
+          : '已记入错题。';
+        setMsg({ type: 'ok', text: `上传成功，学科：${data.subject || '未知'}。${sumText}${data.warn ? data.warn : ''}` });
         setFiles([]);
         if (Platform.OS !== 'web') {
           Alert.alert('上传成功', `已自动识别学科：${data.subject || '未知'}`, [

@@ -13,9 +13,27 @@ interface Favorite {
   answer?: string | null;
   analysis?: string | null;
   solution?: string | null;
+  tips?: string | null;
   image_url?: string | null;
   created_at: string;
 }
+
+type QStatus = 'wrong' | 'attention' | 'correct' | 'blank';
+
+function parseTips(tips?: string | null): { status?: QStatus; user_answer?: string; knowledge_point?: string } {
+  try {
+    return JSON.parse(tips || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+const STATUS_META: Record<QStatus, { label: string; bg: string; fg: string }> = {
+  wrong: { label: '错', bg: '#FEE2E2', fg: '#B91C1C' },
+  attention: { label: '重点', bg: '#FEF3C7', fg: '#B45309' },
+  correct: { label: '对', bg: '#DCFCE7', fg: '#15803D' },
+  blank: { label: '未答', bg: '#F3F4F6', fg: '#6B7280' },
+};
 
 export default function MyFavoritesScreen() {
   const router = useSafeRouter();
@@ -103,10 +121,17 @@ export default function MyFavoritesScreen() {
           renderItem={({ item }) => (
             <View style={styles.group}>
               <Text style={styles.groupTitle}>{item.subject}（{item.items.length}）</Text>
-              {item.items.map((f) => (
+              {item.items.map((f) => {
+                const tips = parseTips(f.tips);
+                const meta = tips.status ? STATUS_META[tips.status] : null;
+                return (
                 <TouchableOpacity key={f.id} style={styles.favItem} activeOpacity={0.7} onPress={() => {
-                  // 打开收藏详情（用文字题干即可，可扩展为详情页）
-                  alert(f.question_text ? stripHtml(f.question_text) : '（图片题目，暂不支持文字预览）');
+                  const lines = [f.question_text ? stripHtml(f.question_text) : '（图片题目）'];
+                  if (tips.user_answer) lines.push(`我的答案：${tips.user_answer}`);
+                  if (f.answer) lines.push(`正确答案：${stripHtml(String(f.answer))}`);
+                  if (f.analysis) lines.push(`错因/要点：${stripHtml(String(f.analysis))}`);
+                  if (tips.knowledge_point) lines.push(`知识点：${tips.knowledge_point}`);
+                  alert(lines.join('\n'));
                 }}>
                   {f.image_url ? (
                     <Image source={{ uri: f.image_url }} style={styles.favThumb} resizeMode="cover" />
@@ -116,14 +141,24 @@ export default function MyFavoritesScreen() {
                     </View>
                   )}
                   <View style={styles.favContent}>
-                    <Text style={styles.favTitle} numberOfLines={2}>
-                      {f.question_text ? stripHtml(f.question_text) : '（图片题目）'}
+                    <View style={styles.favTitleRow}>
+                      {meta && (
+                        <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: meta.fg }]}>{meta.label}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.favTitle} numberOfLines={2}>
+                        {f.question_text ? stripHtml(f.question_text) : '（图片题目）'}
+                      </Text>
+                    </View>
+                    <Text style={styles.favDate} numberOfLines={1}>
+                      {tips.knowledge_point ? `${tips.knowledge_point} · ` : ''}{new Date(f.created_at).toLocaleDateString('zh-CN')}
                     </Text>
-                    <Text style={styles.favDate}>{new Date(f.created_at).toLocaleDateString('zh-CN')}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#CCC" />
                 </TouchableOpacity>
-              ))}
+                );
+              })}
             </View>
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchFavorites(); }} />}
@@ -175,6 +210,9 @@ const styles = StyleSheet.create({
   favThumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#F3F4F6' },
   favThumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   favContent: { flex: 1, marginLeft: 12 },
+  favTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  statusBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginRight: 6, marginTop: 1 },
+  statusBadgeText: { fontSize: 11, fontWeight: '700' },
   favTitle: { fontSize: 14, fontWeight: '600', color: '#1F2937', lineHeight: 20 },
   favDate: { fontSize: 12, color: '#9CA3AF', marginTop: 6 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },

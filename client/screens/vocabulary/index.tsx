@@ -167,6 +167,7 @@ export default function VocabularyPage() {
   const [activeField, setActiveField] = useState<string | null>(null);
   const [history] = useState<LevelSnapshot[]>(() => loadHistory());
   const [subjectLevels, setSubjectLevels] = useState<Record<string, number>>(SUBJECT_LEVELS);
+  const [subjectStats, setSubjectStats] = useState<Record<string, { accuracy?: number; correctCount?: number; wrongCount?: number }>>({});
   const rec = recommendStudent(subjectLevels);
 
   // 能力图谱接入真实错题数据：调取正确/错题水平生成学科能力图谱
@@ -175,15 +176,18 @@ export default function VocabularyPage() {
       try {
         // 服务端文件：server/src/routes/wrong-questions.ts
         // 接口：GET /api/v1/wrong-questions/stats
-        // 返回：data: [{ subject, wrongCount, level }]
+        // 返回：data: [{ subject, wrongCount, correctCount, accuracy, level }]
         const res = await fetchWithRetry('/api/v1/wrong-questions/stats');
         const data = await res.json();
         if (data?.success && Array.isArray(data.data)) {
           const merge: Record<string, number> = { ...SUBJECT_LEVELS };
+          const stats: Record<string, { accuracy?: number; correctCount?: number; wrongCount?: number }> = {};
           for (const item of data.data) {
             if (item?.subject && item.level) merge[item.subject] = Math.max(1, Math.min(6, Number(item.level)));
+            if (item?.subject) stats[item.subject] = { accuracy: item.accuracy, correctCount: item.correctCount, wrongCount: item.wrongCount };
           }
           setSubjectLevels(merge);
+          setSubjectStats(stats);
         }
       } catch {
         // 拉取失败时保留默认学科等级
@@ -217,6 +221,28 @@ export default function VocabularyPage() {
 
   const openSubjectRadar = (subject: string) => {
     router.push('/subject-radar', { subject });
+  };
+
+  const renderSubjectCard = (subject: string) => {
+    const isSelected = selected.includes(subject);
+    const stat = subjectStats[subject];
+    return (
+      <TouchableOpacity
+        key={subject}
+        style={[styles.subjectCard, isSelected ? styles.subjectSelected : styles.subjectDefault]}
+        activeOpacity={0.8}
+        onPress={() => toggleSubject(subject)}
+      >
+        <Text style={styles.subjectText}>{subject}</Text>
+        {stat && (
+          <Text style={styles.subjectStat} numberOfLines={1}>
+            {typeof stat.accuracy === 'number'
+              ? `正确率 ${Math.round(stat.accuracy * 100)}%（错 ${stat.wrongCount ?? 0}）`
+              : `错 ${stat.wrongCount ?? 0} 题`}
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
   };
 
   if (access === 'checking') {
@@ -313,34 +339,10 @@ export default function VocabularyPage() {
               ) : (
                 <>
                   <View style={styles.gridRow}>
-                    {SUBJECTS.slice(0, 5).map((subject) => {
-                      const isSelected = selected.includes(subject);
-                      return (
-                        <TouchableOpacity
-                          key={subject}
-                          style={[styles.subjectCard, isSelected ? styles.subjectSelected : styles.subjectDefault]}
-                          activeOpacity={0.8}
-                          onPress={() => toggleSubject(subject)}
-                        >
-                          <Text style={styles.subjectText}>{subject}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                    {SUBJECTS.slice(0, 5).map(renderSubjectCard)}
                   </View>
                   <View style={styles.gridRow}>
-                    {SUBJECTS.slice(5).map((subject) => {
-                      const isSelected = selected.includes(subject);
-                      return (
-                        <TouchableOpacity
-                          key={subject}
-                          style={[styles.subjectCard, isSelected ? styles.subjectSelected : styles.subjectDefault]}
-                          activeOpacity={0.8}
-                          onPress={() => toggleSubject(subject)}
-                        >
-                          <Text style={styles.subjectText}>{subject}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                    {SUBJECTS.slice(5).map(renderSubjectCard)}
                     <TouchableOpacity
                       style={styles.subjectHide}
                       activeOpacity={0.8}
@@ -530,9 +532,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   subjectCard: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -541,6 +543,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'serif',
     fontWeight: '600',
+  },
+  subjectStat: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 1,
+    maxWidth: 120,
   },
   subjectDefault: {
     backgroundColor: '#9CA3AF',
