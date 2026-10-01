@@ -58,6 +58,18 @@ export default function ImageEditor({ visible, imageUri, onClose, onApply }: Pro
     cropRef.current = crop;
   }, [crop]);
 
+  // web 上强制裁剪区域 touch-action:none，防止浏览器把拖拽当成滚动而取消触摸
+  const boxRef = useRef<any>(null);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (el?.style) {
+      el.style.touchAction = 'none';
+      el.querySelectorAll?.('*')?.forEach((n: any) => {
+        if (n.style) n.style.touchAction = 'none';
+      });
+    }
+  }, [visible, workUri]);
+
   // web 上 PanResponder 对鼠标/触摸不可靠，改用原生 mouse/touch 事件驱动拖拽
   const getPoint = (e: any) => {
     if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -70,6 +82,7 @@ export default function ImageEditor({ visible, imageUri, onClose, onApply }: Pro
     const p = getPoint(e);
     dragRef.current = { sx: p.x, sy: p.y, orig: { ...cropRef.current } };
     const move = (ev: any) => {
+      if (ev.cancelable && ev.touches) ev.preventDefault();
       const q = getPoint(ev);
       const dx = q.x - dragRef.current.sx;
       const dy = q.y - dragRef.current.sy;
@@ -102,11 +115,13 @@ export default function ImageEditor({ visible, imageUri, onClose, onApply }: Pro
       window.removeEventListener('mouseup', up);
       window.removeEventListener('touchmove', move);
       window.removeEventListener('touchend', up);
+      window.removeEventListener('touchcancel', up);
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
-    window.addEventListener('touchmove', move);
+    window.addEventListener('touchmove', move, { passive: false });
     window.addEventListener('touchend', up);
+    window.addEventListener('touchcancel', up);
     e.preventDefault?.();
   };
 
@@ -165,7 +180,7 @@ export default function ImageEditor({ visible, imageUri, onClose, onApply }: Pro
     if (workUri) onApply(workUri);
   };
 
-  const handleSize = 22;
+  const handleSize = 30;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -173,7 +188,7 @@ export default function ImageEditor({ visible, imageUri, onClose, onApply }: Pro
         <View style={styles.panel}>
           <Text style={styles.title}>裁剪 / 旋转</Text>
 
-          <View style={[styles.box, { width: BOX_W, height: BOX_H }]}>
+          <View ref={boxRef} style={[styles.box, { width: BOX_W, height: BOX_H }]}>
             {workUri ? (
               <Image
                 source={{ uri: workUri }}
@@ -199,6 +214,8 @@ export default function ImageEditor({ visible, imageUri, onClose, onApply }: Pro
               </View>
             ) : null}
           </View>
+
+          <Text style={styles.hint}>拖动蓝色边角调整裁剪范围，或拖动框内移动</Text>
 
           <View style={styles.row}>
             <TouchableOpacity style={styles.btn} onPress={() => rotate(-90)} disabled={busy}>
@@ -240,6 +257,7 @@ const styles = StyleSheet.create({
     maxWidth: 380,
   },
   title: { fontSize: 16, fontWeight: '700', marginBottom: 12, textAlign: 'center', color: '#333' },
+  hint: { fontSize: 12, color: '#888', textAlign: 'center', marginTop: 8 },
   box: { position: 'relative', backgroundColor: '#000', overflow: 'hidden' },
   cropBox: {
     position: 'absolute',
