@@ -100,7 +100,7 @@ export default function AdaptiveTraining() {
 
   return (
     <Screen>
-      <View className="flex-1 bg-gray-50">
+      <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
         <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-200">
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color="#333" />
@@ -108,7 +108,7 @@ export default function AdaptiveTraining() {
           <Text className="ml-3 text-lg font-bold text-gray-900">一键万法 · 个性化布置</Text>
         </View>
 
-        <ScrollView className="flex-1 p-4">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
           <Text className="text-sm font-bold text-gray-700 mb-2">班级</Text>
           <View className="flex-row mb-4">
             {CLASSES.map((c) => (
