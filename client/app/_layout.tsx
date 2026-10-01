@@ -64,6 +64,8 @@ export default function RootLayout() {
           <Stack.Screen name="competency-map" options={{ title: "" }} />
           <Stack.Screen name="subject-radar" options={{ title: "" }} />
           <Stack.Screen name="learning-overview" options={{ title: "" }} />
+          <Stack.Screen name="adaptive-training" options={{ title: "" }} />
+          <Stack.Screen name="my-training" options={{ title: "" }} />
           <Stack.Screen name="submit-homework" options={{ title: "" }} />
           <Stack.Screen name="teacher-review" options={{ title: "" }} />
           <Stack.Screen name="class-work" options={{ title: "" }} />

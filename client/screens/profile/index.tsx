@@ -396,12 +396,38 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color="#ccc" />
           </TouchableOpacity>
           <TouchableOpacity
+            style={styles.settingsItem}
+            onPress={() => router.push('/adaptive-training')}
+          >
+            <View style={styles.settingsLeft}>
+              <Ionicons name="flash" size={20} color="#8E44AD" />
+              <Text style={[styles.settingsText, { color: '#8E44AD' }]}>一键万法</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.settingsItem, styles.settingsItemLast]}
             onPress={() => router.push('/vocab-stats')}
           >
             <View style={styles.settingsLeft}>
               <Ionicons name="stats-chart" size={20} color="#8E44AD" />
               <Text style={[styles.settingsText, { color: '#8E44AD' }]}>词汇量统计</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Pilot student training entry */}
+      {user?.phone === '15672049317' && (
+        <View style={styles.settingsSection}>
+          <TouchableOpacity
+            style={[styles.settingsItem, styles.settingsItemLast]}
+            onPress={() => router.push('/my-training')}
+          >
+            <View style={styles.settingsLeft}>
+              <Ionicons name="barbell" size={20} color="#2563EB" />
+              <Text style={[styles.settingsText, { color: '#2563EB' }]}>我的训练</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#ccc" />
           </TouchableOpacity>

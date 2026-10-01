@@ -30,6 +30,7 @@ import sijicihuiStudyRouter from "./routes/sijicihui-study";
 import gkVocabRouter from "./routes/gk-vocab";
 import qwenChatRouter from "./routes/qwen-chat";
 import wrongQuestionsRouter from "./routes/wrong-questions";
+import adaptiveRouter from "./routes/adaptive";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -360,6 +361,7 @@ app.use('/api/v1/iris', irisRouter);
 app.use('/api/v1/user', accountRouter);
 app.use('/api/v1/settings', settingsRouter);
 app.use('/api/v1/essay-grading', essayGradingRouter);
+app.use('/api/v1/adaptive', adaptiveRouter);
 app.use('/api/v1/gk-vocab', gkVocabRouter);
 app.use('/api/v1/sijicihui', sijicihuiRouter);
 app.use('/api/v1/sijicihui-study', sijicihuiStudyRouter);

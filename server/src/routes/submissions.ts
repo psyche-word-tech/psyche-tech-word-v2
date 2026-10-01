@@ -127,6 +127,8 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const supabase = getSupabaseClient();
 
     let query = supabase.from('submissions').select('*');
+    // 自适应训练记录存于同表，用 status='adaptive' 标记，列表不展示
+    query = query.neq('status', 'adaptive');
 
     if (role === 'teacher') {
       if (!isTeacher(req)) {
@@ -180,6 +182,7 @@ router.get('/class/:className', optionalAuthMiddleware, async (req: AuthRequest,
       .from('submissions')
       .select('*')
       .eq('annotations->>className', className);
+    query = query.neq('status', 'adaptive');
 
     const type = String(req.query.type || '');
     if (type === '小作文' || type === '读后续写') {
