@@ -41,6 +41,8 @@ export default function MyFavoritesScreen() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
 
@@ -67,6 +69,30 @@ export default function MyFavoritesScreen() {
   }, [user?.token]);
 
   useEffect(() => { fetchFavorites(); }, [fetchFavorites]);
+
+  const handleDelete = async (item: Favorite) => {
+    if (confirmId !== item.id) {
+      setConfirmId(item.id);
+      return;
+    }
+    setConfirmId(null);
+    try {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/api/v1/favorites/${item.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${user?.token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFavorites((prev) => prev.filter((f) => f.id !== item.id));
+        setNotice(null);
+      } else {
+        setNotice(data.message || '删除失败，请重试');
+      }
+    } catch {
+      setNotice('网络错误，删除失败');
+    }
+  };
 
   // 按学科分组
   const grouped = favorites.reduce<Record<string, Favorite[]>>((acc, f) => {
@@ -125,7 +151,9 @@ export default function MyFavoritesScreen() {
                 const tips = parseTips(f.tips);
                 const meta = tips.status ? STATUS_META[tips.status] : null;
                 return (
-                <TouchableOpacity key={f.id} style={styles.favItem} activeOpacity={0.7} onPress={() => {
+                <View key={f.id} style={styles.favRow}>
+                <TouchableOpacity style={styles.favItem} activeOpacity={0.7} onPress={() => {
+                  setConfirmId(null);
                   const lines = [f.question_text ? stripHtml(f.question_text) : '（图片题目）'];
                   if (tips.user_answer) lines.push(`我的答案：${tips.user_answer}`);
                   if (f.answer) lines.push(`正确答案：${stripHtml(String(f.answer))}`);
@@ -173,6 +201,17 @@ export default function MyFavoritesScreen() {
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#CCC" />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.delBtn, confirmId === f.id && styles.delBtnActive]}
+                  activeOpacity={0.7}
+                  onPress={() => handleDelete(f)}
+                >
+                  <Ionicons name="trash-outline" size={17} color={confirmId === f.id ? '#B91C1C' : '#9CA3AF'} />
+                  <Text style={[styles.delText, confirmId === f.id && styles.delTextActive]}>
+                    {confirmId === f.id ? '确认?' : '删除'}
+                  </Text>
+                </TouchableOpacity>
+                </View>
                 );
               })}
             </View>
@@ -219,10 +258,18 @@ const styles = StyleSheet.create({
   listContent: { padding: 16 },
   group: { marginBottom: 20 },
   groupTitle: { fontSize: 15, fontWeight: '700', color: '#1F2937', marginBottom: 10 },
+  favRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   favItem: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12,
-    padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#F3F4F6',
+    flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12,
+    padding: 12, borderWidth: 1, borderColor: '#F3F4F6',
   },
+  delBtn: {
+    width: 52, alignItems: 'center', justifyContent: 'center', paddingVertical: 8,
+    marginLeft: 8, borderRadius: 10, backgroundColor: '#F5F6F8',
+  },
+  delBtnActive: { backgroundColor: '#FEE2E2' },
+  delText: { fontSize: 10, color: '#9CA3AF', marginTop: 2 },
+  delTextActive: { color: '#B91C1C', fontWeight: '700' },
   favThumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#F3F4F6' },
   favThumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   favContent: { flex: 1, marginLeft: 12 },
