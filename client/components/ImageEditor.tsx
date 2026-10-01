@@ -5,7 +5,6 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  PanResponder,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -53,52 +52,68 @@ export default function ImageEditor({ visible, imageUri, onClose, onApply }: Pro
   const offY = (BOX_H - dispH) / 2;
 
   const dragRef = useRef({ sx: 0, sy: 0, orig: { x: 0, y: 0, w: BOX_W, h: BOX_H } as CropRect });
+  // PanResponder 只创建一次，闭包里的 crop 会过期，用 ref 读最新值
+  const cropRef = useRef(crop);
+  useEffect(() => {
+    cropRef.current = crop;
+  }, [crop]);
 
-  const makeResponder = (mode: DragMode) =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        dragRef.current = {
-          sx: e.nativeEvent.pageX,
-          sy: e.nativeEvent.pageY,
-          orig: { ...crop },
-        };
-      },
-      onPanResponderMove: (e) => {
-        const dx = e.nativeEvent.pageX - dragRef.current.sx;
-        const dy = e.nativeEvent.pageY - dragRef.current.sy;
-        const o = dragRef.current.orig;
-        let { x, y, w, h } = o;
-        if (mode === 'move') {
-          x = clamp(o.x + dx, 0, BOX_W - o.w);
-          y = clamp(o.y + dy, 0, BOX_H - o.h);
-        } else if (mode === 'br') {
-          w = clamp(o.w + dx, MIN_CROP, BOX_W - o.x);
-          h = clamp(o.h + dy, MIN_CROP, BOX_H - o.y);
-        } else if (mode === 'tl') {
-          x = clamp(o.x + dx, 0, o.x + o.w - MIN_CROP);
-          y = clamp(o.y + dy, 0, o.y + o.h - MIN_CROP);
-          w = o.w - (x - o.x);
-          h = o.h - (y - o.y);
-        } else if (mode === 'tr') {
-          y = clamp(o.y + dy, 0, o.y + o.h - MIN_CROP);
-          w = clamp(o.w + dx, MIN_CROP, BOX_W - o.x);
-          h = o.h - (y - o.y);
-        } else if (mode === 'bl') {
-          x = clamp(o.x + dx, 0, o.x + o.w - MIN_CROP);
-          w = o.w - (x - o.x);
-          h = clamp(o.h + dy, MIN_CROP, BOX_H - o.y);
-        }
-        setCrop({ x, y, w, h });
-      },
-    });
+  // web 上 PanResponder 对鼠标/触摸不可靠，改用原生 mouse/touch 事件驱动拖拽
+  const getPoint = (e: any) => {
+    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    if (e.changedTouches && e.changedTouches[0]) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    return { x: e.clientX ?? 0, y: e.clientY ?? 0 };
+  };
 
-  const moveResp = useRef(makeResponder('move'));
-  const tlResp = useRef(makeResponder('tl'));
-  const trResp = useRef(makeResponder('tr'));
-  const blResp = useRef(makeResponder('bl'));
-  const brResp = useRef(makeResponder('br'));
+  const beginDrag = (mode: DragMode) => (e: any) => {
+    e.stopPropagation?.();
+    const p = getPoint(e);
+    dragRef.current = { sx: p.x, sy: p.y, orig: { ...cropRef.current } };
+    const move = (ev: any) => {
+      const q = getPoint(ev);
+      const dx = q.x - dragRef.current.sx;
+      const dy = q.y - dragRef.current.sy;
+      const o = dragRef.current.orig;
+      let { x, y, w, h } = o;
+      if (mode === 'move') {
+        x = clamp(o.x + dx, 0, BOX_W - o.w);
+        y = clamp(o.y + dy, 0, BOX_H - o.h);
+      } else if (mode === 'br') {
+        w = clamp(o.w + dx, MIN_CROP, BOX_W - o.x);
+        h = clamp(o.h + dy, MIN_CROP, BOX_H - o.y);
+      } else if (mode === 'tl') {
+        x = clamp(o.x + dx, 0, o.x + o.w - MIN_CROP);
+        y = clamp(o.y + dy, 0, o.y + o.h - MIN_CROP);
+        w = o.w - (x - o.x);
+        h = o.h - (y - o.y);
+      } else if (mode === 'tr') {
+        y = clamp(o.y + dy, 0, o.y + o.h - MIN_CROP);
+        w = clamp(o.w + dx, MIN_CROP, BOX_W - o.x);
+        h = o.h - (y - o.y);
+      } else if (mode === 'bl') {
+        x = clamp(o.x + dx, 0, o.x + o.w - MIN_CROP);
+        w = o.w - (x - o.x);
+        h = clamp(o.h + dy, MIN_CROP, BOX_H - o.y);
+      }
+      setCrop({ x, y, w, h });
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      window.removeEventListener('touchmove', move);
+      window.removeEventListener('touchend', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchmove', move);
+    window.addEventListener('touchend', up);
+    e.preventDefault?.();
+  };
+
+  const dragProps = (mode: DragMode): any => ({
+    onMouseDown: beginDrag(mode),
+    onTouchStart: beginDrag(mode),
+  });
 
   const toDataUri = (r: { uri: string; base64?: string }) =>
     r.base64 ? `data:image/jpeg;base64,${r.base64}` : r.uri;
@@ -170,12 +185,12 @@ export default function ImageEditor({ visible, imageUri, onClose, onApply }: Pro
             {/* 裁剪框 */}
             <View
               style={[styles.cropBox, { left: crop.x, top: crop.y, width: crop.w, height: crop.h }]}
-              {...moveResp.current.panHandlers}
+              {...dragProps('move')}
             >
-              <View style={[styles.handle, styles.handleTl, { width: handleSize, height: handleSize }]} {...tlResp.current.panHandlers} />
-              <View style={[styles.handle, styles.handleTr, { width: handleSize, height: handleSize }]} {...trResp.current.panHandlers} />
-              <View style={[styles.handle, styles.handleBl, { width: handleSize, height: handleSize }]} {...blResp.current.panHandlers} />
-              <View style={[styles.handle, styles.handleBr, { width: handleSize, height: handleSize }]} {...brResp.current.panHandlers} />
+              <View style={[styles.handle, styles.handleTl, { width: handleSize, height: handleSize }]} {...dragProps('tl')} />
+              <View style={[styles.handle, styles.handleTr, { width: handleSize, height: handleSize }]} {...dragProps('tr')} />
+              <View style={[styles.handle, styles.handleBl, { width: handleSize, height: handleSize }]} {...dragProps('bl')} />
+              <View style={[styles.handle, styles.handleBr, { width: handleSize, height: handleSize }]} {...dragProps('br')} />
             </View>
 
             {busy ? (
