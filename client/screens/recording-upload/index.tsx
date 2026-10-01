@@ -24,6 +24,7 @@ export default function RecordingUploadScreen() {
   const [files, setFiles] = useState<UpFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const handleTakePhoto = async () => {
     setShowPicker(false);
@@ -129,21 +130,22 @@ export default function RecordingUploadScreen() {
       });
       const data = await res.json();
       if (data.success) {
-        Alert.alert(
-          '上传成功',
-          `已自动识别学科：${data.subject || '未知'}\n${data.warn || ''}`,
-          [
-            { text: '继续录题', style: 'cancel', onPress: () => setFiles([]) },
-            { text: '查看我的收藏', onPress: () => router.push('/my-favorites') },
-          ]
-        );
+        setMsg({ type: 'ok', text: `上传成功，已识别学科：${data.subject || '未知'}，已记入错题。${data.warn ? data.warn : ''}` });
         setFiles([]);
+        if (Platform.OS !== 'web') {
+          Alert.alert('上传成功', `已自动识别学科：${data.subject || '未知'}`, [
+            { text: '继续录题', style: 'cancel' },
+            { text: '查看我的收藏', onPress: () => router.push('/my-favorites') },
+          ]);
+        }
       } else {
-        Alert.alert('上传失败', data.message || '请重试');
+        setMsg({ type: 'err', text: data.message || '上传失败，请重试' });
+        if (Platform.OS !== 'web') Alert.alert('上传失败', data.message || '请重试');
       }
     } catch (e) {
       console.error('Upload error:', e);
-      Alert.alert('上传失败', '网络异常，请重试');
+      setMsg({ type: 'err', text: '网络异常，请重试' });
+      if (Platform.OS !== 'web') Alert.alert('上传失败', '网络异常，请重试');
     } finally {
       setLoading(false);
     }
@@ -166,6 +168,17 @@ export default function RecordingUploadScreen() {
           <Text style={styles.hint}>
             上传题目的图片或文档（Word / PDF），系统将自动识别题目所属学科并记录为你的错题，可在「我的收藏」按学科查看。
           </Text>
+
+          {msg && (
+            <View style={[styles.msgBanner, msg.type === 'ok' ? styles.msgOk : styles.msgErr]}>
+              <Text style={[styles.msgText, msg.type === 'ok' ? styles.msgTextOk : styles.msgTextErr]}>{msg.text}</Text>
+              {msg.type === 'ok' && (
+                <TouchableOpacity onPress={() => router.push('/my-favorites')} activeOpacity={0.7}>
+                  <Text style={styles.msgLinkText}>去查看</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           {/* 已选文件 */}
           {files.length > 0 && (
@@ -260,6 +273,16 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentInner: { padding: 16, paddingBottom: 40 },
   hint: { fontSize: 14, color: '#6B7280', lineHeight: 22, marginBottom: 16 },
+  msgBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16,
+  },
+  msgOk: { backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0' },
+  msgErr: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
+  msgText: { fontSize: 13, lineHeight: 20, flex: 1 },
+  msgTextOk: { color: '#065F46' },
+  msgTextErr: { color: '#991B1B' },
+  msgLinkText: { fontSize: 13, color: '#059669', fontWeight: '700', marginLeft: 8 },
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#1F2937', marginBottom: 10 },
   fileRow: { flexDirection: 'row', gap: 10, paddingVertical: 6 },

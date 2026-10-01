@@ -23,6 +23,7 @@ export default function MyFavoritesScreen() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
 
   const fetchFavorites = useCallback(async () => {
@@ -34,9 +35,13 @@ export default function MyFavoritesScreen() {
       const data = await res.json();
       if (data.success) {
         setFavorites(data.data || []);
+        setFailed(false);
+      } else {
+        setFailed(true);
       }
     } catch (error) {
       console.error('获取收藏失败:', error);
+      setFailed(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -125,6 +130,12 @@ export default function MyFavoritesScreen() {
           ListEmptyComponent={
             loading ? (
               <View style={styles.empty}><ActivityIndicator color="#3B82F6" /></View>
+            ) : failed ? (
+              <View style={styles.empty}>
+                <Ionicons name="cloud-offline-outline" size={64} color="#FCA5A5" />
+                <Text style={styles.emptyText}>加载失败，服务暂时不可用</Text>
+                <Text style={styles.emptySubText}>请稍后下拉刷新重试</Text>
+              </View>
             ) : (
               <View style={styles.empty}>
                 <Ionicons name="star-outline" size={64} color="#D1D5DB" />
@@ -168,4 +179,5 @@ const styles = StyleSheet.create({
   favDate: { fontSize: 12, color: '#9CA3AF', marginTop: 6 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
   emptyText: { fontSize: 16, color: '#9CA3AF', marginTop: 16 },
+  emptySubText: { fontSize: 13, color: '#C4C7CC', marginTop: 6 },
 });
