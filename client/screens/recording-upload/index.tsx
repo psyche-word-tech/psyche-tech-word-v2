@@ -132,7 +132,7 @@ export default function RecordingUploadScreen() {
       if (data.success) {
         const s = data.summary;
         const sumText = s && s.total > 0
-          ? `共 ${s.total} 题：对 ${s.correct}、错 ${s.wrong}${s.attention ? `、重点关注 ${s.attention}` : ''}${s.blank ? `、未作答 ${s.blank}` : ''}，已计入能力图谱。`
+          ? `共 ${s.total} 题：对 ${s.correct}、错 ${s.wrong}${s.attention ? `、重点关注 ${s.attention}` : ''}${s.blank ? `、未作答 ${s.blank}` : ''}${s.deduped ? `，其中 ${s.deduped} 题与已有重复已自动合并` : ''}，已计入能力图谱。`
           : '已记入错题。';
         setMsg({ type: 'ok', text: `上传成功，学科：${data.subject || '未知'}。${sumText}${data.warn ? data.warn : ''}` });
         setFiles([]);

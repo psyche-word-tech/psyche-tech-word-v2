@@ -81,7 +81,7 @@ async function recognizeContent(content: {
       content:
         "你是经验丰富的批改与题目分析老师。用户上传题目/试卷照片（可能含用户手写答案与批改痕迹）。任务：\n" +
         "1. 判定学科。\n" +
-        "2. 逐题识别：题号、完整题干（含小题与选项）、用户手写答案（没有则空串）。\n" +
+        "2. 逐题识别：题号、完整题干（含小题与选项）、用户手写答案（没有则空串）。语法填空/完形类带空的题，question 必须收录完整上下文三句：空所在句的前一句 + 空所在句本身 + 后一句，保证脱离原卷也能读懂作答。\n" +
         "3. 判定每题 status：\n" +
         "   - 有批改痕迹时：题号或答案处画了 ×、叉、打叉 → \"wrong\"；题号被圈起来/框起来（代表重点关注）→ \"attention\"；画了 ✓、勾、对号 → \"correct\"。\n" +
         "   - 没有批改痕迹但用户写了答案时：你必须先自己独立解出该题正确答案，再与用户答案核对：一致 → \"correct\"，不一致 → \"wrong\"，并在 reason 写清用户错在哪里、correct_answer 写正确答案。\n" +
@@ -275,17 +275,38 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
       });
     }
 
-    const { error } = await supabase.from("favorites").insert(rows);
-    if (error) {
-      console.error("[WrongQuestions] 错题入库失败:", error.message);
-      return res.status(500).json({ success: false, message: "错题保存失败: " + error.message });
+    // 相同题目去重：已存在同 user+同题干 的记录则更新，不重复插入
+    const qTexts = rows.map((r) => r.question_text);
+    const { data: existing } = await supabase
+      .from("favorites")
+      .select("id, question_text")
+      .eq("user_id", userId)
+      .in("question_text", qTexts);
+    const existMap = new Map<string, string>();
+    for (const e of existing || []) existMap.set(e.question_text, e.id);
+
+    const toInsert = rows.filter((r) => !existMap.has(r.question_text));
+    const toUpdate = rows.filter((r) => existMap.has(r.question_text));
+    for (const r of toUpdate) {
+      await supabase
+        .from("favorites")
+        .update({ answer: r.answer, analysis: r.analysis, tips: r.tips })
+        .eq("id", existMap.get(r.question_text));
+    }
+
+    if (toInsert.length > 0) {
+      const { error } = await supabase.from("favorites").insert(toInsert);
+      if (error) {
+        console.error("[WrongQuestions] 错题入库失败:", error.message);
+        return res.status(500).json({ success: false, message: "错题保存失败: " + error.message });
+      }
     }
 
     return res.json({
       success: true,
       message: "上传成功",
       subject: recognized.subject,
-      summary: { total: recognized.questions.length, correct, wrong, attention, blank },
+      summary: { total: recognized.questions.length, correct, wrong, attention, blank, deduped: toUpdate.length },
       warn: failed > 0 ? `${failed} 个文档无法解析（暂不支持该格式）` : undefined,
     });
   } catch (e: any) {
