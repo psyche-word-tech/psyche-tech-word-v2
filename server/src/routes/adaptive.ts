@@ -147,17 +147,20 @@ router.get('/students', authMiddleware, async (req: AuthRequest, res: Response) 
       .eq('phone', PILOT_STUDENT_PHONE)
       .limit(1);
     const pilotUser = pilot?.[0] as any;
-    const list = students.map((s) => ({ ...s, isPilot: false }));
+    const list = students.map((s) => ({ ...s, isPilot: false, phone: '' }));
     if (pilotUser) {
       const pid = String(pilotUser.id);
       const existing = list.find((s) => s.userId === pid);
-      if (existing) existing.isPilot = true;
-      else
+      if (existing) {
+        existing.isPilot = true;
+        existing.phone = PILOT_STUDENT_PHONE;
+      } else
         list.push({
           userId: pid,
           name: pilotUser.name || pilotUser.nickname || '试点学生',
           level: 3,
           isPilot: true,
+          phone: PILOT_STUDENT_PHONE,
         });
     }
     res.json({ success: true, data: { className, students: list } });

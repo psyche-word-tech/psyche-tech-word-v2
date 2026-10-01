@@ -15,6 +15,7 @@ interface Stu {
   name: string;
   level: number;
   isPilot?: boolean;
+  phone?: string;
 }
 
 export default function AdaptiveTraining() {
@@ -82,7 +83,7 @@ export default function AdaptiveTraining() {
           durationMin: duration,
           students: students
             .filter((s) => selected.has(s.userId))
-            .map((s) => ({ userId: s.userId, name: s.name, level: s.level })),
+            .map((s) => ({ userId: s.userId, name: s.name, level: s.level, phone: s.phone || '' })),
         }),
       });
       const d = await res.json();
@@ -176,7 +177,11 @@ export default function AdaptiveTraining() {
                     color={selected.has(s.userId) ? '#7C3AED' : '#9CA3AF'}
                   />
                   <Text className="ml-2 text-gray-900">{s.name}</Text>
-                  {s.isPilot && <Text className="ml-2 text-xs text-orange-500">试点</Text>}
+                  {s.isPilot && (
+                    <Text className="ml-2 text-xs text-orange-500">
+                      试点{s.phone ? `·${s.phone}` : ''}
+                    </Text>
+                  )}
                   <View className="ml-auto bg-purple-100 rounded-full px-2 py-0.5">
                     <Text className="text-xs text-purple-700">L{s.level}</Text>
                   </View>
