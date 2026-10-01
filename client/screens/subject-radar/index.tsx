@@ -1,6 +1,9 @@
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
+import { useAuth } from '@/contexts/AuthContext';
+import { getApiBaseUrl } from '@/utils/apiConfig';
 
 const RADAR_SIZE = Math.min(336, 320);
 const LEVELS = 6;
@@ -72,10 +75,40 @@ function Radar({ labels, values }: { labels: string[]; values: number[] }) {
 
 export default function SubjectRadarPage() {
   const router = useSafeRouter();
+  const { user } = useAuth();
   const { subject } = useSafeSearchParams<{ subject?: string }>();
   const name = subject || '';
   const knowledge = SUBJECT_KNOWLEDGE[name] ?? [];
-  const values = kpLevels(name, knowledge.length || 1);
+
+  // 外语"书面表达"维度接入真实作文批改数据
+  const [writingLevel, setWritingLevel] = useState<number | null>(null);
+  const [writingCount, setWritingCount] = useState(0);
+  useEffect(() => {
+    if (name !== '外语') return;
+    (async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/v1/essay-grading/writing-ability`, {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        });
+        const d = await res.json();
+        if (d?.success && d.data?.level) {
+          setWritingLevel(Number(d.data.level));
+          setWritingCount(Number(d.data.sampleCount) || 0);
+        }
+      } catch {
+        // 拉取失败保留演示值
+      }
+    })();
+  }, [name, user?.token]);
+
+  const values = useMemo(() => {
+    const v = kpLevels(name, knowledge.length || 1);
+    if (name === '外语' && writingLevel != null) {
+      const i = knowledge.indexOf('书面表达');
+      if (i >= 0) v[i] = writingLevel;
+    }
+    return v;
+  }, [name, knowledge, writingLevel]);
 
   return (
     <Screen>
@@ -104,6 +137,9 @@ export default function SubjectRadarPage() {
                 <View key={kp} style={styles.listItem}>
                   <Text style={[styles.kpIndex, { backgroundColor: KP_COLORS[i % KP_COLORS.length] }]}>{i + 1}</Text>
                   <Text style={styles.nameText}>{kp}</Text>
+                  {kp === '书面表达' && writingLevel != null && (
+                    <Text style={styles.realTag}>作文{writingCount}篇</Text>
+                  )}
                   <Text style={styles.levelText}>L{values[i]}</Text>
                 </View>
               ))}
@@ -150,4 +186,14 @@ const styles = StyleSheet.create({
   },
   nameText: { flex: 1, fontSize: 13, color: '#333333' },
   levelText: { fontSize: 13, color: '#3B82F6', fontWeight: '700' },
+  realTag: {
+    fontSize: 10,
+    color: '#059669',
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginRight: 6,
+    overflow: 'hidden',
+  },
 });

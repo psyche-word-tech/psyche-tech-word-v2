@@ -386,6 +386,16 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color="#ccc" />
           </TouchableOpacity>
           <TouchableOpacity
+            style={styles.settingsItem}
+            onPress={() => router.push('/learning-overview')}
+          >
+            <View style={styles.settingsLeft}>
+              <Ionicons name="analytics" size={20} color="#8E44AD" />
+              <Text style={[styles.settingsText, { color: '#8E44AD' }]}>学情一览</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.settingsItem, styles.settingsItemLast]}
             onPress={() => router.push('/vocab-stats')}
           >

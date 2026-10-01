@@ -1516,6 +1516,89 @@ router.get('/history', optionalAuthMiddleware, async (req: AuthRequest, res) => 
   }
 });
 
+// 书面表达能力（1-6）：用登录学生真实作文批改数据计算，供外语能力画像的"书面表达"维度使用
+// 注意：必须注册在 /:id 之前，否则会被 /:id 抢先匹配
+router.get('/writing-ability', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.userId;
+  if (!userId) {
+    return res.json({ success: true, data: { level: null, sampleCount: 0, avgRatio: null } });
+  }
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('submissions')
+      .select('annotations')
+      .eq('annotations->>userId', String(userId));
+    if (error) throw error;
+
+    const ratios: number[] = [];
+    for (const row of data || []) {
+      const g = (row.annotations as any)?.grading;
+      const total = Number(g?.total_score);
+      const max = Number(g?.max_score) > 0 ? Number(g?.max_score) : 15;
+      if (Number.isFinite(total) && total >= 0) ratios.push(Math.max(0, Math.min(1, total / max)));
+    }
+
+    if (ratios.length === 0) {
+      return res.json({ success: true, data: { level: null, sampleCount: 0, avgRatio: null } });
+    }
+    const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    const level = Math.max(1, Math.min(6, Math.round(avgRatio * 6)));
+    res.json({ success: true, data: { level, sampleCount: ratios.length, avgRatio: Number(avgRatio.toFixed(3)) } });
+  } catch (e: any) {
+    console.error('书面表达能力计算失败:', e);
+    res.json({ success: true, data: { level: null, sampleCount: 0, avgRatio: null } });
+  }
+});
+
+// 学情一览：按作文提交班级聚合每个学生的书面表达能力（真实作文数据）+ 班级整体水平
+// 注意：必须注册在 /:id 之前
+router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.from('submissions').select('annotations');
+    if (error) throw error;
+
+    const classes = new Map<string, Map<string, { name: string; ratios: number[] }>>();
+    for (const row of data || []) {
+      const a = (row.annotations as any) || {};
+      const g = a.grading || {};
+      const uid = a.userId != null ? String(a.userId) : '';
+      const cls = String(a.className || '').trim() || '未分班';
+      const name = String(a.studentName || '').trim() || '未填姓名';
+      const total = Number(g?.total_score);
+      const max = Number(g?.max_score) > 0 ? Number(g?.max_score) : 15;
+      if (!uid || !Number.isFinite(total) || total < 0) continue;
+      if (!classes.has(cls)) classes.set(cls, new Map());
+      const stu = classes.get(cls)!;
+      if (!stu.has(uid)) stu.set(uid, { name, ratios: [] });
+      stu.get(uid)!.ratios.push(Math.max(0, Math.min(1, total / max)));
+    }
+
+    const toLevel = (rs: number[]) => {
+      if (!rs.length) return null as number | null;
+      const avg = rs.reduce((a, b) => a + b, 0) / rs.length;
+      return Math.max(1, Math.min(6, Math.round(avg * 6)));
+    };
+
+    const result = Array.from(classes.entries()).map(([className, stu]) => {
+      const students = Array.from(stu.entries()).map(([userId, s]) => ({
+        userId,
+        name: s.name,
+        sampleCount: s.ratios.length,
+        level: toLevel(s.ratios),
+      })).sort((x, y) => (y.level || 0) - (x.level || 0));
+      const all = Array.from(stu.values()).flatMap((s) => s.ratios);
+      return { className, students, classLevel: toLevel(all), sampleCount: all.length };
+    }).sort((a, b) => a.className.localeCompare(b.className));
+
+    res.json({ success: true, data: { classes: result } });
+  } catch (e: any) {
+    console.error('学情一览计算失败:', e);
+    res.json({ success: true, data: { classes: [] } });
+  }
+});
+
 /**
  * GET /api/v1/essay-grading/:id
  * 获取单次批改详情
