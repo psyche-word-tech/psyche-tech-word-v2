@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +28,7 @@ export default function AdaptiveTraining() {
   const [duration, setDuration] = useState(20);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
+  const [msg, setMsg] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -67,8 +68,9 @@ export default function AdaptiveTraining() {
   };
 
   const handleAssign = async () => {
-    if (types.size === 0) return Alert.alert('提示', '请至少选择一种题型');
-    if (selected.size === 0) return Alert.alert('提示', '请至少选择一名学生');
+    if (types.size === 0) return setMsg('请至少选择一种题型');
+    if (selected.size === 0) return setMsg('请至少选择一名学生');
+    setMsg('正在按能力生成题目，学生越多越慢，请稍候…');
     setAssigning(true);
     try {
       const res = await fetch(`${getApiBaseUrl()}/api/v1/adaptive/assign`, {
@@ -90,9 +92,9 @@ export default function AdaptiveTraining() {
       const results = d?.data?.results || [];
       const ok = results.filter((r: any) => r.ok).length;
       const fail = results.length - ok;
-      Alert.alert('布置完成', `成功 ${ok} 人${fail ? `，失败 ${fail} 人` : ''}`);
+      setMsg(`布置完成：成功 ${ok} 人${fail ? `，失败 ${fail} 人` : ''}。学生端「我的训练」可查看。`);
     } catch {
-      Alert.alert('布置失败', '网络错误，请重试');
+      setMsg('布置失败：网络错误，请重试');
     } finally {
       setAssigning(false);
     }
@@ -191,17 +193,22 @@ export default function AdaptiveTraining() {
           )}
         </ScrollView>
 
+        {msg !== '' && (
+          <View className="px-4 py-2 bg-blue-50 border-t border-blue-200">
+            <Text className="text-blue-700 text-sm">{msg}</Text>
+          </View>
+        )}
+
         <View className="p-4 bg-white border-t border-gray-200">
           <TouchableOpacity
             onPress={handleAssign}
             disabled={assigning}
-            className="bg-purple-600 rounded-xl py-3 items-center"
+            className="bg-purple-600 rounded-xl py-3 items-center flex-row justify-center"
           >
-            {assigning ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text className="text-white font-bold">一键布置作业</Text>
-            )}
+            {assigning && <ActivityIndicator color="#fff" />}
+            <Text className="text-white font-bold ml-2">
+              {assigning ? '布置中…' : '一键布置作业'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

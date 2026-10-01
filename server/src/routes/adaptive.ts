@@ -187,28 +187,30 @@ router.post('/assign', authMiddleware, async (req: AuthRequest, res: Response) =
     const supabase = getSupabaseClient();
     const results: { userId: string; name: string; ok: boolean; count: number; error?: string }[] =
       [];
-    for (const stu of students) {
-      try {
-        const questions = await generateQuestions(Number(stu.level) || 3, questionTypes, duration);
-        const { error } = await supabase.from('adaptive_sets').insert({
-          assignment_id: assignmentId,
-          teacher_id: Number(req.userId) || 0,
-          class_name: className,
-          user_id: String(stu.userId),
-          student_name: stu.name,
-          phone: stu.phone || '',
-          level: Number(stu.level) || 3,
-          question_types: questionTypes,
-          duration_min: duration,
-          questions,
-          status: 'assigned',
-        });
-        if (error) throw new Error(error.message);
-        results.push({ userId: stu.userId, name: stu.name, ok: true, count: questions.length });
-      } catch (e: any) {
-        results.push({ userId: stu.userId, name: stu.name, ok: false, count: 0, error: e.message });
-      }
-    }
+    await Promise.all(
+      students.map(async (stu) => {
+        try {
+          const questions = await generateQuestions(Number(stu.level) || 3, questionTypes, duration);
+          const { error } = await supabase.from('adaptive_sets').insert({
+            assignment_id: assignmentId,
+            teacher_id: Number(req.userId) || 0,
+            class_name: className,
+            user_id: String(stu.userId),
+            student_name: stu.name,
+            phone: stu.phone || '',
+            level: Number(stu.level) || 3,
+            question_types: questionTypes,
+            duration_min: duration,
+            questions,
+            status: 'assigned',
+          });
+          if (error) throw new Error(error.message);
+          results.push({ userId: stu.userId, name: stu.name, ok: true, count: questions.length });
+        } catch (e: any) {
+          results.push({ userId: stu.userId, name: stu.name, ok: false, count: 0, error: e.message });
+        }
+      })
+    );
     res.json({ success: true, data: { assignmentId, results } });
   } catch (e: any) {
     console.error('[adaptive] assign error:', e);
