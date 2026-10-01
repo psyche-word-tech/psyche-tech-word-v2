@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ActivityIndicator, TextInput, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
+import ImageEditor from '@/components/ImageEditor';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
@@ -58,6 +59,8 @@ export default function EssayGradingScreen() {
   const [publishing, setPublishing] = useState(false);
   // 教师可选写的发布评语（不写则不传），随发布一并带给学生
   const [teacherComment, setTeacherComment] = useState('');
+  // 点击缩略图打开裁剪/旋转编辑器的图片下标
+  const [editIndex, setEditIndex] = useState<number | null>(null);
 
   // 从「作业查看」进入批改时，自动导入该班已提交的作业图片，无需再手动选图
   // names：逗号分隔的学生姓名；为空表示批改全部作业，否则只导入选中学生
@@ -556,12 +559,17 @@ export default function EssayGradingScreen() {
         {/* 图片选择区域 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. 上传作文图片</Text>
-          
+          {selectedImages.length > 0 && (
+            <Text style={styles.editHint}>点击图片可裁剪 / 旋转</Text>
+          )}
+
           {selectedImages.length > 0 ? (
             <View style={styles.previewRow}>
               {selectedImages.map((uri, idx) => (
                 <View key={idx} style={styles.thumbContainer}>
-                  <Image source={{ uri }} style={styles.previewThumb} resizeMode="contain" />
+                  <TouchableOpacity onPress={() => setEditIndex(idx)} activeOpacity={0.8}>
+                    <Image source={{ uri }} style={styles.previewThumb} resizeMode="contain" />
+                  </TouchableOpacity>
                   {!loading && (
                     <TouchableOpacity style={styles.thumbRemove} onPress={() => removeImage(idx)}>
                       <Ionicons name="close-circle" size={20} color="#ff3b30" />
@@ -875,6 +883,18 @@ export default function EssayGradingScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <ImageEditor
+        visible={editIndex !== null}
+        imageUri={editIndex !== null ? selectedImages[editIndex] ?? null : null}
+        onClose={() => setEditIndex(null)}
+        onApply={(newUri) => {
+          if (editIndex !== null) {
+            setSelectedImages((prev) => prev.map((u, i) => (i === editIndex ? newUri : u)));
+          }
+          setEditIndex(null);
+        }}
+      />
     </Screen>
   );
 }
@@ -918,6 +938,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 12,
+  },
+  editHint: {
+    fontSize: 12,
+    color: '#8a94a6',
+    marginTop: -8,
+    marginBottom: 10,
   },
   subSectionTitle: {
     fontSize: 14,
