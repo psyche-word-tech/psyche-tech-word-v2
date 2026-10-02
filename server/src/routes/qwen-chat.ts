@@ -84,7 +84,7 @@ router.post("/", authMiddleware, async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const { messages } = req.body;
+    const { messages, internet } = req.body;
     if (!Array.isArray(messages) || !messages.length) {
       res.status(400).json({ success: false, message: "messages 参数缺失" });
       return;
@@ -129,6 +129,7 @@ router.post("/", authMiddleware, async (req: Request, res: Response): Promise<vo
           messages: [{ role: "system", content: systemPrompt }, ...messages],
           temperature: 0.7,
           enable_thinking: false,
+          enable_search: !!internet,
           stream: true,
         }),
         signal: controller.signal,

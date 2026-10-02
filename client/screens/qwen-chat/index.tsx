@@ -18,6 +18,7 @@ export default function QwenChatPage() {
   const [messages, setMessages] = useState<Msg[]>([{ role: 'assistant', content: GREETING }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [internet, setInternet] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   // 用户是否正在手动上滚查看（true 时暂停自动跟随底部）
   const userScrollingUpRef = useRef(false);
@@ -44,7 +45,7 @@ export default function QwenChatPage() {
     fetchLongTimeout('/api/v1/qwen-chat/history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: payload }),
+      body: JSON.stringify({ messages: payload, internet }),
     }).catch(() => { /* 静默 */ });
   }, []);
 
@@ -196,6 +197,23 @@ export default function QwenChatPage() {
           ))}
         </ScrollView>
 
+        <View style={styles.internetRow}>
+          <TouchableOpacity
+            style={styles.internetToggle}
+            activeOpacity={0.8}
+            onPress={() => setInternet((v) => !v)}
+          >
+            <FontAwesome6
+              name="globe"
+              size={13}
+              color={internet ? '#EB6A45' : '#6B7280'}
+            />
+            <Text style={[styles.internetText, internet && styles.internetTextOn]}>
+              联网搜索
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
@@ -254,6 +272,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,
     padding: 12, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB',
   },
+  internetRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingTop: 6,
+  },
+  internetToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999, borderWidth: 1, borderColor: '#E5E7EB',
+  },
+  internetText: { fontSize: 12, color: '#6B7280' },
+  internetTextOn: { color: '#EB6A45' },
   input: {
     flex: 1, minHeight: 42, maxHeight: 120,
     borderRadius: 20, borderWidth: 1, borderColor: '#D1D5DB',
