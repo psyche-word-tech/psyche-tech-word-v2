@@ -22,6 +22,32 @@ export default function QwenChatPage() {
   // 用户是否正在手动上滚查看（true 时暂停自动跟随底部）
   const userScrollingUpRef = useRef(false);
 
+  // 进入页面时从后端恢复历史对话记录
+  useEffect(() => {
+    let alive = true;
+    fetchLongTimeout('/api/v1/qwen-chat/history', { method: 'GET' })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!alive) return;
+        const hist: Msg[] = Array.isArray(data.messages) ? data.messages : [];
+        if (hist.length) setMessages(hist);
+      })
+      .catch(() => { /* 静默：无历史或网络异常时保持默认引导语 */ });
+    return () => { alive = false; };
+  }, []);
+
+  // 持久化当前对话（整合用户消息与新增的 assistant 回复），供下次进入/后续提问调用
+  const persistHistory = useCallback((hist: Msg[]) => {
+    const payload = hist.filter((m) => m.content && m.content !== '…').map(({ role, content }) => ({ role, content }));
+    if (!payload.length) return;
+    fetchLongTimeout('/api/v1/qwen-chat/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: payload }),
+    }).catch(() => { /* 静默 */ });
+  }, []);
+
   const detectScroll = (e: any) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const distanceFromBottom =
@@ -89,7 +115,14 @@ export default function QwenChatPage() {
           ...prev.slice(0, -1),
           { role: 'assistant', content: '抱歉，我没有收到清晰的回复，换个说法再问我一次好吗？' },
         ]);
+        return;
       }
+      // 回复完整后持久化：以本次最终对话为准（含本轮回合）
+      setMessages((prev) => {
+        const final = [...prev.slice(0, -1), { role: 'assistant' as const, content: full }];
+        return final;
+      });
+      persistHistory([...messages, { role: 'user', content: text }, { role: 'assistant', content: full }]);
     } catch {
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -98,7 +131,7 @@ export default function QwenChatPage() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages]);
+  }, [input, loading, messages, persistHistory]);
 
   useEffect(() => {
     // 流式输出期间，仅当用户没有主动上滚查看时才自动跟随底部

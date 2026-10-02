@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { authMiddleware } from "../middleware/auth";
+import { getSupabaseClient } from "../storage/database/supabase-client";
 
 const router = Router();
 
@@ -8,6 +9,71 @@ const QWEN_API_URL_DEFAULT =
 
 // 弦歌回响仅对教师(userId 116 / 13995589952)开放
 const TEACHER_USER_ID = 116;
+// 对话历史持久化到 Supabase Storage（复用 submissions bucket，避免建表）
+const HISTORY_BUCKET = "submissions";
+const historyPath = (userId: number) => `qwen-chat/history-${userId}.json`;
+
+// 读取该用户保存的对话历史
+router.get("/history", authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authUserId = (req as { userId?: number }).userId;
+    if (authUserId !== TEACHER_USER_ID) {
+      res.status(403).json({ success: false, message: "弦歌回响仅对教师开放" });
+      return;
+    }
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.storage
+      .from(HISTORY_BUCKET)
+      .download(historyPath(authUserId));
+    if (error || !data) {
+      res.json({ success: true, messages: [] });
+      return;
+    }
+    const text = await data.text();
+    const parsed = JSON.parse(text);
+    res.json({ success: true, messages: Array.isArray(parsed) ? parsed : [] });
+  } catch (err) {
+    console.error("读取弦歌回响历史错误:", err);
+    res.json({ success: false, messages: [] });
+  }
+});
+
+// 保存整段对话历史（前端每次完整回复后整体覆盖写最新）
+router.post("/history", authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authUserId = (req as { userId?: number }).userId;
+    if (authUserId !== TEACHER_USER_ID) {
+      res.status(403).json({ success: false, message: "弦歌回响仅对教师开放" });
+      return;
+    }
+    const { messages } = req.body;
+    if (!Array.isArray(messages)) {
+      res.status(400).json({ success: false, message: "messages 参数缺失" });
+      return;
+    }
+    // 仅保留最近 N 条，防止无限增长
+    const capped = messages.slice(-100).map((m: any) => ({
+      role: m?.role === "user" || m?.role === "assistant" ? m.role : "user",
+      content: typeof m?.content === "string" ? m.content.slice(0, 6000) : "",
+    }));
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.storage
+      .from(HISTORY_BUCKET)
+      .upload(historyPath(authUserId), JSON.stringify(capped), {
+        contentType: "application/json",
+        upsert: true,
+      });
+    if (error) {
+      console.error("保存弦歌回响历史错误:", error.message);
+      res.status(500).json({ success: false, message: "保存历史失败" });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("保存弦歌回响历史错误:", err?.message || err);
+    res.json({ success: false, message: "服务器错误" });
+  }
+});
 
 // 弦歌回响：日常与千问(默认 qwen3.8-max)对话，良师益友式答疑，SSE 流式逐字返回
 router.post("/", authMiddleware, async (req: Request, res: Response): Promise<void> => {
