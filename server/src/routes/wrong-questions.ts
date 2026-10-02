@@ -81,7 +81,7 @@ async function recognizeContent(content: {
       content:
         "你是经验丰富的批改与题目分析老师。用户上传题目/试卷照片（可能含用户手写答案与批改痕迹）。任务：\n" +
         "1. 判定学科。\n" +
-        "2. 逐题识别：题号、完整题干（含小题与选项）、用户手写答案（没有则空串）。语法填空/完形类带空的题，question 必须收录完整上下文三句：空所在句的前一句 + 空所在句本身 + 后一句，保证脱离原卷也能读懂作答。\n" +
+        "2. 逐题识别：题号、完整题干（含小题与选项）、用户手写答案（没有则空串）。语法填空/完形类带空的题，必须额外返回 raw_context 字段：该空所在段落/小节的完整原文（从段落开头抄到段落结尾，空位用 ____ 标出），服务端会据此自动截取上下文三句。\n" +
         "3. 判定每题 status：\n" +
         "   - 有批改痕迹时：题号或答案处画了 ×、叉、打叉 → \"wrong\"；题号被圈起来/框起来（代表重点关注）→ \"attention\"；画了 ✓、勾、对号 → \"correct\"。\n" +
         "   - 没有批改痕迹但用户写了答案时：你必须先自己独立解出该题正确答案，再与用户答案核对：一致 → \"correct\"，不一致 → \"wrong\"，并在 reason 写清用户错在哪里、correct_answer 写正确答案。\n" +
@@ -89,7 +89,7 @@ async function recognizeContent(content: {
         "4. wrong/attention 题给 reason（错因/要点）与 knowledge_point（知识点）；correct 题 reason 可空。\n" +
         "5. 每题给 core_competency（学科核心素养，简短，如 语言能力/思维品质/文化意识/学习能力/数学运算/逻辑推理/直观想象 等）与 difficulty（难度，L1-L6，L1 最易 L6 最难）。\n" +
         "只返回合法 JSON（不要 markdown 代码块），schema：" +
-        `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","knowledge_point":"知识点","core_competency":"核心素养","difficulty":"L1-L6"}]}`,
+        `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","knowledge_point":"知识点","core_competency":"核心素养","difficulty":"L1-L6","raw_context":"语法填空/完形题该空所在段落完整原文(空位用____标出)，非此类题填空串"}]}`,
     },
   ];
   const userContent: any[] = [];
@@ -122,7 +122,12 @@ async function recognizeContent(content: {
     const rawQs = Array.isArray(parsed.questions) ? parsed.questions : [];
     const questions: ParsedQuestion[] = rawQs
       .filter((q: any) => q && typeof q === "object")
-      .map((q: any) => normalizeQuestion(q))
+      .map((q: any) => {
+        const nq = normalizeQuestion(q);
+        const three = extractThreeSentences(String(q.raw_context || ""));
+        if (three) nq.question = three;
+        return nq;
+      })
       .filter((q: ParsedQuestion) => q.question || q.user_answer || q.number);
     if (questions.length === 0) return null;
     return { subject: String(parsed.subject || "未知"), questions };
@@ -185,6 +190,19 @@ function normalizeQuestion(q: any): ParsedQuestion {
 function normalizeDifficulty(v: any): string {
   const m = String(v || "").toUpperCase().match(/L?\s*([1-6])/);
   return m ? `L${m[1]}` : "";
+}
+
+// 只以 . ? ! 作为句子结束（逗号/破折号/冒号/分号不切分），截取空(____)所在句的前一句+本句+后一句
+function extractThreeSentences(raw: string): string | null {
+  const text = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!text || !text.includes("____")) return null;
+  const sentences = (text.match(/[^.?!]*[.?!]+/g) || []).map((s) => s.trim()).filter(Boolean);
+  if (sentences.length === 0) return null;
+  let idx = sentences.findIndex((s) => s.includes("____"));
+  if (idx < 0) idx = 0;
+  const from = Math.max(0, idx - 1);
+  const to = Math.min(sentences.length - 1, idx + 1);
+  return sentences.slice(from, to + 1).join(" ");
 }
 
 /**
