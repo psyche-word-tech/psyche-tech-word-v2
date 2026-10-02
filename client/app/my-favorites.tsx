@@ -240,7 +240,7 @@ export default function MyFavoritesScreen() {
                 <Ionicons name="close" size={22} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
               {detail && (() => {
                 const t = parseTips(detail.tips);
                 const meta = t.status ? STATUS_META[t.status] : null;
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: '#FFFFFF', borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    maxHeight: '82%', paddingBottom: 24,
+    height: '86%', overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -338,7 +338,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
   modalClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  modalBody: { paddingHorizontal: 16, paddingVertical: 14 },
+  modalBody: { flex: 1, paddingHorizontal: 16, paddingVertical: 14 },
+  modalBodyContent: { paddingBottom: 24, flexGrow: 1 },
   modalContextWrap: {
     backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginBottom: 14,
     borderWidth: 1, borderColor: '#EEF2F7',
