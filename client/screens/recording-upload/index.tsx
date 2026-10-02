@@ -21,6 +21,19 @@ interface UpFile {
 export default function RecordingUploadScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
+  const isLutiTeacher = !!user && (String(user.phone ?? '').includes('13995589952') || Number(user.id) === 116);
+  if (!isLutiTeacher) {
+    return (
+      <View style={styles.permissContainer}>
+        <Ionicons name="lock-closed-outline" size={44} color="#9CA3AF" />
+        <Text style={styles.permissTitle}>录题暂未开放</Text>
+        <Text style={styles.permissDesc}>录题功能当前仅对教师账号 13995589952 开放，如需使用请联系管理员。</Text>
+        <TouchableOpacity style={styles.permissBtn} onPress={() => router.back()} activeOpacity={0.8}>
+          <Text style={styles.permissBtnText}>返回</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
   const [files, setFiles] = useState<UpFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -266,6 +279,11 @@ export default function RecordingUploadScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
+  permissContainer: { flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  permissTitle: { marginTop: 12, fontSize: 18, fontWeight: '600', color: '#374151' },
+  permissDesc: { marginTop: 8, fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 20 },
+  permissBtn: { marginTop: 24, backgroundColor: '#3B82F6', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
+  permissBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6',

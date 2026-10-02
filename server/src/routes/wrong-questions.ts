@@ -4,6 +4,7 @@ import { createRequire } from "module";
 import sharp from "sharp";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 import { authMiddleware, type AuthRequest } from "../middleware/auth.js";
+const TEACHER_LUTI_UID = 116;
 
 const require = createRequire(import.meta.url);
 
@@ -326,6 +327,9 @@ async function transcribePassage(images: { base64: string; mime: string }[]): Pr
 router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequest, res) => {
   try {
     const userId = req.userId as number;
+    if (userId !== TEACHER_LUTI_UID) {
+      return res.status(403).json({ success: false, message: "录题功能当前仅对教师账号 13995589952 开放" });
+    }
     const files = (req.files as Express.Multer.File[] | undefined) || [];
     if (!files || files.length === 0) {
       return res.status(400).json({ success: false, message: "请上传题目图片或文档" });

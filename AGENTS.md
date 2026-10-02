@@ -459,6 +459,7 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 学生提交时选择班级并填写姓名，班级+姓名存在 `annotations`（JSONB）的 `className`/`studentName` 字段（`submissions` 线上表无 student_name/class_name 列，且 server 的 Supabase 仅有 Data API 无 DDL，故复用 annotations，勿试图加列）。过滤用 `annotations->>className`。学生 `student_id` 用占位 UUID `00000000-0000-0000-0000-000000000000`（用户表非 uuid、学生未登录也需可提交）。
 
 - **唯一教师** = userId `116`（手机号 `13995589952`），后端 `isTeacher` = req.userId===116。前端个人中心判断 `user.phone==='13995589952' || user.id===116`，仅教师显示「作业查看」入口。
+- **【录题仅对教师开放】** 录题（`screens/recording-upload`，自动识学科并记错题）当前**只对 13995589952(id=116) 开放**，双重门控：后端 `wrong-questions.ts` 常量 `TEACHER_LUTI_UID=116`，POST 开头 `userId!==116` 直接返回 403「录题功能当前仅对教师账号 13995589952 开放」；前端 `recording-upload` 页非教师渲染"录题暂未开放"占位（`isLutiTeacher`）、`study/index.tsx` 右上角录题按钮（create-outline）仅教师显示。改后端仍 `node build.js`+pkill。验证：学生(1) POST 403 / 打开页见"暂未开放"；教师(116) 正常。
 - 学生提交走 `POST /api/v1/submissions`（`optionalAuthMiddleware`，无需登录，body 传 `{image,name,className,type:'student'}`）。
 - 教师班级查询用 `GET /api/v1/submissions/class/:className`（必带 `Authorization: Bearer <token>`，非教师 403）；`/class/*` 路由必须挂 `optionalAuthMiddleware` 先解析 req.userId，否则 isTeacher 恒 false。`req.params` 为 `string|string[]`，需 `String(req.params.className)` 强转。
 
