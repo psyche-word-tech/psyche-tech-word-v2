@@ -222,7 +222,7 @@ function threeNearBlank(sents: string[], number: string): string | null {
 
 async function readClozeStructure(
   images: { base64: string; mime: string }[]
-): Promise<{ passage: string; questions: ParsedQuestion[] } | null> {
+): Promise<ParsedQuestion[] | null> {
   if (!images.length) return null;
   const qwenApiUrl = (process.env.QWEN_API_URL || 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1').replace(/\/+$/, '');
   const apiKey = process.env.QWEN_API_KEY || '';
@@ -233,11 +233,10 @@ async function readClozeStructure(
     text:
       `图中是一道英语语法填空/完形题（一篇短文含多个空的留白）。请逐空识别，对每个空只输出一个数据块：` +
       `number(该空题号)、user_answer(该空学生手写答案，没有则空串)、correct_answer(正确形式)、` +
-      `reason(若学生写错，给一句话错因/知识点要点；写对可空)、knowledge_point(知识点)、core_competency(核心素养，如 语言能力)、difficulty(L1-L6)。` +
-      `题号与正确答案/解析必须从图中同一处空读取，严禁串到别的空。` +
-      `除 questions 外，请在最外层另输出一个 passage 字段：整篇短文的**逐字完整原文**，逐字保留每个空前的题号与 ____ 下划线（空写成 ____）、` +
-      `不要省略任何句子、不要翻译、不要改写、不要用省略号。` +
-      `只输出合法 JSON（不要 markdown 代码块）：{"passage":"整篇逐字原文","questions":[{"number":"","user_answer":"","correct_answer":"","reason":"","knowledge_point":"","core_competency":"","difficulty":""}]}`,
+      `reason(若学生写错，给一句话错因/知识点要点；写对可空)、knowledge_point(知识点)、core_competency(核心素养，如 语言能力)、difficulty(L1-L6)、` +
+      `three_sentences(面向学生的三句语境：该空所在句连同**前一句与后一句**，三句各自完整到句末，只以 . ? ! 结尾，逗号/破折号/冒号不切分；空位写成 ____)。` +
+      `题号与正确答案/解析/三句必须从图中**同一处空**读取，严禁从别的空串数据。` +
+      `只输出合法 JSON（不要 markdown 代码块）：{"questions":[{"number":"","user_answer":"","correct_answer":"","reason":"","knowledge_point":"","core_competency":"","difficulty":"","three_sentences":""}]}`,
   });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
@@ -245,29 +244,19 @@ async function readClozeStructure(
     const resp = await fetch(`${qwenApiUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages: [{ role: "user", content: userContent }], temperature: 0.2, enable_thinking: false, max_tokens: 8000 }),
+      body: JSON.stringify({ model, messages: [{ role: "user", content: userContent }], temperature: 0.2, enable_thinking: false, max_tokens: 6000 }),
       signal: controller.signal,
     });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
     const parsed = extractJson(data.choices?.[0]?.message?.content || "");
     const rawQs = Array.isArray(parsed?.questions) ? parsed.questions : [];
-    const passage = String(parsed?.passage || "").replace(/\s+/g, " ").trim();
-    const sents = passage ? (passage.match(/[^.?!]+[.?!]+/g) || []).map((s) => s.trim()).filter(Boolean) : [];
     const out: ParsedQuestion[] = [];
     for (const q of rawQs) {
       if (!q || typeof q !== "object") continue;
       const nq = normalizeQuestion(q);
-      const num = String(q?.number ?? nq.number ?? "").replace(/\D/g, "");
-      const det = num && sents.length ? threeNearBlank(sents, num) : null;
       const three = String(q.three_sentences || "").trim();
-      if (det) {
-        nq.question = det;
-      } else if (!/_{2,}|\(\s*[A-Za-z]+\s*\)/.test(three) && !/_{2,}|\(\s*[A-Za-z]+\s*\)/.test(nq.question)) {
-        continue;
-      } else if (!three || three.length < nq.question.length) {
-        nq.question = three || nq.question;
-      } else {
+      if (three && three.length >= (nq.question || "").length && /_{2,}|\(\s*[A-Za-z]+\s*\)/.test(three)) {
         nq.question = three;
       }
       const user = nq.user_answer;
@@ -279,7 +268,44 @@ async function readClozeStructure(
       }
       out.push(nq);
     }
-    return out.length ? { passage, questions: out } : null;
+    return out.length ? out : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 整篇短文逐字转录（独立调用，输出短、专一）：供服务端按题号确定性切三句，避免与结构化输出挤在同一响应里被截断。
+async function transcribePassage(images: { base64: string; mime: string }[]): Promise<{ passage: string; sents: string[] } | null> {
+  if (!images.length) return null;
+  const qwenApiUrl = (process.env.QWEN_API_URL || 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1').replace(/\/+$/, '');
+  const apiKey = process.env.QWEN_API_KEY || '';
+  const model = process.env.QWEN_CLOZE_MODEL || 'qwen3.8-max';
+  const userContent: any[] = images.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mime};base64,${img.base64}` } }));
+  userContent.push({
+    type: "text",
+    text:
+      `请逐字转录图中这篇英语短文的**完整原文**：保留每个空前的题号（如 56）与空的下划线（空写成 ____），` +
+      `逐句完整、每个句子都以 . ? ! 结尾，必须一直转录到短文最后一句结束为止，不可省略、不可截断、不要翻译、不要改写、不要解释。` +
+      `只输出合法 JSON（不要 markdown 代码块）：{"passage":"整篇逐字完整原文"}`,
+  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120000);
+  try {
+    const resp = await fetch(`${qwenApiUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: userContent }], temperature: 0.1, enable_thinking: false, max_tokens: 8000 }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
+    const passage = extractJson(data.choices?.[0]?.message?.content || "");
+    const text = String(passage?.passage || "").replace(/\s+/g, " ").trim();
+    if (!text) return null;
+    const sents = (text.match(/[^.?!]+[.?!]+/g) || []).map((s) => s.trim()).filter(Boolean);
+    return { passage: text, sents };
   } catch {
     return null;
   } finally {
@@ -328,9 +354,16 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
 
     // 语法填空/完形：整篇结构化读取，用更强模型逐空返回自洽数据块，替换 flash 首遍可能切句/编号错误的行
     if (recognized && images.length > 0 && /英/.test(recognized.subject)) {
-      const structured = await readClozeStructure(images);
-      if (structured && structured.questions.length > 0) {
-        recognized.questions = structured.questions;
+      const [structured, psg] = await Promise.all([readClozeStructure(images), transcribePassage(images)]);
+      if (structured && structured.length > 0) {
+        if (psg && psg.sents.length) {
+          for (const q of structured) {
+            const num = String(q.number ?? "").replace(/\D/g, "");
+            const det = num ? threeNearBlank(psg.sents, num) : null;
+            if (det) q.question = det;
+          }
+        }
+        recognized.questions = structured;
       }
     }
 
