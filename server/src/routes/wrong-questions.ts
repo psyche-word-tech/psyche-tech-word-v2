@@ -338,12 +338,15 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     const images: { base64: string; mime: string }[] = [];
     const texts: string[] = [];
     let failed = 0;
+    let firstImageBuffer: Buffer | null = null;
     for (const f of files) {
       if (isImageMime(f.mimetype)) {
         try {
           const compressed = await sharp(f.buffer).resize(1200, 1200, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 75 }).toBuffer();
+          if (!firstImageBuffer) firstImageBuffer = compressed;
           images.push({ base64: compressed.toString("base64"), mime: "image/jpeg" });
         } catch {
+          if (!firstImageBuffer) firstImageBuffer = f.buffer;
           images.push({ base64: f.buffer.toString("base64"), mime: f.mimetype });
         }
       } else {
@@ -399,6 +402,22 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     }
 
     let correct = 0, wrong = 0, attention = 0, blank = 0;
+    // 把上传的第一张图压缩后存到公开存储，供收藏列表缩略图展示
+    let coverImageUrl: string | null = null;
+    if (firstImageBuffer) {
+      try {
+        const supabase0 = getSupabaseClient();
+        const fileName = `wrong-questions/${Date.now()}-${Math.random().toString(36).substring(2, 11)}.jpg`;
+        const { error: uErr } = await supabase0.storage.from("submissions").upload(fileName, firstImageBuffer, { contentType: "image/jpeg", upsert: false });
+        if (!uErr) {
+          coverImageUrl = supabase0.storage.from("submissions").getPublicUrl(fileName).data.publicUrl;
+        } else {
+          console.error("[WrongQuestions] 题图上传失败:", uErr.message);
+        }
+      } catch (e) {
+        console.error("[WrongQuestions] 题图上传异常:", (e as Error).message);
+      }
+    }
     const rows: any[] = [];
     for (const q of recognized.questions) {
       if (q.status === "correct") correct++;
@@ -420,7 +439,7 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
           difficulty: q.difficulty,
           source: "recording",
         }),
-        image_url: null,
+        image_url: coverImageUrl,
       });
     }
 
@@ -439,7 +458,7 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     for (const r of toUpdate) {
       await supabase
         .from("favorites")
-        .update({ answer: r.answer, analysis: r.analysis, solution: r.solution, tips: r.tips })
+        .update({ answer: r.answer, analysis: r.analysis, solution: r.solution, tips: r.tips, image_url: coverImageUrl })
         .eq("id", existMap.get(r.question_text));
     }
 
