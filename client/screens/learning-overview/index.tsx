@@ -16,6 +16,7 @@ interface Student {
   sampleCount: number;
   level: number | null;
   grammarLevel: number | null;
+  vocabLevel: number | null;
   grammarWeakPoints?: { category: string; count: number; examples: string[] }[];
 }
 interface ClassGroup {
@@ -23,6 +24,7 @@ interface ClassGroup {
   students: Student[];
   classLevel: number | null;
   grammarClassLevel: number | null;
+  vocabClassLevel: number | null;
   sampleCount: number;
 }
 
@@ -63,12 +65,14 @@ function Radar({ labels, values, color = '#3B82F6' }: { labels: string[]; values
   );
 }
 
-// 外语六维基础值（演示基线），书面表达与语法用真实作文数据覆盖
+// 外语六维基础值（演示基线），书面表达、语法、语音与词汇用真实数据覆盖
 const GRAMMAR_INDEX = 1;
-function buildValues(writingLevel: number | null, grammarLevel: number | null): number[] {
+const VOCAB_INDEX = 0;
+function buildValues(writingLevel: number | null, grammarLevel: number | null, vocabLevel: number | null): number[] {
   const v = [3, 3, 3, 3, 3, 3];
   if (writingLevel != null) v[WRITING_INDEX] = writingLevel;
   if (grammarLevel != null) v[GRAMMAR_INDEX] = grammarLevel;
+  if (vocabLevel != null) v[VOCAB_INDEX] = vocabLevel;
   return v;
 }
 
@@ -127,10 +131,10 @@ export default function LearningOverviewScreen() {
 
                 <Text style={styles.sectionLabel}>班级整体能力图谱</Text>
                 <View style={styles.radarWrap}>
-                  <Radar labels={FOREIGN_LABELS} values={buildValues(cls.classLevel, cls.grammarClassLevel)} color="#8B5CF6" />
+                  <Radar labels={FOREIGN_LABELS} values={buildValues(cls.classLevel, cls.grammarClassLevel, cls.vocabClassLevel)} color="#8B5CF6" />
                 </View>
                 <Text style={styles.classLevelText}>
-                  班级书面表达 {cls.classLevel != null ? `L${cls.classLevel}` : '—'} · 语法 {cls.grammarClassLevel != null ? `L${cls.grammarClassLevel}` : '—'}
+                  班级书面表达 {cls.classLevel != null ? `L${cls.classLevel}` : '—'} · 语法 {cls.grammarClassLevel != null ? `L${cls.grammarClassLevel}` : '—'} · 语音与词汇 {cls.vocabClassLevel != null ? `L${cls.vocabClassLevel}` : '—'}
                 </Text>
 
                 <Text style={styles.sectionLabel}>学生能力图谱（点击姓名查看）</Text>
@@ -151,10 +155,10 @@ export default function LearningOverviewScreen() {
                 {sel && (
                   <View style={styles.studentRadar}>
                     <Text style={styles.studentRadarTitle}>
-                      {sel.name} 的能力图谱（书面表达 L{sel.level ?? '—'} · 语法 L{sel.grammarLevel ?? '—'} · 作文 {sel.sampleCount} 篇）
+                      {sel.name} 的能力图谱（书面表达 L{sel.level ?? '—'} · 语法 L{sel.grammarLevel ?? '—'} · 语音与词汇 L{sel.vocabLevel ?? '—'} · 作文 {sel.sampleCount} 篇）
                     </Text>
                     <View style={styles.radarWrap}>
-                      <Radar labels={FOREIGN_LABELS} values={buildValues(sel.level, sel.grammarLevel)} color="#10B981" />
+                      <Radar labels={FOREIGN_LABELS} values={buildValues(sel.level, sel.grammarLevel, sel.vocabLevel)} color="#10B981" />
                     </View>
                     <TouchableOpacity
                       style={styles.grammarToggle}

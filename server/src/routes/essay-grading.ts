@@ -1584,7 +1584,31 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
     const { data, error } = await supabase.from('submissions').select('annotations');
     if (error) throw error;
 
-    const classes = new Map<string, Map<string, { name: string; ratios: number[]; gratios: number[]; gweak: Map<string, { category: string; count: number; examples: string[] }> }>>();
+    // 语音与词汇维度：直接取单词测试（vocab_test_records）最新 'all' 行的识别率定档
+    const vocabLevelByUser = new Map<string, number>();
+    try {
+      const { data: vrows, error: verr } = await supabase
+        .from('vocab_test_records')
+        .select('user_id, level, sample_count, known_count')
+        .eq('level', 'all')
+        .not('user_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(2000);
+      if (!verr) {
+        for (const r of (vrows || [])) {
+          const uid = String(r.user_id);
+          if (vocabLevelByUser.has(uid)) continue; // created_at desc，首次即最新
+          const sample = Number(r.sample_count) || 0;
+          const known = Number(r.known_count) || 0;
+          if (sample <= 0) continue;
+          const acc = known / sample;
+          const lv = acc >= 0.9 ? 6 : acc >= 0.75 ? 5 : acc >= 0.6 ? 4 : acc >= 0.45 ? 3 : acc >= 0.3 ? 2 : 1;
+          vocabLevelByUser.set(uid, lv);
+        }
+      }
+    } catch { /* 单词测试数据缺失时不影响其余维度 */ }
+
+    const classes = new Map<string, Map<string, { name: string; ratios: number[]; gratios: number[]; vlevels: number[]; gweak: Map<string, { category: string; count: number; examples: string[] }> }>>();
     for (const row of data || []) {
       const a = (row.annotations as any) || {};
       const g = a.grading || {};
@@ -1596,8 +1620,10 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
       if (!uid || !Number.isFinite(total) || total < 0) continue;
       if (!classes.has(cls)) classes.set(cls, new Map());
       const stu = classes.get(cls)!;
-      if (!stu.has(uid)) stu.set(uid, { name, ratios: [], gratios: [], gweak: new Map() });
+      if (!stu.has(uid)) stu.set(uid, { name, ratios: [], gratios: [], vlevels: [], gweak: new Map() });
       stu.get(uid)!.ratios.push(Math.max(0, Math.min(1, total / max)));
+      const vlv = vocabLevelByUser.get(uid);
+      if (vlv) stu.get(uid)!.vlevels.push(vlv / 6);
       // 语法维度：由该篇作文的语法类错误数量定档（转录常为空，无法按词数归一）
       const errors = Array.isArray(g?.errors) ? g.errors : [];
       const gErrs = errors.filter((e: any) => e && (e.type === 'grammar' || e.type === 'sentence_structure'));
@@ -1628,11 +1654,13 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
         sampleCount: s.ratios.length,
         level: toLevel(s.ratios),
         grammarLevel: toLevel(s.gratios),
+        vocabLevel: toLevel(s.vlevels),
         grammarWeakPoints: Array.from(s.gweak.values()).sort((a, b) => b.count - a.count).slice(0, 10),
       })).sort((x, y) => (y.level || 0) - (x.level || 0));
       const all = Array.from(stu.values()).flatMap((s) => s.ratios);
       const allG = Array.from(stu.values()).flatMap((s) => s.gratios);
-      return { className, students, classLevel: toLevel(all), grammarClassLevel: toLevel(allG), sampleCount: all.length };
+      const allV = Array.from(stu.values()).flatMap((s) => s.vlevels);
+      return { className, students, classLevel: toLevel(all), grammarClassLevel: toLevel(allG), vocabClassLevel: toLevel(allV), sampleCount: all.length };
     }).sort((a, b) => a.className.localeCompare(b.className));
 
     res.json({ success: true, data: { classes: result } });
