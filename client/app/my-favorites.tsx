@@ -36,9 +36,6 @@ const STATUS_META: Record<QStatus, { label: string; bg: string; fg: string }> = 
   blank: { label: '未答', bg: '#F3F4F6', fg: '#6B7280' },
 };
 
-// 顶部展示的固定学科全集（与录题识别一致），点击可筛选/跳转到对应学科错题
-const ALL_SUBJECTS = ['数学', '语文', '英语', '物理', '化学', '生物', '政治', '历史', '地理'];
-
 export default function MyFavoritesScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
@@ -148,8 +145,8 @@ export default function MyFavoritesScreen() {
     (acc[s] = acc[s] || []).push(f);
     return acc;
   }, {});
-  // 顶部列出所有学科全集（即使该学科暂无错题也能看到并点击），收藏中出现的其他学科追加在末位
-  const subjects = [...ALL_SUBJECTS, ...Object.keys(grouped).filter((s) => !ALL_SUBJECTS.includes(s))];
+  // 顶部列出实际被搜索/收藏过的学科（有错题数据的学科），紧跟「全部」之后，点击即可筛选跳转到该学科
+  const subjects = [...new Set([...Object.keys(grouped)])];
   const shownSubjects = activeSubject ? [activeSubject] : subjects;
   const listData = shownSubjects.map((s) => ({ subject: s, items: grouped[s] || [] }));
 
