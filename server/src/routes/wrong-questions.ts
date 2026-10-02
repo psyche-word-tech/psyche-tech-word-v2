@@ -23,6 +23,7 @@ interface ParsedQuestion {
   correct_answer: string;
   status: QStatus;
   reason: string;
+  solution: string;
   knowledge_point: string;
   core_competency: string;
   difficulty: string;
@@ -88,8 +89,9 @@ async function recognizeContent(content: {
         "   - 用户没写答案也无痕迹 → \"blank\"。\n" +
         "4. wrong/attention 题给 reason（错因/要点）与 knowledge_point（知识点）；correct 题 reason 可空。\n" +
         "5. 每题给 core_competency（学科核心素养，简短，如 语言能力/思维品质/文化意识/学习能力/数学运算/逻辑推理/直观想象 等）与 difficulty（难度，L1-L6，L1 最易 L6 最难）。\n" +
+        "6. 每题给 solution：面向学生的详细解析（如何得到正确答案的完整讲解，含关键语法/公式/规则、必要的解释与中文翻译；wrong 题着重讲清错误点与正确思路）。语言严谨、可直接讲解给学生，不要输出思考碎念。\n" +
         "只返回合法 JSON（不要 markdown 代码块），schema：" +
-        `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","knowledge_point":"知识点","core_competency":"核心素养","difficulty":"L1-L6","raw_context":"语法填空/完形题该空所在段落完整原文(空位用____标出)，非此类题填空串"}]}`,
+        `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","solution":"详细解析","knowledge_point":"知识点","core_competency":"核心素养","difficulty":"L1-L6","raw_context":"语法填空/完形题该空所在段落完整原文(空位用____标出)，非此类题填空串"}]}`,
     },
   ];
   const userContent: any[] = [];
@@ -181,6 +183,7 @@ function normalizeQuestion(q: any): ParsedQuestion {
     correct_answer: String(q.correct_answer || "").trim(),
     status,
     reason: String(q.reason || "").trim(),
+    solution: String(q.solution || "").trim(),
     knowledge_point: String(q.knowledge_point || "").trim(),
     core_competency: String(q.core_competency || "").trim().slice(0, 40),
     difficulty: normalizeDifficulty(q.difficulty),
@@ -233,10 +236,10 @@ async function readClozeStructure(
     text:
       `图中是一道英语语法填空/完形题（一篇短文含多个空的留白）。请逐空识别，对每个空只输出一个数据块：` +
       `number(该空题号)、user_answer(该空学生手写答案，没有则空串)、correct_answer(正确形式)、` +
-      `reason(若学生写错，给一句话错因/知识点要点；写对可空)、knowledge_point(知识点)、core_competency(核心素养，如 语言能力)、difficulty(L1-L6)、` +
+      `reason(若学生写错，给一句话错因/知识点要点；写对可空)、solution(详细解析：如何得出正确形式的完整讲解，含语法规则/依据/必要时中文翻译，面向学生、严谨直接，不要思考碎念)、knowledge_point(知识点)、core_competency(核心素养，如 语言能力)、difficulty(L1-L6)、` +
       `three_sentences(面向学生的三句语境：该空所在句连同**前一句与后一句**，三句各自完整到句末，只以 . ? ! 结尾，逗号/破折号/冒号不切分；空位写成 ____)。` +
       `题号与正确答案/解析/三句必须从图中**同一处空**读取，严禁从别的空串数据。` +
-      `只输出合法 JSON（不要 markdown 代码块）：{"questions":[{"number":"","user_answer":"","correct_answer":"","reason":"","knowledge_point":"","core_competency":"","difficulty":"","three_sentences":""}]}`,
+      `只输出合法 JSON（不要 markdown 代码块）：{"questions":[{"number":"","user_answer":"","correct_answer":"","reason":"","solution":"","knowledge_point":"","core_competency":"","difficulty":"","three_sentences":""}]}`,
   });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
@@ -404,7 +407,7 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
         subject: recognized.subject,
         answer: q.correct_answer || "",
         analysis: q.reason || "",
-        solution: "",
+        solution: q.solution || "",
         tips: JSON.stringify({
           status: q.status,
           user_answer: q.user_answer,
@@ -432,7 +435,7 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     for (const r of toUpdate) {
       await supabase
         .from("favorites")
-        .update({ answer: r.answer, analysis: r.analysis, tips: r.tips })
+        .update({ answer: r.answer, analysis: r.analysis, solution: r.solution, tips: r.tips })
         .eq("id", existMap.get(r.question_text));
     }
 

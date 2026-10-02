@@ -317,6 +317,7 @@ export default function MyFavoritesScreen() {
                     {t.user_answer ? <Field label="我的答案" value={t.user_answer} /> : null}
                     {detail.answer ? <Field label="正确答案" value={stripHtml(String(detail.answer), true)} /> : null}
                     {detail.analysis ? <Field label="错因 / 要点" value={stripHtml(String(detail.analysis), true)} /> : null}
+                    {detail.solution ? <Field label="详细解析" value={stripHtml(String(detail.solution), true)} /> : null}
                     {t.knowledge_point ? <Field label="知识点" value={t.knowledge_point} /> : null}
                     {t.core_competency ? <Field label="核心素养" value={t.core_competency} /> : null}
                     {t.difficulty ? <Field label="难度" value={t.difficulty} /> : null}
