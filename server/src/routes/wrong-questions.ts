@@ -208,9 +208,21 @@ function extractThreeSentences(raw: string): string | null {
 // 语法填空/完形：整篇短文一次结构化读取。
 // 用更强模型逐空解析，每个空返回"题号+上下三句+学生答案+正确答案+解析"自洽数据块，
 // 从根本上避免首遍 flash 在密集小填上切句/编号错误或字段串位。
+// 在整篇逐字原文里，按题号定位空所在句，取"前一句+本句+后一句"（只按 .?! 切，逗号/破折号/冒号不切）。
+function threeNearBlank(sents: string[], number: string): string | null {
+  if (!sents.length || !number) return null;
+  // 空可能呈现为 ____56____、56 ____ 或 ____ 56 等，题号必须与空尖紧邻，避免串到别的空
+  const re = new RegExp("_{2,}\\s*" + number + "\\s*_{2,}|\\b" + number + "\\b\\s*_{2,}|_{2,}\\s*" + number + "\\b");
+  const idx = sents.findIndex((s) => /_{2,}/.test(s) && re.test(s));
+  if (idx < 0) return null;
+  const from = Math.max(0, idx - 1);
+  const to = Math.min(sents.length - 1, idx + 1);
+  return sents.slice(from, to + 1).join(" ");
+}
+
 async function readClozeStructure(
   images: { base64: string; mime: string }[]
-): Promise<ParsedQuestion[] | null> {
+): Promise<{ passage: string; questions: ParsedQuestion[] } | null> {
   if (!images.length) return null;
   const qwenApiUrl = (process.env.QWEN_API_URL || 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1').replace(/\/+$/, '');
   const apiKey = process.env.QWEN_API_KEY || '';
@@ -220,12 +232,12 @@ async function readClozeStructure(
     type: "text",
     text:
       `图中是一道英语语法填空/完形题（一篇短文含多个空的留白）。请逐空识别，对每个空只输出一个数据块：` +
-      `number(该空题号)、three_sentences(该空前一句话 + 空所在句(空位写成 ____) + 后一句话，三句用空格拼接；` +
-      `每句必须完整到句末的 . ? 或 ! 为止，逗号/破折号/冒号/分号不切分，不要省略单词、不要用省略号)、` +
-      `user_answer(该空学生手写答案，没有则空串)、correct_answer(正确形式)、` +
+      `number(该空题号)、user_answer(该空学生手写答案，没有则空串)、correct_answer(正确形式)、` +
       `reason(若学生写错，给一句话错因/知识点要点；写对可空)、knowledge_point(知识点)、core_competency(核心素养，如 语言能力)、difficulty(L1-L6)。` +
-      `题号与空所在句必须从图中同一处空读取，严禁串到别的空。` +
-      `只输出合法 JSON（不要 markdown 代码块）：{"questions":[{"number":"","three_sentences":"","user_answer":"","correct_answer":"","reason":"","knowledge_point":"","core_competency":"","difficulty":""}]}`,
+      `题号与正确答案/解析必须从图中同一处空读取，严禁串到别的空。` +
+      `除 questions 外，请在最外层另输出一个 passage 字段：整篇短文的**逐字完整原文**，逐字保留每个空前的题号与 ____ 下划线（空写成 ____）、` +
+      `不要省略任何句子、不要翻译、不要改写、不要用省略号。` +
+      `只输出合法 JSON（不要 markdown 代码块）：{"passage":"整篇逐字原文","questions":[{"number":"","user_answer":"","correct_answer":"","reason":"","knowledge_point":"","core_competency":"","difficulty":""}]}`,
   });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
@@ -240,13 +252,20 @@ async function readClozeStructure(
     const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
     const parsed = extractJson(data.choices?.[0]?.message?.content || "");
     const rawQs = Array.isArray(parsed?.questions) ? parsed.questions : [];
+    const passage = String(parsed?.passage || "").replace(/\s+/g, " ").trim();
+    const sents = passage ? (passage.match(/[^.?!]+[.?!]+/g) || []).map((s) => s.trim()).filter(Boolean) : [];
     const out: ParsedQuestion[] = [];
     for (const q of rawQs) {
       if (!q || typeof q !== "object") continue;
       const nq = normalizeQuestion(q);
+      const num = String(q?.number ?? nq.number ?? "").replace(/\D/g, "");
+      const det = num && sents.length ? threeNearBlank(sents, num) : null;
       const three = String(q.three_sentences || "").trim();
-      if (!/_{2,}|\(\s*[A-Za-z]+\s*\)/.test(three) && !/_{2,}|\(\s*[A-Za-z]+\s*\)/.test(nq.question)) continue;
-      if (!three || three.length < nq.question.length) {
+      if (det) {
+        nq.question = det;
+      } else if (!/_{2,}|\(\s*[A-Za-z]+\s*\)/.test(three) && !/_{2,}|\(\s*[A-Za-z]+\s*\)/.test(nq.question)) {
+        continue;
+      } else if (!three || three.length < nq.question.length) {
         nq.question = three || nq.question;
       } else {
         nq.question = three;
@@ -260,7 +279,7 @@ async function readClozeStructure(
       }
       out.push(nq);
     }
-    return out.length ? out : null;
+    return out.length ? { passage, questions: out } : null;
   } catch {
     return null;
   } finally {
@@ -310,8 +329,8 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     // 语法填空/完形：整篇结构化读取，用更强模型逐空返回自洽数据块，替换 flash 首遍可能切句/编号错误的行
     if (recognized && images.length > 0 && /英/.test(recognized.subject)) {
       const structured = await readClozeStructure(images);
-      if (structured && structured.length > 0) {
-        recognized.questions = structured;
+      if (structured && structured.questions.length > 0) {
+        recognized.questions = structured.questions;
       }
     }
 
