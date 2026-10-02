@@ -391,6 +391,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
 
 30. **雷达"语音与词汇"维度接单词测试数据（已实现）**：用户要求六维雷达的"语音与词汇"（index 0）直接用单词测试数据。后端 `writing-overview`（essay-grading.ts）在拉取 submissions 后额外查 `vocab_test_records`（`.eq('level','all')`、`.order('created_at',{ascending:false})`、`.limit(2000)`），对每个 user_id 取最新一行算识别率 `acc=known_count/sample_count` 定档（≥0.9→6、≥0.75→5、≥0.6→4、≥0.45→3、≥0.3→2、else→1）建 `vocabLevelByUser`（key=String(user_id)）。**关键**：submissions 的 `annotations.userId` 即 users.id（与 vocab_test_records.user_id 同源），可直接按 uid 命中，无需按姓名匹配。学生对象增 `vlevels`（命中则 push vlv/6），返回每生 `vocabLevel`、每班 `vocabClassLevel`（`toLevel` 平均）。单词测试数据缺失时 try/catch 吞掉、不影响其余维度。前端 learning-overview：`Student`/`ClassGroup` 加 `vocabLevel`/`vocabClassLevel`，`buildValues(writing,grammar,vocab)` 填 `VOCAB_INDEX=0`，班级/学生雷达标题加"语音与词汇 Lx"。数据经 `d.data.classes` 直传无需额外映射。实测 318 班 vocabClassLevel=5、覃晓漫 vocab=6。**改前端后务必** `expo export --platform web --clear`+补 KaTeX 字体+同步 public+重启，且 served index.html 可能缓存旧 entry hash，需重启服务后才对齐。
 
+31. **「我的收藏」详情改为应用内 Modal，明确展示原文三句（已实现）**：用户反馈"找不到原文三句"。原实现点击题卡用浏览器原生 `alert()` 拼接多行——在 WebView 里行高/滚动不可控，长三句被裁掉看不到（且坑早期 Alert 空实现）。`app/my-favorites.tsx`：新增 `detail` state，点题卡 `setDetail(f)` 打开 `Modal`（transparent/slide），顶部标题"题目详情"、可滚动 Body；第一块为"原文语境 · 上句/本句/下句"高亮卡（`question_text` 即已按 `.?!` 切好的三句，空位 `____`），其后 Field 行展示 我的答案/正确答案/错因·要点/知识点/核心素养/难度。语义上"原文三句"就是每条记录的 `question_text`（前+本+后三句是存题干字段，不是单独列）。复用 parseTips/stripHtml。改前端需 `export --clear`+同步 public+重启（served index 缓存旧 entry）。
+
 ## 开机动画（AnimatedSplash）只播一次
 - `AnimatedSplash` 挂载在 `app/_layout.tsx` 根布局顶层（zIndex 999），播完自隐。**用户偏好：任何返回/重挂载都不再进入开机动画**。
 - 实现：`client/components/AnimatedSplash.tsx` 增加会话级守卫 `splapAlreadyPlayed()`——Web 用 `sessionStorage['ws-ani-splash-played-v1']`、原生端用模块级变量，首次进入播、之后任何返回/整页刷新/重挂载都直接隐藏（`setVisible(false)`）。

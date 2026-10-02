@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, RefreshControl, ActivityIndicator, Image } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, RefreshControl, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -42,6 +42,7 @@ export default function MyFavoritesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Favorite | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
@@ -154,14 +155,7 @@ export default function MyFavoritesScreen() {
                 <View key={f.id} style={styles.favRow}>
                 <TouchableOpacity style={styles.favItem} activeOpacity={0.7} onPress={() => {
                   setConfirmId(null);
-                  const lines = [f.question_text ? stripHtml(f.question_text) : '（图片题目）'];
-                  if (tips.user_answer) lines.push(`我的答案：${tips.user_answer}`);
-                  if (f.answer) lines.push(`正确答案：${stripHtml(String(f.answer))}`);
-                  if (f.analysis) lines.push(`错因/要点：${stripHtml(String(f.analysis))}`);
-                  if (tips.knowledge_point) lines.push(`知识点：${tips.knowledge_point}`);
-                  if (tips.core_competency) lines.push(`核心素养：${tips.core_competency}`);
-                  if (tips.difficulty) lines.push(`难度：${tips.difficulty}`);
-                  alert(lines.join('\n'));
+                  setDetail(f);
                 }}>
                   {f.image_url ? (
                     <Image source={{ uri: f.image_url }} style={styles.favThumb} resizeMode="cover" />
@@ -236,7 +230,56 @@ export default function MyFavoritesScreen() {
           contentContainerStyle={styles.listContent}
         />
       </View>
+
+      <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>题目详情</Text>
+              <TouchableOpacity onPress={() => setDetail(null)} style={styles.modalClose}>
+                <Ionicons name="close" size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              {detail && (() => {
+                const t = parseTips(detail.tips);
+                const meta = t.status ? STATUS_META[t.status] : null;
+                return (
+                  <>
+                    <View style={styles.modalContextWrap}>
+                      <Text style={styles.modalLabel}>原文语境 · 上句 / 本句 / 下句</Text>
+                      {meta && (
+                        <View style={[styles.modalBadge, { backgroundColor: meta.bg }]}>
+                          <Text style={[styles.modalBadgeText, { color: meta.fg }]}>{meta.label}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.modalContext}>
+                        {detail.question_text ? stripHtml(detail.question_text) : '（图片题目）'}
+                      </Text>
+                    </View>
+                    {t.user_answer ? <Field label="我的答案" value={t.user_answer} /> : null}
+                    {detail.answer ? <Field label="正确答案" value={stripHtml(String(detail.answer))} /> : null}
+                    {detail.analysis ? <Field label="错因 / 要点" value={stripHtml(String(detail.analysis))} /> : null}
+                    {t.knowledge_point ? <Field label="知识点" value={t.knowledge_point} /> : null}
+                    {t.core_competency ? <Field label="核心素养" value={t.core_competency} /> : null}
+                    {t.difficulty ? <Field label="难度" value={t.difficulty} /> : null}
+                  </>
+                );
+              })()}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.fieldRow}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldValue}>{value}</Text>
+    </View>
   );
 }
 
@@ -284,4 +327,29 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
   emptyText: { fontSize: 16, color: '#9CA3AF', marginTop: 16 },
   emptySubText: { fontSize: 13, color: '#C4C7CC', marginTop: 6 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalCard: {
+    backgroundColor: '#FFFFFF', borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    maxHeight: '82%', paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
+  },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  modalClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  modalBody: { paddingHorizontal: 16, paddingVertical: 14 },
+  modalContextWrap: {
+    backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginBottom: 14,
+    borderWidth: 1, borderColor: '#EEF2F7',
+  },
+  modalLabel: { fontSize: 12, color: '#6B7280', marginBottom: 8 },
+  modalContext: { fontSize: 15, lineHeight: 23, color: '#1F2937' },
+  modalBadge: {
+    alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 8,
+  },
+  modalBadgeText: { fontSize: 12, fontWeight: '700' },
+  fieldRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  fieldLabel: { width: 84, fontSize: 14, color: '#6B7280', fontWeight: '600', paddingTop: 1 },
+  fieldValue: { flex: 1, fontSize: 14, lineHeight: 21, color: '#1F2937' },
 });
