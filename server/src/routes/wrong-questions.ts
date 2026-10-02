@@ -75,7 +75,7 @@ async function recognizeContent(content: {
   const qwenApiUrl = (process.env.QWEN_API_URL || 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1').replace(/\/+$/, '');
   const chatUrl = `${qwenApiUrl}/chat/completions`;
   const apiKey = process.env.QWEN_API_KEY || '';
-  const model = process.env.QWEN_MODEL || 'qwen3.8-flash';
+  const model = process.env.QWEN_MODEL_RECOGNIZE || 'qwen3.8-max';
 
   const messages: any[] = [
     {
@@ -91,7 +91,7 @@ async function recognizeContent(content: {
         "4. wrong/attention 题给 reason（错因/要点）与 knowledge_point（知识点）；correct 题 reason 可空。\n" +
         "5. 每题给 core_competency（学科核心素养，简短，如 语言能力/思维品质/文化意识/学习能力/数学运算/逻辑推理/直观想象 等）与 difficulty（难度，L1-L6，L1 最易 L6 最难）。\n" +
         "6. 每题给 solution：面向学生的详细解析（如何得到正确答案的完整讲解，含关键语法/公式/规则、必要的解释与中文翻译；wrong 题着重讲清错误点与正确思路）。语言严谨、可直接讲解给学生，不要输出思考碎念。\n" +
-        "只返回合法 JSON（不要 markdown 代码块），schema：" +
+        "只返回一个合法的 JSON 对象（不要 markdown 代码块，不要在 JSON 之外输出任何文字/标题/解释/思考过程；solution 等字段内部的解析内容必须写在字段值里）。重要：JSON 字符串值内所有双引号必须转义为 \\\"，所有反斜杠（如 LaTeX \\sqrt）必须写成 \\\\\\\\，否则解析失败。答案与解析必须严谨、肯定、可直接展示给学生，严禁自我怀疑、思考过程、口语碎念（例如严禁出现\"让我再想想/好像/？但这样才对\"之类）。schema：" +
         `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","solution":"详细解析","knowledge_point":"知识点","core_competency":"核心素养","difficulty":"L1-L6","raw_context":"语法填空/完形题该空所在段落完整原文(空位用____标出)，非此类题填空串"}]}`,
     },
   ];
@@ -104,39 +104,72 @@ async function recognizeContent(content: {
   }
   messages.push({ role: "user", content: userContent });
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 120000);
-  try {
-    const resp = await fetch(chatUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages, temperature: 0.2, enable_thinking: false, max_tokens: 6000 }),
-      signal: controller.signal,
-    });
-    if (!resp.ok) {
-      const t = await resp.text();
-      throw new Error(`千问 API 调用失败: ${resp.status} - ${t.slice(0, 200)}`);
+  // 单次调用，返回模型原始文本；API 失败/超时返回 null（不抛异常，便于重试与诊断）
+  async function callOnce(): Promise<string | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 180000);
+    try {
+      const resp = await fetch(chatUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages, temperature: 0.2, enable_thinking: false, max_tokens: 16000 }),
+        signal: controller.signal,
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        console.error(`[WrongQuestions] 千问 API 失败: ${resp.status} - ${t.slice(0, 200)}`);
+        return null;
+      }
+      const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
+      const cs = data.choices?.[0]?.message?.content || "";
+      if (!cs) { console.error("[WrongQuestions] 千问返回空内容"); return null; }
+      return cs;
+    } catch (e) {
+      console.error("[WrongQuestions] 千问调用异常(超时/网络):", (e as Error).message);
+      return null;
+    } finally {
+      clearTimeout(timer);
     }
-    const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
-    const contentStr = data.choices?.[0]?.message?.content || "";
-    if (!contentStr) throw new Error("千问 API 返回内容为空");
-    const parsed = extractJson(contentStr);
-    if (!parsed) return null;
-    const rawQs = Array.isArray(parsed.questions) ? parsed.questions : [];
-    const questions: ParsedQuestion[] = rawQs
-      .filter((q: any) => q && typeof q === "object")
-      .map((q: any) => {
-        const nq = normalizeQuestion(q);
-        const three = extractThreeSentences(String(q.raw_context || ""));
-        if (three) nq.question = three;
-        return nq;
-      })
-      .filter((q: ParsedQuestion) => q.question || q.user_answer || q.number);
-    if (questions.length === 0) return null;
-    return { subject: String(parsed.subject || "未知"), questions };
-  } finally {
-    clearTimeout(timer);
   }
+
+  let contentStr = await callOnce();
+  if (!contentStr) contentStr = await callOnce(); // 失败重试一次（限流/超时偶发）
+
+  const dump = (tag: string) => {
+    try { require("node:fs").writeFileSync(`/tmp/wrong-recog-${tag}.txt`, contentStr || ""); } catch {}
+    console.error(`[WrongQuestions] recognize ${tag} 失败，原始输出已 dump 到 /tmp/wrong-recog-${tag}.txt`);
+  };
+
+  if (!contentStr) { dump("api"); return null; }
+  const parsed = extractJson(contentStr);
+  if (!parsed) { dump("json"); return null; }
+  const rawQs = Array.isArray(parsed.questions) ? parsed.questions : [];
+  const questions: ParsedQuestion[] = rawQs
+    .filter((q: any) => q && typeof q === "object")
+    .map((q: any) => {
+      const nq = normalizeQuestion(q);
+      const three = extractThreeSentences(String(q.raw_context || ""));
+      if (three) nq.question = three;
+      return nq;
+    })
+    .filter((q: ParsedQuestion) => q.question || q.user_answer || q.number);
+  if (questions.length === 0) { dump("empty"); return null; }
+  return { subject: String(parsed.subject || "未知"), questions };
+}
+
+function escapeLatexForJson(s: string): string {
+  // 数学/理科学：模型常在题干/解析里直接输出 LaTeX（\sqrt \perp \Omega \{ \} \frac...），
+  // 其中单反斜杠会令 JSON.parse 报 Illegal/bad escape。
+  // 做法：先把【合法的 JSON 转义】(\uXXXX、\\、\n\t\r\b\f\"\/) 摘成占位保护，再把剩余的单反斜杠
+  // （都是未转义的 LaTeX 命令/符号）统一加一个反斜杠转义，最后还原占位。
+  const protect: string[] = [];
+  const guardRe = new RegExp("\\\\u[0-9a-fA-F]{4}|\\\\\\\\|\\\\[ntrfbu\"\\/]", "g");
+  const guarded = s.replace(guardRe, (m) => {
+    protect.push(m);
+    return "\u0001" + (protect.length - 1) + "\u0002";
+  });
+  const escaped = guarded.replace(/\\(?=.)/g, "\\\\");
+  return escaped.replace(/\u0001(\d+)\u0002/g, (_, i) => protect[Number(i)]);
 }
 
 function extractJson(contentStr: string): any {
@@ -145,6 +178,7 @@ function extractJson(contentStr: string): any {
   const last = cleaned.lastIndexOf("}");
   if (first < 0 || last <= first) return null;
   let jsonStr = cleaned.slice(first, last + 1);
+  jsonStr = escapeLatexForJson(jsonStr);
   try {
     return JSON.parse(jsonStr);
   } catch {
