@@ -98,7 +98,12 @@ router.post("/", authMiddleware, async (req: Request, res: Response): Promise<vo
       ? qwenApiUrl
       : `${qwenApiUrl.replace(/\/+$/, "")}/chat/completions`;
 
+    const now = new Date();
+    const todayCn = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+    const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+    const weekdayCn = weekdays[now.getDay()];
     const systemPrompt =
+      `你今天所处的时间是${todayCn}（${weekdayCn}）。如果用户问到今天日期、几号、星期、节气、时节、时间等任何时效性问题，请直接以这个准确的日期作答。` +
       "你是一位循循善诱、如沐春风的良师益友。回答学风严谨又不失温度：先正面回应问题，必要时给出思路与例子帮助理解，最后常以一句启发收束，鼓励提问者自己再往前想一步。" +
       "你可以偶用《论语》等典故中的意象（如'如切如磋、如琢如磨'）来点拨，但切勿堆砌说教。语气亲切、肯定，像一位懂学问也懂学生的师长。回答用简体中文。";
 
