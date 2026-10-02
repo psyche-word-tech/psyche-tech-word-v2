@@ -16,6 +16,7 @@ interface Student {
   sampleCount: number;
   level: number | null;
   grammarLevel: number | null;
+  grammarWeakPoints?: { category: string; count: number; examples: string[] }[];
 }
 interface ClassGroup {
   className: string;
@@ -77,6 +78,7 @@ export default function LearningOverviewScreen() {
   const [classes, setClasses] = useState<ClassGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, Student | null>>({});
+  const [grammarOpen, setGrammarOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     (async () => {
@@ -154,6 +156,33 @@ export default function LearningOverviewScreen() {
                     <View style={styles.radarWrap}>
                       <Radar labels={FOREIGN_LABELS} values={buildValues(sel.level, sel.grammarLevel)} color="#10B981" />
                     </View>
+                    <TouchableOpacity
+                      style={styles.grammarToggle}
+                      onPress={() => setGrammarOpen((p) => ({ ...p, [cls.className]: !p[cls.className] }))}
+                    >
+                      <Text style={styles.grammarToggleText}>
+                        语法 L{sel.grammarLevel ?? '—'} · {grammarOpen[cls.className] ? '收起薄弱点 ▴' : '点击查看语法薄弱点 ▾'}
+                      </Text>
+                    </TouchableOpacity>
+                    {grammarOpen[cls.className] && (
+                      <View style={styles.grammarPanel}>
+                        {(sel.grammarWeakPoints || []).length === 0 ? (
+                          <Text style={styles.grammarEmpty}>暂无语法错误记录，掌握良好</Text>
+                        ) : (
+                          (sel.grammarWeakPoints || []).map((w: any, i: number) => (
+                            <View key={i} style={styles.grammarItem}>
+                              <Text style={styles.grammarWord}>
+                                {w.category || '其他语法'}
+                                <Text style={styles.grammarCount}>（{w.count} 处）</Text>
+                              </Text>
+                              {(w.examples || []).map((ex: string, j: number) => (
+                                <Text key={j} style={styles.grammarExplain}>例：{ex}</Text>
+                              ))}
+                            </View>
+                          ))
+                        )}
+                      </View>
+                    )}
                   </View>
                 )}
               </View>
@@ -189,4 +218,14 @@ const styles = StyleSheet.create({
   chipTextActive: { color: '#2563EB' },
   studentRadar: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
   studentRadarTitle: { fontSize: 13, fontWeight: '700', color: '#10B981', marginBottom: 6, textAlign: 'center' },
+  grammarToggle: { marginTop: 8, alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#10B981' },
+  grammarToggleText: { fontSize: 13, fontWeight: '600', color: '#059669' },
+  grammarPanel: { marginTop: 10, backgroundColor: '#F9FAFB', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  grammarEmpty: { fontSize: 13, color: '#10B981', textAlign: 'center' },
+  grammarItem: { marginBottom: 10 },
+  grammarWord: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
+  grammarCount: { fontSize: 12, fontWeight: '400', color: '#9CA3AF' },
+  grammarArrow: { color: '#6B7280' },
+  grammarFix: { color: '#059669', fontWeight: '700' },
+  grammarExplain: { fontSize: 12, color: '#6B7280', marginTop: 2 },
 });

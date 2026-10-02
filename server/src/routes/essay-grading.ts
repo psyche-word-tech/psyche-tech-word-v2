@@ -1557,6 +1557,25 @@ router.get('/writing-ability', optionalAuthMiddleware, async (req: AuthRequest, 
   }
 });
 
+// 将单条语法错误归类到具体语法知识点（用于分类概括，而非逐条罗列）
+function grammarCategory(e: any): string {
+  const ex = String(e?.explanation || '') + ' ' + String(e?.original || '') + ' ' + String(e?.correction || '');
+  if (/被动/.test(ex)) return '被动语态';
+  const tense = ex.match(/(现在完成时|过去完成时|一般过去时|一般现在时|一般将来时|现在进行时|过去进行时)/);
+  if (tense) return '时态·' + tense[1];
+  if (/冠词/.test(ex)) return '冠词';
+  if (/复数|单数/.test(ex)) return '名词单复数';
+  if (/主谓|一致/.test(ex)) return '主谓一致';
+  if (/代词|主格|宾格|所有格/.test(ex)) return '代词';
+  if (/非谓语|不定式|动名词|分词/.test(ex)) return '非谓语动词';
+  if (/从句|连词|关系词/.test(ex)) return '从句与连词';
+  if (/词性|名词形式|形容词|副词/.test(ex)) return '词性转换';
+  if (/介词|搭配|固定/.test(ex)) return '介词与固定搭配';
+  if (/中式|句式|表达习惯|逻辑/.test(ex)) return '句式与表达';
+  if (/时态|时/.test(ex)) return '时态';
+  return '其他语法';
+}
+
 // 学情一览：按作文提交班级聚合每个学生的书面表达能力（真实作文数据）+ 班级整体水平
 // 注意：必须注册在 /:id 之前
 router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest, res) => {
@@ -1565,7 +1584,7 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
     const { data, error } = await supabase.from('submissions').select('annotations');
     if (error) throw error;
 
-    const classes = new Map<string, Map<string, { name: string; ratios: number[]; gratios: number[] }>>();
+    const classes = new Map<string, Map<string, { name: string; ratios: number[]; gratios: number[]; gweak: Map<string, { category: string; count: number; examples: string[] }> }>>();
     for (const row of data || []) {
       const a = (row.annotations as any) || {};
       const g = a.grading || {};
@@ -1577,13 +1596,23 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
       if (!uid || !Number.isFinite(total) || total < 0) continue;
       if (!classes.has(cls)) classes.set(cls, new Map());
       const stu = classes.get(cls)!;
-      if (!stu.has(uid)) stu.set(uid, { name, ratios: [], gratios: [] });
+      if (!stu.has(uid)) stu.set(uid, { name, ratios: [], gratios: [], gweak: new Map() });
       stu.get(uid)!.ratios.push(Math.max(0, Math.min(1, total / max)));
       // 语法维度：由该篇作文的语法类错误数量定档（转录常为空，无法按词数归一）
       const errors = Array.isArray(g?.errors) ? g.errors : [];
-      const gErr = errors.filter((e: any) => e && (e.type === 'grammar' || e.type === 'sentence_structure')).length;
-      const gLevel = gErr === 0 ? 6 : gErr <= 2 ? 5 : gErr <= 4 ? 4 : gErr <= 6 ? 3 : gErr <= 9 ? 2 : 1;
+      const gErrs = errors.filter((e: any) => e && (e.type === 'grammar' || e.type === 'sentence_structure'));
+      const gLevel = gErrs.length === 0 ? 6 : gErrs.length <= 2 ? 5 : gErrs.length <= 4 ? 4 : gErrs.length <= 6 ? 3 : gErrs.length <= 9 ? 2 : 1;
       stu.get(uid)!.gratios.push(gLevel / 6);
+      // 按语法知识点分类概括薄弱点（计数 + 代表性例子，不逐条罗列）
+      const wk = stu.get(uid)!.gweak;
+      for (const e of gErrs) {
+        const cat = grammarCategory(e);
+        const cur = wk.get(cat) || { category: cat, count: 0, examples: [] as string[] };
+        cur.count += 1;
+        const ex = `${String(e?.original || '').trim()} → ${String(e?.correction || '').trim()}`;
+        if (ex.trim() !== '→' && !cur.examples.includes(ex) && cur.examples.length < 2) cur.examples.push(ex);
+        wk.set(cat, cur);
+      }
     }
 
     const toLevel = (rs: number[]) => {
@@ -1599,6 +1628,7 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
         sampleCount: s.ratios.length,
         level: toLevel(s.ratios),
         grammarLevel: toLevel(s.gratios),
+        grammarWeakPoints: Array.from(s.gweak.values()).sort((a, b) => b.count - a.count).slice(0, 10),
       })).sort((x, y) => (y.level || 0) - (x.level || 0));
       const all = Array.from(stu.values()).flatMap((s) => s.ratios);
       const allG = Array.from(stu.values()).flatMap((s) => s.gratios);
