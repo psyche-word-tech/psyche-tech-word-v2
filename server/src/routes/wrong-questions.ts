@@ -84,14 +84,15 @@ async function recognizeContent(content: {
         "你是经验丰富的批改与题目分析老师。用户上传题目/试卷照片（可能含用户手写答案与批改痕迹）。任务：\n" +
         "1. 判定学科。\n" +
         "2. 逐题识别：题号、完整题干（含小题与选项）、用户手写答案（没有则空串）。语法填空/完形类带空的题，必须额外返回 raw_context 字段：该空所在段落/小节的完整原文（从段落开头抄到段落结尾，空位用 ____ 标出），服务端会据此自动截取上下文三句；同时 question 字段本身也直接写成上下文三句（空所在句的前一句+本句+后一句，只以 . ? ! 分句，逗号/破折号/冒号/分号不切分）作为兜底。\n" +
-        "3. 判定每题 status：\n" +
-        "   - 有批改痕迹时：题号或答案处画了 ×、叉、打叉 → \"wrong\"；题号被圈起来/框起来（代表重点关注）→ \"attention\"；画了 ✓、勾、对号 → \"correct\"。\n" +
-        "   - 没有批改痕迹但用户写了答案时：你必须先自己独立解出该题正确答案，再与用户答案核对：一致 → \"correct\"，不一致 → \"wrong\"，并在 reason 写清用户错在哪里、correct_answer 写正确答案。\n" +
+        "3. 铁律——独立解题，绝不被用户答案带偏：每一题都必须先忽略用户答案，从题干独立解出正确答案，该正解只来源于题目本身，绝不允许为了跟用户答案一致、或因为\"用户写了某个答案就当作标准答案\"而修改 correct_answer。\n" +
+        "4. 再核对用户答案：在独立正解的基础上，用正解比对用户手写答案，一致 → \"correct\"，不一致 → \"wrong\"，并在 reason 写清用户错在哪里、correct_answer 必须写你独立解出的正解（严禁等于用户答案来搪塞）。\n" +
+        "   - 如果题干或图片信息不足以唯一确定答案，correct_answer 写\"条件不足无法判定\"，hint 仍可给，但绝不许猜测填空或顺从用户答案。\n" +
+        "   - 有批改痕迹时：题号或答案处画了 ×、叉、打叉 → \"wrong\"；题号被圈起来/框起来（代表重点关注）→ \"attention\"；画了 ✓、勾、对号 → \"correct\"（批改痕迹与用户写的答案可能冲突时，以独立解题的正解为准判对错）。\n" +
         "   - 用户没写答案也无痕迹 → \"blank\"。\n" +
-        "4. wrong/attention 题给 reason（错因/要点）与 knowledge_point（知识点）；correct 题 reason 可空。\n" +
-        "5. 每题给 core_competency（学科核心素养，简短，如 语言能力/思维品质/文化意识/学习能力/数学运算/逻辑推理/直观想象 等）与 difficulty（难度，L1-L6，L1 最易 L6 最难）。\n" +
-        "6. 每题给 solution：面向学生的详细解析（如何得到正确答案的完整讲解，含关键语法/公式/规则、必要的解释与中文翻译；wrong 题着重讲清错误点与正确思路）。语言严谨、可直接讲解给学生，不要输出思考碎念。\n" +
-        "只返回一个合法的 JSON 对象（不要 markdown 代码块，不要在 JSON 之外输出任何文字/标题/解释/思考过程；solution 等字段内部的解析内容必须写在字段值里）。重要：JSON 字符串值内所有双引号必须转义为 \\\"，所有反斜杠（如 LaTeX \\sqrt）必须写成 \\\\\\\\，否则解析失败。答案与解析必须严谨、肯定、可直接展示给学生，严禁自我怀疑、思考过程、口语碎念（例如严禁出现\"让我再想想/好像/？但这样才对\"之类）。schema：" +
+        "5. wrong/attention 题给 reason（错因/要点）与 knowledge_point（知识点）；correct 题 reason 可空。\n" +
+        "6. 每题给 core_competency（学科核心素养，简短，如 语言能力/思维品质/文化意识/学习能力/数学运算/逻辑推理/直观想象 等）与 difficulty（难度，L1-L6，L1 最易 L6 最难）。\n" +
+        "7. 每题给 solution：面向学生的详细解析（如何得到正确答案的完整讲解，含关键语法/公式/规则、必要的解释与中文翻译；wrong 题着重讲清错误点与正确思路）。语言严谨、可直接讲解给学生，不要输出思考碎念。\n" +
+        "只返回一个合法的 JSON 对象（不要 markdown 代码块，不要在 JSON 之外输出任何文字/标题/解释/思考过程；solution 等字段内部的解析内容必须写在字段值里）。重要：JSON 字符串值内所有双引号必须转义为 \\\"，所有反斜杠（如 LaTeX \\sqrt）必须写成 \\\\\\\\，否则解析失败。答案与解析必须严谨、肯定、可直接展示给学生，严禁自我怀疑、思考过程、口语碎念（例如严禁出现\"让我再想想/好像/？但这样才对\"之类）。再三强调：correct_answer 只能是独立解题所得、由题干决定的唯一正解，绝不允许因为用户写了某个选项、或\"用户选X所以标准答案大概是X\"这类理由而变更为迎合用户的答案——若出现\"既然用户选了C就按C讲\"这样的表述，视为严重错误。schema：" +
         `{"subject":"学科（如 数学/语文/英语/物理/化学/生物/政治/历史/地理）","questions":[{"number":"题号","question":"题干","user_answer":"用户手写答案","correct_answer":"正确答案","status":"wrong|attention|correct|blank","reason":"错因或要点","solution":"详细解析","knowledge_point":"知识点","core_competency":"核心素养","difficulty":"L1-L6","raw_context":"语法填空/完形题该空所在段落完整原文(空位用____标出)，非此类题填空串"}]}`,
     },
   ];
@@ -453,11 +454,20 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
       }
     }
     const rows: any[] = [];
+    // 后端兜底：检测模型被用户答案带偏的露馅表述，避免错误答案以 correct 状态入库
+    const BIAS_RE =
+      /既然用户选了|既然用户选X|按用户.{0,4}讲|用户选.{0,2}所以|用户选.{0,2}是.{0,2}|大概.{0,4}是C|标准答案大概是|用户.{0,4}而.{0,4}正确|为迎合|顺从用户/;
     for (const q of recognized.questions) {
-      if (q.status === "correct") correct++;
-      else if (q.status === "wrong") wrong++;
-      else if (q.status === "attention") attention++;
-      else blank++;
+      const answerStr = String(q.correct_answer || "");
+      const biasHint = `${q.solution || ""} ${q.reason || ""} ${answerStr}`;
+      const biased = BIAS_RE.test(biasHint);
+      if (biased) {
+        q.status = "attention";
+        q.reason = (q.reason ? q.reason + "；" : "") + "【系统提示】此处原答案疑似受用户手写答案影响，请人工复核正确结论";
+        console.warn(`[WrongQuestions] 第${q.number || "?"}题疑似被用户答案带偏，已转 attention 待复核`);
+      }
+      if (q.status === "correct") correct++; else if (q.status === "wrong") wrong++;
+      else if (q.status === "attention") attention++; else blank++;
       rows.push({
         user_id: userId,
         question_text: q.number ? `${q.number}. ${q.question}` : q.question || "(图片题目)",
