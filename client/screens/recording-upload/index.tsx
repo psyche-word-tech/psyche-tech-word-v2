@@ -269,7 +269,7 @@ export default function RecordingUploadScreen() {
         {loading && (
           <View style={styles.loadingMask}>
             <ActivityIndicator size="large" color="#3B82F6" />
-            <Text style={styles.loadingText}>正在识别题目学科…</Text>
+            <Text style={styles.loadingText}>正在识别题目学科…识别较复杂的题(数学/理科)可能需要 1-2 分钟，请耐心等待，不要关闭页面</Text>
           </View>
         )}
       </View>
