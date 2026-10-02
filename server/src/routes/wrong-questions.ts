@@ -231,6 +231,43 @@ function normalizeDifficulty(v: any): string {
   return m ? `L${m[1]}` : "";
 }
 
+// 剥离开放式大模型写进解析里的"思考碎念/自我怀疑/试错钻牛角尖"口语，
+// 只把面向学生的严谨教学性推导保留下来（含 LaTeX 公式、结论、分步演算）。
+// 原理：按句子/分句拆分（. ? ! 以及中文句末标点），逐句剔除口语化试错句。
+function stripThinkingNoise(text: string): string {
+  if (!text) return text;
+  // 以 . ? ! 和中文句号问号叹号切分子句（保留 $...$ 内的点号不切：先用占位保护公式）
+  const protectedBlocks: string[] = [];
+  const masked = text.replace(/\$\$[^]*?\$\$|\$[^]*?\$/g, (m) => {
+    protectedBlocks.push(m);
+    return `§BLOCK${protectedBlocks.length - 1}§`;
+  });
+  // 分句：英文 . ? ! 后跟空白/结束，或中文。？！后
+  const clauses = masked.split(/(?<=[.!?。？！])\s*/).map((s) => s.trim()).filter(Boolean);
+  // 句首暴露的思考/试错/自我质疑信号
+  const noiseRe =
+    /^(等等|让我们|我们再|重新(考虑|思考|审视|检查)|尝试|试着|试一下|(看看|看)能否|看看|难道|会不会|是不是我|我(算错|看错|想错|搞错|理解错)|哦|嗯|那为什么|为什么用户|但是作为|作为AI|独立解题|难道说|我觉得|我想|不管怎样|好吧|修正|其实如果|或者我|让我(再|重新)|我们(需要|检验|验证|再|试试)|按理说|按理)/;
+  // 句中带自我纠正/质疑、却不含公式的短句也删（"那X能…？""看来X不行"）
+  const midNoise =
+    /^(?!.*(因为|由于|所以|因此|故|综上|则|即|可知|得到|推出|解得|成立|可行|正确|选)).*(难道|吗？|是不是|会不会|让我|看看能否|试一下|试着|看来.{0,8}不行|能不能|那.{1,8}能.{0,6}(吗|？)|等等|哦|除非|或者我|不\.\.\.\.|不，)(?![$])/;
+  const conclusionRe = /(因此|所以|故|综上|综上所述|由此可得|因而|即|可知|由此|所以正确|正确答案是|故$|所以$|于是$)/;
+  const keep: string[] = [];
+  for (const c of clauses) {
+    const t = c.trim();
+    if (!t) continue;
+    // 还原公式块
+    const restored = t.replace(/§BLOCK(\d+)§/g, (_, i) => protectedBlocks[Number(i)]);
+    const hasMath = t.includes("§BLOCK");
+    const isShortNoise = t.length <= 16 && noiseRe.test(t);
+    const isHeadLongNoise = noiseRe.test(t) && !conclusionRe.test(t) && !hasMath;
+    const isMidProbe = (hasMath ? false : midNoise.test(t)) && !conclusionRe.test(t) && t.length <= 48;
+    if (!isShortNoise && !isHeadLongNoise && !isMidProbe) keep.push(restored);
+  }
+  // 去掉首尾多余空行/空格
+  let out = keep.join(" ").replace(/\s+/g, " ").replace(/[ \t]+([。？！])/g, "$1").trim();
+  return out;
+}
+
 // 只以 . ? ! 作为句子结束（逗号/破折号/冒号/分号不切分），截取空(____)所在句的前一句+本句+后一句
 function extractThreeSentences(raw: string): string | null {
   const text = String(raw || "").replace(/\s+/g, " ").trim();
@@ -468,13 +505,15 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
       }
       if (q.status === "correct") correct++; else if (q.status === "wrong") wrong++;
       else if (q.status === "attention") attention++; else blank++;
+      const cleanSolution = stripThinkingNoise(q.solution || "");
+      const cleanReason = stripThinkingNoise(q.reason || "");
       rows.push({
         user_id: userId,
         question_text: q.number ? `${q.number}. ${q.question}` : q.question || "(图片题目)",
         subject: recognized.subject,
         answer: q.correct_answer || "",
-        analysis: q.reason || "",
-        solution: q.solution || "",
+        analysis: cleanReason,
+        solution: cleanSolution,
         tips: JSON.stringify({
           status: q.status,
           user_answer: q.user_answer,
