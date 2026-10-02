@@ -205,6 +205,52 @@ function extractThreeSentences(raw: string): string | null {
   return sentences.slice(from, to + 1).join(" ");
 }
 
+function splitSentences(text: string): string[] {
+  return (String(text || "").replace(/\s+/g, " ").match(/[^.?!]*[.?!]+/g) || []).map((s) => s.trim()).filter(Boolean);
+}
+
+// 在完整转录里定位与题干最匹配的句子，取其前+本+后三句（只按 .?! 切分）
+function enrichThreeSentences(question: string, sentences: string[]): string | null {
+  const keywords = Array.from(new Set((question.match(/[A-Za-z]{5,}/g) || []).map((w) => w.toLowerCase()))).slice(0, 8);
+  if (keywords.length === 0 || sentences.length === 0) return null;
+  let best = -1, bestScore = 0;
+  sentences.forEach((s, i) => {
+    const low = s.toLowerCase();
+    const score = keywords.reduce((acc, k) => acc + (low.includes(k) ? 1 : 0), 0);
+    if (score > bestScore) { bestScore = score; best = i; }
+  });
+  if (best < 0 || bestScore < 1) return null;
+  const from = Math.max(0, best - 1);
+  const to = Math.min(sentences.length - 1, best + 1);
+  return sentences.slice(from, to + 1).join(" ");
+}
+
+// 专用整页转录：为带空题提供完整原文，供服务端截取三句
+async function transcribeFull(images: { base64: string; mime: string }[]): Promise<string> {
+  const qwenApiUrl = (process.env.QWEN_API_URL || 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1').replace(/\/+$/, '');
+  const apiKey = process.env.QWEN_API_KEY || '';
+  const model = process.env.QWEN_MODEL || 'qwen3.8-flash';
+  const userContent: any[] = images.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mime};base64,${img.base64}` } }));
+  userContent.push({ type: "text", text: "请逐字转录图片中全部文字，保留原有标点与顺序，不省略、不翻译、不解释，只输出原文。" });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
+  try {
+    const resp = await fetch(`${qwenApiUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: userContent }], temperature: 0.1, enable_thinking: false, max_tokens: 6000 }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) return "";
+    const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
+    return data.choices?.[0]?.message?.content || "";
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * 录题 / 错题上传接口
  * POST /api/v1/wrong-questions
@@ -243,6 +289,20 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
     }
 
     const recognized = await recognizeContent({ images, texts });
+
+    // 英语带空题：整页转录后按 .?! 确定性截取三句，纠正首遍识别截断
+    if (recognized && images.length > 0 && /英/.test(recognized.subject)) {
+      const sentences = splitSentences(await transcribeFull(images));
+      if (sentences.length > 0) {
+        for (const q of recognized.questions) {
+          const three = enrichThreeSentences(q.question, sentences);
+          if (three && three.length > q.question.length && /_{2,}|\(\s*[A-Za-z]+\s*\)/.test(three)) {
+            q.question = three;
+          }
+        }
+      }
+    }
+
     const supabase = getSupabaseClient();
 
     // 识别失败兜底：整单作为一条待核对记录入库
