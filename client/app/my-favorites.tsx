@@ -43,7 +43,7 @@ export default function MyFavoritesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Favorite | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -72,6 +72,12 @@ export default function MyFavoritesScreen() {
 
   useEffect(() => { fetchFavorites(); }, [fetchFavorites]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const handleDelete = async (item: Favorite) => {
     if (confirmId !== item.id) {
       setConfirmId(item.id);
@@ -87,23 +93,23 @@ export default function MyFavoritesScreen() {
       const data = await res.json();
       if (data.success) {
         setFavorites((prev) => prev.filter((f) => f.id !== item.id));
-        setNotice(null);
+        setToast(null);
       } else {
-        setNotice(data.message || '删除失败，请重试');
+        setToast(data.message || '删除失败，请重试');
       }
     } catch {
-      setNotice('网络错误，删除失败');
+      setToast('网络错误，删除失败');
     }
   };
 
   const handleDownload = async () => {
     if (Platform.OS !== 'web') {
-      setNotice('请使用网页端下载');
+      setToast('请使用网页端下载');
       return;
     }
     try {
       setDownloading(true);
-      setNotice(null);
+      setToast(null);
       const apiBase = getApiBaseUrl();
       const res = await fetch(`${apiBase}/api/v1/favorites/export`, {
         method: 'POST',
@@ -111,7 +117,7 @@ export default function MyFavoritesScreen() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setNotice(j.message || '导出失败');
+        setToast(j.message || '导出失败');
         return;
       }
       const blob = await res.blob();
@@ -123,9 +129,9 @@ export default function MyFavoritesScreen() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
-      setNotice('已生成错题训练文档，并开始下载');
+      setToast('已生成错题训练文档，并开始下载');
     } catch {
-      setNotice('网络错误，导出失败');
+      setToast('网络错误，导出失败');
     } finally {
       setDownloading(false);
     }
@@ -155,19 +161,8 @@ export default function MyFavoritesScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        {/* 下载错题训练 */}
-        <TouchableOpacity style={styles.downloadBar} onPress={handleDownload} disabled={downloading} activeOpacity={0.8}>
-          <Ionicons name="download-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.downloadBarText}>{downloading ? '正在生成…' : '下载错题训练（导出一份含答案的 Word 错题单）'}</Text>
-        </TouchableOpacity>
-        {notice ? (
-          <View style={styles.noticeBar}>
-            <Text style={styles.noticeText}>{notice}</Text>
-          </View>
-        ) : null}
-
-        {/* 学科过滤 */}
-        {subjects.length > 0 && (
+        {/* 工具行：学科过滤 + 导出错题 */}
+        <View style={styles.toolbar}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subjectBar} contentContainerStyle={styles.subjectBarContent}>
             <TouchableOpacity
               style={[styles.subjectChip, activeSubject === null && styles.subjectChipActive]}
@@ -187,7 +182,22 @@ export default function MyFavoritesScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        )}
+          <TouchableOpacity
+            style={[styles.exportBtn, downloading && styles.exportBtnDisabled]}
+            onPress={handleDownload}
+            disabled={downloading}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="download-outline" size={16} color="#3B82F6" />
+            <Text style={styles.exportBtnText}>{downloading ? '生成中' : '导出错题'}</Text>
+          </TouchableOpacity>
+        </View>
+        {toast ? (
+          <View style={styles.toast} pointerEvents="none">
+            <Ionicons name="checkmark-circle" size={16} color="#34D399" />
+            <Text style={styles.toastText}>{toast}</Text>
+          </View>
+        ) : null}
 
         <FlatList
           data={listData}
@@ -339,8 +349,6 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '600', color: '#1F2937' },
   placeholder: { width: 40 },
-  subjectBar: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  subjectBarContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
   subjectChip: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
   subjectChipActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
   subjectChipText: { fontSize: 14, fontWeight: '600', color: '#374151' },
@@ -375,14 +383,27 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 16, color: '#9CA3AF', marginTop: 16 },
   emptySubText: { fontSize: 13, color: '#C4C7CC', marginTop: 6 },
   placeholder: { width: 40 },
-  downloadBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#3B82F6', marginHorizontal: 16, marginTop: 10,
-    borderRadius: 10, paddingVertical: 12,
+  toolbar: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, marginTop: 10, marginBottom: 6,
   },
-  downloadBarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600', marginLeft: 8 },
-  noticeBar: { backgroundColor: '#EFF6FF', marginHorizontal: 16, marginTop: 8, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  noticeText: { color: '#1D4ED8', fontSize: 13 },
+  subjectBar: { flex: 1 },
+  subjectBarContent: { paddingRight: 4, gap: 8, alignItems: 'center' },
+  exportBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#EFF6FF', borderRadius: 16,
+    paddingHorizontal: 12, height: 32, marginLeft: 12,
+  },
+  exportBtnDisabled: { opacity: 0.55 },
+  exportBtnText: { color: '#3B82F6', fontSize: 13, fontWeight: '600', marginLeft: 5 },
+  toast: {
+    position: 'absolute', top: 64, alignSelf: 'center',
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(17,24,39,0.9)', borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 9, maxWidth: '86%', zIndex: 20,
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+  },
+  toastText: { color: '#FFFFFF', fontSize: 13, marginLeft: 6 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: '#FFFFFF', borderTopLeftRadius: 16, borderTopRightRadius: 16,
