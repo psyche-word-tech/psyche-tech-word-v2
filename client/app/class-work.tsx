@@ -32,7 +32,7 @@ export default function ClassWorkScreen() {
   const [confirmTarget, setConfirmTarget] = useState<Submission | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const TYPES = ['全部', '小作文', '读后续写'];
 
@@ -138,13 +138,12 @@ export default function ClassWorkScreen() {
     const meta = getMeta(item);
     const isGraded = item.status === 'graded' || item.status === 'published';
     const badgeLabel = item.status === 'published' ? '已发布' : item.status === 'graded' ? '已批改' : '待批改';
-    const isSelected = selectedNames.has(meta.studentName) || (meta.studentName === '未填姓名' && selectedNames.has('__unnamed__'));
+    const isSelected = selectedIds.has(item.id);
     const toggleSelect = () => {
-      const key = meta.studentName !== '未填姓名' ? meta.studentName : '__unnamed__';
-      setSelectedNames((prev) => {
+      setSelectedIds((prev) => {
         const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
+        if (next.has(item.id)) next.delete(item.id);
+        else next.add(item.id);
         return next;
       });
     };
@@ -200,13 +199,11 @@ export default function ClassWorkScreen() {
   };
 
   const handleGrade = () => {
-    const namesParam = [...selectedNames]
-      .map((n) => (n === '__unnamed__' ? '未填姓名' : n))
-      .join(',');
+    const sidsParam = [...selectedIds].join(',');
     router.push('/essay-grading', {
       cls: activeClass,
       type: activeType,
-      ...(namesParam ? { names: namesParam } : {}),
+      ...(sidsParam ? { sids: sidsParam } : {}),
     });
   };
 
@@ -237,7 +234,7 @@ export default function ClassWorkScreen() {
             <TouchableOpacity
               key={c}
               style={[styles.classChip, activeClass === c && styles.classChipActive]}
-              onPress={() => { setActiveClass(c); setSelectedNames(new Set()); }}
+              onPress={() => { setActiveClass(c); setSelectedIds(new Set()); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.classChipText, activeClass === c && styles.classChipTextActive]}>{c}</Text>
@@ -251,7 +248,7 @@ export default function ClassWorkScreen() {
             <TouchableOpacity
               key={t}
               style={[styles.classChip, activeType === t && styles.classChipActive]}
-              onPress={() => { setActiveType(t); setSelectedNames(new Set()); }}
+              onPress={() => { setActiveType(t); setSelectedIds(new Set()); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.classChipText, activeType === t && styles.classChipTextActive]}>{t}</Text>
@@ -261,9 +258,9 @@ export default function ClassWorkScreen() {
 
         {/* 操作按钮：批改 + 下载报告 */}
         <Text style={styles.selectHint}>
-          {selectedNames.size
-            ? `已选 ${selectedNames.size} 位学生，点「批改」仅批改选中学生`
-            : '点击学生姓名可多选；不选直接点「批改」则批改全部。已批改的作文可点「重新批改」，新结果直接覆盖原结果'}
+          {selectedIds.size
+            ? `已选 ${selectedIds.size} 篇作文，点「批改」仅批改选中篇目`
+            : '按篇目点选作文可多选（同一学生多篇作文互不影响）；不选直接点「批改」则批改全部。已批改的作文可点「重新批改」，新结果直接覆盖原结果'}
         </Text>
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -272,7 +269,7 @@ export default function ClassWorkScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="create-outline" size={18} color="#fff" />
-            <Text style={styles.actionBtnText}>批改{selectedNames.size ? `(${selectedNames.size})` : ''}</Text>
+            <Text style={styles.actionBtnText}>批改{selectedIds.size ? `(${selectedIds.size})` : ''}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, styles.reportBtn]}
