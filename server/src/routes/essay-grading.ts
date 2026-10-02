@@ -1565,7 +1565,7 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
     const { data, error } = await supabase.from('submissions').select('annotations');
     if (error) throw error;
 
-    const classes = new Map<string, Map<string, { name: string; ratios: number[] }>>();
+    const classes = new Map<string, Map<string, { name: string; ratios: number[]; gratios: number[] }>>();
     for (const row of data || []) {
       const a = (row.annotations as any) || {};
       const g = a.grading || {};
@@ -1577,8 +1577,13 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
       if (!uid || !Number.isFinite(total) || total < 0) continue;
       if (!classes.has(cls)) classes.set(cls, new Map());
       const stu = classes.get(cls)!;
-      if (!stu.has(uid)) stu.set(uid, { name, ratios: [] });
+      if (!stu.has(uid)) stu.set(uid, { name, ratios: [], gratios: [] });
       stu.get(uid)!.ratios.push(Math.max(0, Math.min(1, total / max)));
+      // 语法维度：由该篇作文的语法类错误数量定档（转录常为空，无法按词数归一）
+      const errors = Array.isArray(g?.errors) ? g.errors : [];
+      const gErr = errors.filter((e: any) => e && (e.type === 'grammar' || e.type === 'sentence_structure')).length;
+      const gLevel = gErr === 0 ? 6 : gErr <= 2 ? 5 : gErr <= 4 ? 4 : gErr <= 6 ? 3 : gErr <= 9 ? 2 : 1;
+      stu.get(uid)!.gratios.push(gLevel / 6);
     }
 
     const toLevel = (rs: number[]) => {
@@ -1593,9 +1598,11 @@ router.get('/writing-overview', optionalAuthMiddleware, async (req: AuthRequest,
         name: s.name,
         sampleCount: s.ratios.length,
         level: toLevel(s.ratios),
+        grammarLevel: toLevel(s.gratios),
       })).sort((x, y) => (y.level || 0) - (x.level || 0));
       const all = Array.from(stu.values()).flatMap((s) => s.ratios);
-      return { className, students, classLevel: toLevel(all), sampleCount: all.length };
+      const allG = Array.from(stu.values()).flatMap((s) => s.gratios);
+      return { className, students, classLevel: toLevel(all), grammarClassLevel: toLevel(allG), sampleCount: all.length };
     }).sort((a, b) => a.className.localeCompare(b.className));
 
     res.json({ success: true, data: { classes: result } });
