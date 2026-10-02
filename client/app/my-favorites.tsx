@@ -1,4 +1,4 @@
-import { Modal, View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, RefreshControl, ActivityIndicator, Image } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, RefreshControl, ActivityIndicator, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -46,6 +46,7 @@ export default function MyFavoritesScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const fetchFavorites = useCallback(async () => {
     try {
@@ -95,6 +96,41 @@ export default function MyFavoritesScreen() {
     }
   };
 
+  const handleDownload = async () => {
+    if (Platform.OS !== 'web') {
+      setNotice('请使用网页端下载');
+      return;
+    }
+    try {
+      setDownloading(true);
+      setNotice(null);
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/api/v1/favorites/export`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${user?.token}` },
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setNotice(j.message || '导出失败');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '错题训练.docx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      setNotice('已生成错题训练文档，并开始下载');
+    } catch {
+      setNotice('网络错误，导出失败');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   // 按学科分组
   const grouped = favorites.reduce<Record<string, Favorite[]>>((acc, f) => {
     const s = f.subject || '其他';
@@ -118,6 +154,17 @@ export default function MyFavoritesScreen() {
           <Text style={styles.headerTitle}>我的收藏</Text>
           <View style={styles.placeholder} />
         </View>
+
+        {/* 下载错题训练 */}
+        <TouchableOpacity style={styles.downloadBar} onPress={handleDownload} disabled={downloading} activeOpacity={0.8}>
+          <Ionicons name="download-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.downloadBarText}>{downloading ? '正在生成…' : '下载错题训练（导出一份含答案的 Word 错题单）'}</Text>
+        </TouchableOpacity>
+        {notice ? (
+          <View style={styles.noticeBar}>
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        ) : null}
 
         {/* 学科过滤 */}
         {subjects.length > 0 && (
@@ -327,6 +374,15 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
   emptyText: { fontSize: 16, color: '#9CA3AF', marginTop: 16 },
   emptySubText: { fontSize: 13, color: '#C4C7CC', marginTop: 6 },
+  placeholder: { width: 40 },
+  downloadBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#3B82F6', marginHorizontal: 16, marginTop: 10,
+    borderRadius: 10, paddingVertical: 12,
+  },
+  downloadBarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600', marginLeft: 8 },
+  noticeBar: { backgroundColor: '#EFF6FF', marginHorizontal: 16, marginTop: 8, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  noticeText: { color: '#1D4ED8', fontSize: 13 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: '#FFFFFF', borderTopLeftRadius: 16, borderTopRightRadius: 16,
