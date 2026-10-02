@@ -36,6 +36,9 @@ const STATUS_META: Record<QStatus, { label: string; bg: string; fg: string }> = 
   blank: { label: '未答', bg: '#F3F4F6', fg: '#6B7280' },
 };
 
+// 顶部展示的固定学科全集（与录题识别一致），点击可筛选/跳转到对应学科错题
+const ALL_SUBJECTS = ['数学', '语文', '英语', '物理', '化学', '生物', '政治', '历史', '地理'];
+
 export default function MyFavoritesScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
@@ -145,9 +148,10 @@ export default function MyFavoritesScreen() {
     (acc[s] = acc[s] || []).push(f);
     return acc;
   }, {});
-  const subjects = Object.keys(grouped);
+  // 顶部列出所有学科全集（即使该学科暂无错题也能看到并点击），收藏中出现的其他学科追加在末位
+  const subjects = [...ALL_SUBJECTS, ...Object.keys(grouped).filter((s) => !ALL_SUBJECTS.includes(s))];
   const shownSubjects = activeSubject ? [activeSubject] : subjects;
-  const listData = shownSubjects.map((s) => ({ subject: s, items: grouped[s] }));
+  const listData = shownSubjects.map((s) => ({ subject: s, items: grouped[s] || [] }));
 
   const stripHtml = (text: string, full = false) =>
     text.replace(/<[^>]*>/g, '').replace(/\\\(|\\\[|\\\)|\\\]/g, '').slice(0, full ? undefined : 60);
@@ -207,7 +211,12 @@ export default function MyFavoritesScreen() {
           renderItem={({ item }) => (
             <View style={styles.group}>
               <Text style={styles.groupTitle}>{item.subject}（{item.items.length}）</Text>
-              {item.items.map((f) => {
+              {item.items.length === 0 ? (
+                <View style={styles.groupEmpty}>
+                  <Text style={styles.groupEmptyText}>该学科暂无收藏错题</Text>
+                </View>
+              ) : (
+              item.items.map((f) => {
                 const tips = parseTips(f.tips);
                 const meta = tips.status ? STATUS_META[tips.status] : null;
                 return (
@@ -274,7 +283,8 @@ export default function MyFavoritesScreen() {
                 </TouchableOpacity>
                 </View>
                 );
-              })}
+              })
+              )}
             </View>
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchFavorites(); }} />}
@@ -399,6 +409,8 @@ const styles = StyleSheet.create({
   listContent: { padding: 16 },
   group: { marginBottom: 20 },
   groupTitle: { fontSize: 15, fontWeight: '700', color: '#1F2937', marginBottom: 10 },
+  groupEmpty: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 20, alignItems: 'center' },
+  groupEmptyText: { fontSize: 13, color: '#9CA3AF' },
   favRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   favItem: {
     flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12,
