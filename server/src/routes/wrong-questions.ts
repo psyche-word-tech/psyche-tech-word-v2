@@ -205,47 +205,64 @@ function extractThreeSentences(raw: string): string | null {
   return sentences.slice(from, to + 1).join(" ");
 }
 
-function splitSentences(text: string): string[] {
-  return (String(text || "").replace(/\s+/g, " ").match(/[^.?!]*[.?!]+/g) || []).map((s) => s.trim()).filter(Boolean);
-}
-
-// 在完整转录里定位与题干最匹配的句子，取其前+本+后三句（只按 .?! 切分）
-function enrichThreeSentences(question: string, sentences: string[]): string | null {
-  const keywords = Array.from(new Set((question.match(/[A-Za-z]{5,}/g) || []).map((w) => w.toLowerCase()))).slice(0, 8);
-  if (keywords.length === 0 || sentences.length === 0) return null;
-  let best = -1, bestScore = 0;
-  sentences.forEach((s, i) => {
-    const low = s.toLowerCase();
-    const score = keywords.reduce((acc, k) => acc + (low.includes(k) ? 1 : 0), 0);
-    if (score > bestScore) { bestScore = score; best = i; }
-  });
-  if (best < 0 || bestScore < 1) return null;
-  const from = Math.max(0, best - 1);
-  const to = Math.min(sentences.length - 1, best + 1);
-  return sentences.slice(from, to + 1).join(" ");
-}
-
-// 专用整页转录：为带空题提供完整原文，供服务端截取三句
-async function transcribeFull(images: { base64: string; mime: string }[]): Promise<string> {
+// 语法填空/完形：整篇短文一次结构化读取。
+// 用更强模型逐空解析，每个空返回"题号+上下三句+学生答案+正确答案+解析"自洽数据块，
+// 从根本上避免首遍 flash 在密集小填上切句/编号错误或字段串位。
+async function readClozeStructure(
+  images: { base64: string; mime: string }[]
+): Promise<ParsedQuestion[] | null> {
+  if (!images.length) return null;
   const qwenApiUrl = (process.env.QWEN_API_URL || 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1').replace(/\/+$/, '');
   const apiKey = process.env.QWEN_API_KEY || '';
-  const model = process.env.QWEN_MODEL || 'qwen3.8-flash';
+  const model = process.env.QWEN_CLOZE_MODEL || 'qwen3.8-max';
   const userContent: any[] = images.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mime};base64,${img.base64}` } }));
-  userContent.push({ type: "text", text: "请逐字转录图片中全部文字，保留原有标点与顺序，不省略、不翻译、不解释，只输出原文。" });
+  userContent.push({
+    type: "text",
+    text:
+      `图中是一道英语语法填空/完形题（一篇短文含多个空的留白）。请逐空识别，对每个空只输出一个数据块：` +
+      `number(该空题号)、three_sentences(该空前一句话 + 空所在句(空位写成 ____) + 后一句话，三句用空格拼接；` +
+      `每句必须完整到句末的 . ? 或 ! 为止，逗号/破折号/冒号/分号不切分，不要省略单词、不要用省略号)、` +
+      `user_answer(该空学生手写答案，没有则空串)、correct_answer(正确形式)、` +
+      `reason(若学生写错，给一句话错因/知识点要点；写对可空)、knowledge_point(知识点)、core_competency(核心素养，如 语言能力)、difficulty(L1-L6)。` +
+      `题号与空所在句必须从图中同一处空读取，严禁串到别的空。` +
+      `只输出合法 JSON（不要 markdown 代码块）：{"questions":[{"number":"","three_sentences":"","user_answer":"","correct_answer":"","reason":"","knowledge_point":"","core_competency":"","difficulty":""}]}`,
+  });
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 90000);
+  const timer = setTimeout(() => controller.abort(), 120000);
   try {
     const resp = await fetch(`${qwenApiUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages: [{ role: "user", content: userContent }], temperature: 0.1, enable_thinking: false, max_tokens: 6000 }),
+      body: JSON.stringify({ model, messages: [{ role: "user", content: userContent }], temperature: 0.2, enable_thinking: false, max_tokens: 8000 }),
       signal: controller.signal,
     });
-    if (!resp.ok) return "";
+    if (!resp.ok) return null;
     const data = (await resp.json()) as { choices?: { message?: { content?: string } }[] };
-    return data.choices?.[0]?.message?.content || "";
+    const parsed = extractJson(data.choices?.[0]?.message?.content || "");
+    const rawQs = Array.isArray(parsed?.questions) ? parsed.questions : [];
+    const out: ParsedQuestion[] = [];
+    for (const q of rawQs) {
+      if (!q || typeof q !== "object") continue;
+      const nq = normalizeQuestion(q);
+      const three = String(q.three_sentences || "").trim();
+      if (!/_{2,}|\(\s*[A-Za-z]+\s*\)/.test(three) && !/_{2,}|\(\s*[A-Za-z]+\s*\)/.test(nq.question)) continue;
+      if (!three || three.length < nq.question.length) {
+        nq.question = three || nq.question;
+      } else {
+        nq.question = three;
+      }
+      const user = nq.user_answer;
+      const correct = nq.correct_answer;
+      if (user && correct) {
+        nq.status = user.trim().toLowerCase() === correct.trim().toLowerCase() ? "correct" : "wrong";
+      } else {
+        nq.status = "blank";
+      }
+      out.push(nq);
+    }
+    return out.length ? out : null;
   } catch {
-    return "";
+    return null;
   } finally {
     clearTimeout(timer);
   }
@@ -290,16 +307,11 @@ router.post("/", authMiddleware, upload.array("files", 20), async (req: AuthRequ
 
     const recognized = await recognizeContent({ images, texts });
 
-    // 英语带空题：整页转录后按 .?! 确定性截取三句，纠正首遍识别截断
+    // 语法填空/完形：整篇结构化读取，用更强模型逐空返回自洽数据块，替换 flash 首遍可能切句/编号错误的行
     if (recognized && images.length > 0 && /英/.test(recognized.subject)) {
-      const sentences = splitSentences(await transcribeFull(images));
-      if (sentences.length > 0) {
-        for (const q of recognized.questions) {
-          const three = enrichThreeSentences(q.question, sentences);
-          if (three && three.length > q.question.length && /_{2,}|\(\s*[A-Za-z]+\s*\)/.test(three)) {
-            q.question = three;
-          }
-        }
+      const structured = await readClozeStructure(images);
+      if (structured && structured.length > 0) {
+        recognized.questions = structured;
       }
     }
 
