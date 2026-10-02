@@ -45,7 +45,7 @@ export default function QwenChatPage() {
     fetchLongTimeout('/api/v1/qwen-chat/history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: payload, internet }),
+      body: JSON.stringify({ messages: payload }),
     }).catch(() => { /* 静默 */ });
   }, []);
 
@@ -69,7 +69,7 @@ export default function QwenChatPage() {
       const res = await fetchLongTimeout('/api/v1/qwen-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: payload }),
+        body: JSON.stringify({ messages: payload, internet }),
       });
       if (!res.ok || !res.body) {
         setMessages((prev) => [
@@ -132,7 +132,7 @@ export default function QwenChatPage() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, persistHistory]);
+  }, [input, loading, messages, persistHistory, internet]);
 
   useEffect(() => {
     // 流式输出期间，仅当用户没有主动上滚查看时才自动跟随底部
