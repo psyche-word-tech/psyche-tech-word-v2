@@ -166,7 +166,7 @@ export default function MyFavoritesScreen() {
 
         {/* 工具行：学科过滤 + 导出错题 */}
         <View style={styles.toolbar}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subjectBar} contentContainerStyle={styles.subjectBarContent}>
+          <View style={styles.subjectsWrap}>
             <TouchableOpacity
               style={[styles.subjectChip, activeSubject === null && styles.subjectChipActive]}
               onPress={() => setActiveSubject(null)}
@@ -184,16 +184,18 @@ export default function MyFavoritesScreen() {
                 <Text style={[styles.subjectChipText, activeSubject === s && styles.subjectChipTextActive]}>{s}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
-          <TouchableOpacity
-            style={[styles.exportBtn, downloading && styles.exportBtnDisabled]}
-            onPress={handleDownload}
-            disabled={downloading}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="download-outline" size={16} color="#3B82F6" />
-            <Text style={styles.exportBtnText}>{downloading ? '生成中' : '导出错题'}</Text>
-          </TouchableOpacity>
+          </View>
+          <View style={styles.toolbarRow}>
+            <TouchableOpacity
+              style={[styles.exportBtn, downloading && styles.exportBtnDisabled]}
+              onPress={handleDownload}
+              disabled={downloading}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="download-outline" size={16} color="#3B82F6" />
+              <Text style={styles.exportBtnText}>{downloading ? '生成中' : '导出错题'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         {toast ? (
           <View style={styles.toast} pointerEvents="none">
@@ -441,15 +443,14 @@ const styles = StyleSheet.create({
   emptySubText: { fontSize: 13, color: '#C4C7CC', marginTop: 6 },
   placeholder: { width: 40 },
   toolbar: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, marginTop: 10, marginBottom: 6,
+    paddingHorizontal: 16, marginTop: 10, marginBottom: 6, gap: 8,
   },
-  subjectBar: { flex: 1 },
-  subjectBarContent: { paddingRight: 4, gap: 8, alignItems: 'center' },
+  subjectsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  toolbarRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
   exportBtn: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#EFF6FF', borderRadius: 16,
-    paddingHorizontal: 12, height: 32, marginLeft: 12,
+    paddingHorizontal: 12, height: 32,
   },
   exportBtnDisabled: { opacity: 0.55 },
   exportBtnText: { color: '#3B82F6', fontSize: 13, fontWeight: '600', marginLeft: 5 },
