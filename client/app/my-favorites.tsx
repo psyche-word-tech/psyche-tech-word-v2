@@ -1,6 +1,7 @@
 import { Modal, View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, RefreshControl, ActivityIndicator, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
+import { MathView } from '@/components/MathView';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useCallback, useEffect } from 'react';
@@ -310,14 +311,18 @@ export default function MyFavoritesScreen() {
                           <Text style={[styles.modalBadgeText, { color: meta.fg }]}>{meta.label}</Text>
                         </View>
                       )}
-                      <Text style={styles.modalContext}>
-                        {detail.question_text ? stripHtml(detail.question_text, true) : '（图片题目）'}
-                      </Text>
+                      {detail.question_text ? (
+                        <View style={styles.modalMathWrap}>
+                          <MathView text={stripHtml(detail.question_text, true)} fontSize={15} textColor="#1F2937" />
+                        </View>
+                      ) : (
+                        <Text style={styles.modalContext}>（图片题目）</Text>
+                      )}
                     </View>
-                    {t.user_answer ? <Field label="我的答案" value={t.user_answer} /> : null}
-                    {detail.answer ? <Field label="正确答案" value={stripHtml(String(detail.answer), true)} /> : null}
-                    {detail.analysis ? <Field label="错因 / 要点" value={stripHtml(String(detail.analysis), true)} /> : null}
-                    {detail.solution ? <Field label="详细解析" value={stripHtml(String(detail.solution), true)} /> : null}
+                    {t.user_answer ? <Field label="我的答案" value={t.user_answer} math /> : null}
+                    {detail.answer ? <Field label="正确答案" value={stripHtml(String(detail.answer), true)} math /> : null}
+                    {detail.analysis ? <Field label="错因 / 要点" value={stripHtml(String(detail.analysis), true)} math /> : null}
+                    {detail.solution ? <Field label="详细解析" value={stripHtml(String(detail.solution), true)} math /> : null}
                     {t.knowledge_point ? <Field label="知识点" value={t.knowledge_point} /> : null}
                     {t.core_competency ? <Field label="核心素养" value={t.core_competency} /> : null}
                     {t.difficulty ? <Field label="难度" value={t.difficulty} /> : null}
@@ -332,11 +337,17 @@ export default function MyFavoritesScreen() {
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, math = false }: { label: string; value: string; math?: boolean }) {
   return (
     <View style={styles.fieldRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Text style={styles.fieldValue}>{value}</Text>
+      {math ? (
+        <View style={styles.fieldMathWrap}>
+          <MathView text={value} fontSize={14} textColor="#1F2937" />
+        </View>
+      ) : (
+        <Text style={styles.fieldValue}>{value}</Text>
+      )}
     </View>
   );
 }
@@ -431,4 +442,6 @@ const styles = StyleSheet.create({
   fieldRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
   fieldLabel: { width: 84, fontSize: 14, color: '#6B7280', fontWeight: '600', paddingTop: 1 },
   fieldValue: { flex: 1, fontSize: 14, lineHeight: 21, color: '#1F2937' },
+  fieldMathWrap: { flex: 1 },
+  modalMathWrap: { width: '100%' },
 });
