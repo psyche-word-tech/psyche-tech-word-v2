@@ -184,6 +184,72 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// LaTeX → Unicode 纯文本（docx 不渲染 LaTeX，需转成可读数学文本）
+const LATEX_SUP: Record<string, string> = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻','=':'⁼','(':'⁽',')':'⁾',',':'ᐟ','n':'ⁿ','·':'ᐧ' };
+const LATEX_SUB: Record<string, string> = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉','+':'₊','-':'₋','=':'₌','(':'₍',')':'₎' };
+function latexToUnicode(input: string): string {
+  let s = String(input || '');
+  // 1) 去掉公式包裹符
+  s = s.replace(/\$\$|\\begin\{equation\*\}|\\end\{equation\*\}|\\begin\{array\}|\\end\{array\}|\\begin\{aligned\}|\\end\{aligned\}|\$|\\\(|\\\)|\\\[|\\\]/g, '');
+  // 2) 先处理 \frac{...}{...}（循环直到无）
+  let guard = 0;
+  while (s.includes('\\frac') && guard++ < 20) {
+    s = s.replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (_, a, b) => `(${latexToUnicode(a)})/(${latexToUnicode(b)})`);
+  }
+  // 3) \sqrt[n]{...}
+  s = s.replace(/\\sqrt\s*\[\s*([^\[\]]*)\s*\]\s*\{([^{}]*)\}/g, (_, n, a) => `∛...`.includes('...') ? `${n}√(${latexToUnicode(a)})` : `${n}√(${latexToUnicode(a)})`);
+  s = s.replace(/\\sqrt\s*\{([^{}]*)\}/g, (_, a) => `√(${latexToUnicode(a)})`);
+  // 4) 上标 ^ 与下标 _
+  s = s.replace(/\^\{([^{}]*)\}/g, (_, a) => a.split('').map((c: string) => LATEX_SUP[c] || `^${c}`).join(''));
+  s = s.replace(/\^{([^{}]*)}/g, (_, a) => a.split('').map((c: string) => LATEX_SUP[c] || `^${c}`).join(''));
+  s = s.replace(/\^([A-Za-z0-9+\-=()·])/g, (_, c) => LATEX_SUP[c] || `^${c}`);
+  s = s.replace(/_\{([^{}]*)\}/g, (_, a) => a.split('').map((c: string) => LATEX_SUB[c] || `_${c}`).join(''));
+  s = s.replace(/_([A-Za-z0-9+\-=()])/g, (_, c) => LATEX_SUB[c] || `_${c}`);
+  // 5) 常见 LaTeX 命令 → Unicode 符号（长在前避免子串冲突）
+  const CMDS: Array<[RegExp, string]> = [
+    [/\\times/gi,'×'], [/\\cdot/gi,'·'], [/\\div/gi,'÷'], [/\\pm/gi,'±'], [/\\mp/gi,'∓'],
+    [/\\leqq?|\\leqslant/gi,'≤'], [/\\geqq?|\\geqslant/gi,'≥'], [/\\neq|\\ne/gi,'≠'],
+    [/\\approx/gi,'≈'], [/\\equiv/gi,'≡'], [/\\propto/gi,'∝'], [/\\in/gi,'∈'],
+    [/\\notin/gi,'∉'], [/\\subset(?!eq)/gi,'⊂'], [/\\supset(?!eq)/gi,'⊃'],
+    [/\\subseteq/gi,'⊆'], [/\\supseteq/gi,'⊇'], [/\\cup/gi,'∪'], [/\\cap/gi,'∩'],
+    [/\\emptyset/gi,'∅'], [/\\forall/gi,'∀'], [/\\exists/gi,'∃'], [/\\infty/gi,'∞'],
+    [/\\angle/gi,'∠'], [/\\perp/gi,'⊥'], [/\\parallel/gi,'∥'], [/\\therefore/gi,'∴'],
+    [/\\because/gi,'∵'], [/\\leftarrow/gi,'←'], [/\\rightarrow/gi,'→'],
+    [/\\leftrightarrow/gi,'↔'], [/\\Rightarrow/gi,'⇒'], [/\\Leftarrow/gi,'⇐'],
+    [/\\Longrightarrow|\\implies/gi,'⇒'], [/\\Leftrightarrow/gi,'⇔'],
+    [/\\cdot/gi,'·'], [/\\cdots|\\ldots|\\dots|\\dotsc/gi,'…'], [/\\;|\\,|\\!|\\ /g,' '],
+    [/\\alpha/gi,'α'], [/\\beta/gi,'β'], [/\\gamma/gi,'γ'], [/\\delta/gi,'δ'],
+    [/\\epsilon/gi,'ε'], [/\\zeta/gi,'ζ'], [/\\eta/gi,'η'], [/\\theta/gi,'θ'],
+    [/\\iota/gi,'ι'], [/\\kappa/gi,'κ'], [/\\lambda/gi,'λ'], [/\\mu/gi,'μ'],
+    [/\\nu/gi,'ν'], [/\\xi/gi,'ξ'], [/\\pi/gi,'π'], [/\\rho/gi,'ρ'],
+    [/\\sigma/gi,'σ'], [/\\tau/gi,'τ'], [/\\upsilon/gi,'υ'], [/\\phi/gi,'φ'],
+    [/\\chi/gi,'χ'], [/\\psi/gi,'ψ'], [/\\omega/gi,'ω'],
+    [/\\Gamma/gi,'Γ'], [/\\Delta/gi,'Δ'], [/\\Theta/gi,'Θ'], [/\\Lambda/gi,'Λ'],
+    [/\\Pi/gi,'Π'], [/\\Sigma/gi,'Σ'], [/\\Phi/gi,'Φ'], [/\\Omega/gi,'Ω'],
+    [/\\circ/gi,'°'], [/\\prime/gi,"'"], [/\\hbar/gi,'ℏ'], [/\\partial/gi,'∂'],
+    [/\\nabla/gi,'∇'], [/\\sum/gi,'∑'], [/\\prod/gi,'∏'], [/\\int/gi,'∫'],
+    [/\\lim/gi,'lim'], [/\\log/gi,'log'], [/\\ln/gi,'ln'], [/\\lg/gi,'lg'],
+    [/\\sin/gi,'sin'], [/\\cos/gi,'cos'], [/\\tan/gi,'tan'], [/\\cot/gi,'cot'],
+    [/\\sec/gi,'sec'], [/\\csc/gi,'csc'], [/\\arcsin/gi,'arcsin'], [/\\arccos/gi,'arccos'],
+    [/\\arctan/gi,'arctan'], [/\\text\{([^{}]*)\}/g,'$1'], [/\\mathrm\{([^{}]*)\}/g,'$1'],
+    [/\\mathbf\{([^{}]*)\}/g,'$1'], [/\\mathit\{([^{}]*)\}/g,'$1'],
+    [/\\left/gi,''], [/\\right/gi,''], [/\\{/g,'{'], [/\\}/g,'}'],
+    [/\\\(|\\\)/g,''], [/\\%/g,'%'], [/\\_/g,'_'], [/\\&/g,'&'], [/\\#/g,'#'],
+    [/\\;/g,' '], [/\\\\/g,'\n'],
+  ];
+  for (const [re, rep] of CMDS) s = s.replace(re, rep);
+  // 6) 残留的裸反斜杠命令（如 \text {..} 空格分隔）尽量清掉
+  s = s.replace(/\\[a-zA-Z]+\s*/g, '');
+  return s.trim();
+}
+function exportClean(t: string): string {
+  const s = latexToUnicode(t);
+  // 移除模型在题干里补写的"题目显示不全/推测/看不清"等说明句
+  return s
+    .replace(/[（(]?(?:题目|题干)?[显显]?(?:内容|题目)?(?:显示|识别)?不全[，,、]?.*$/, '')
+    .replace(/[（(](?:题目|内容)?(?:显示|看不清楚?|无法(?:识别|看清)|推测(?:为|是)?|可能(?:为|是)?)[^）)]*[）)]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
 // 导出错题训练材料（docx）：题干含完整原文语境（保证能推出答案），每题附正确答案/错因/知识点
 // groupBy：none=平铺；subject=按学科；knowledge=按知识点；competency=按核心素养
 function buildTrainDocx(rows: any[], userName: string, groupBy: string = 'none'): any {
@@ -194,7 +260,7 @@ function buildTrainDocx(rows: any[], userName: string, groupBy: string = 'none')
   const H1 = (t: string) => new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: t })] });
   const H2 = (t: string) => new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: t })] });
   const bullets: any[] = [];
-  const strip = (t: string) => String(t || '').replace(/<[^>]*>/g, '').replace(/\\\(|\\\[|\\\)|\\\]/g, '');
+  const strip = (t: string) => exportClean(String(t || '').replace(/<[^>]*>/g, ''));
 
   // 解析每题的 tips 与分组键
   const items = rows.map((r) => {

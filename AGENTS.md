@@ -830,3 +830,8 @@ cacheMode(CacheMode.None)  // 完全禁用缓存
   - 题10（空间几何 圆柱面+二面角60°）：answer 原为 ABD 但解析推出 BC → **全部不符，独立求解正确答案=B**（A反例∠CAD可<60°；B: CD²=3+(z1-z2)²≥3 恒成立；C反例 α-β=120° 时 CD⊥AD不成立；D反例 z1=z2=0 不保证 AC⊥AD）。重写干净解析。
   - 题11（三圆+直线，题目图片显示不全）：answer="条件不足无法判定"为**诚实正确**，保留。
   已修正的题均重写严谨无碎念解析，原值备份 /tmp/fix_q9_backup.json、/tmp/fix_q10_backup.json。经验：多选/几何题的 answer 字段与 solution 结论可能不一致——收尾复核时应重跑 solution 推导并独立求解，不能只看 answer。
+## 错题导出（favorites.ts buildTrainDocx）LaTeX→Unicode 转换（已修复）
+- 问题：导出的 docx 里数学公式保留原始 LaTeX 标记（`$...$`、`\sqrt{}`、`\dots` 等），因 docx 不渲染 LaTeX，读起来是一堆源码。
+- 修复：`favorites.ts` 新增 `latexToUnicode()`——去公式包裹符（`$ $$ \( \[ \begin`）、`\frac{a}{b}`→`(a)/(b)`、`\sqrt`→`√()`、上下标 `^`/`_` 映射 Unicode 上/下标、常见命令表（希腊字母/运算符/等号不等号/√∞π∈≤≥≠±×÷…）映射 Unicode；`exportClean()` 在其后剥离模型在题干里补写的"题目显示不全（推测为…）"等说明句。`buildTrainDocx` 的 `strip()` 统一走 `exportClean`，全部导出字段（题干/答案/知识点/素养/难度/错因）都转。
+- 建后端仍须 `node build.js` + pkill 重启；单测 `POST /export?groupBy=subject` + python 解压 document.xml 验 `C₁:(x+1)²+y²=1` 等 Unicode 已转、`$`/反斜杠残留为 0、说明句已剥。
+- 注意：题干本身残缺（如直线 `y=kx+…` 缺方程、选项 C/D 缺失、answer=条件不足无法判定，id=024afaff）是录入时图片截断的历史脏数据，导出如实展示，不属于本次修复范围；如需补全需另行更新该条记录。
