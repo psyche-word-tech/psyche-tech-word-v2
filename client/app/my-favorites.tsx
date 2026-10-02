@@ -44,6 +44,7 @@ export default function MyFavoritesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Favorite | null>(null);
+  const [previewImg, setPreviewImg] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
@@ -216,7 +217,15 @@ export default function MyFavoritesScreen() {
                   setDetail(f);
                 }}>
                   {f.image_url ? (
-                    <Image source={{ uri: f.image_url }} style={styles.favThumb} resizeMode="cover" />
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={(e) => {
+                        setConfirmId(null);
+                        setPreviewImg(f.image_url as string);
+                      }}
+                    >
+                      <Image source={{ uri: f.image_url }} style={styles.favThumb} resizeMode="cover" />
+                    </TouchableOpacity>
                   ) : (
                     <View style={[styles.favThumb, styles.favThumbPlaceholder]}>
                       <Ionicons name="document-text-outline" size={28} color="#D1D5DB" />
@@ -288,6 +297,28 @@ export default function MyFavoritesScreen() {
           contentContainerStyle={styles.listContent}
         />
       </View>
+
+      {/* 原图查看：单击缩略图放大显示原图 */}
+      <Modal visible={!!previewImg} transparent animationType="fade" onRequestClose={() => setPreviewImg(null)}>
+        <View style={styles.previewBackdrop}>
+          <TouchableOpacity style={styles.previewClose} activeOpacity={0.7} onPress={() => setPreviewImg(null)}>
+            <Ionicons name="close" size={30} color="#FFFFFF" />
+          </TouchableOpacity>
+          {previewImg ? (
+            <ScrollView
+              style={styles.previewScroll}
+              contentContainerStyle={styles.previewScrollContent}
+              maximumZoomScale={4}
+              minimumZoomScale={1}
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              pinchGestureEnabled
+            >
+              <Image source={{ uri: previewImg }} style={styles.previewImg} resizeMode="contain" />
+            </ScrollView>
+          ) : null}
+        </View>
+      </Modal>
 
       <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
         <View style={styles.modalBackdrop}>
@@ -381,6 +412,11 @@ const styles = StyleSheet.create({
   delText: { fontSize: 10, color: '#9CA3AF', marginTop: 2 },
   delTextActive: { color: '#B91C1C', fontWeight: '700' },
   favThumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#F3F4F6' },
+  previewBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' },
+  previewClose: { position: 'absolute', top: 52, right: 20, zIndex: 2, padding: 8 },
+  previewScroll: { flex: 1, alignSelf: 'stretch' },
+  previewScrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  previewImg: { width: '100%', height: '100%' },
   favThumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   favContent: { flex: 1, marginLeft: 12 },
   favTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
