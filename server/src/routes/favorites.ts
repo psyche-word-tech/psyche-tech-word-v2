@@ -185,7 +185,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // 导出错题训练材料（docx）：题干含完整原文语境（保证能推出答案），每题附正确答案/错因/知识点
-function buildTrainDocx(rows: any[], userName: string): any {
+// groupBy：none=平铺；subject=按学科；knowledge=按知识点；competency=按核心素养
+function buildTrainDocx(rows: any[], userName: string, groupBy: string = 'none'): any {
   const P = (t: string, bold = false, size = 22) => new Paragraph({
     children: [new TextRun({ text: t, bold, size })],
     spacing: { after: 120 },
@@ -193,29 +194,30 @@ function buildTrainDocx(rows: any[], userName: string): any {
   const H1 = (t: string) => new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: t })] });
   const H2 = (t: string) => new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: t })] });
   const bullets: any[] = [];
-
-  bullets.push(H1('错题训练'));
-  bullets.push(P(`学生：${userName}    共 ${rows.length} 道错题    导出时间：${new Date().toLocaleString('zh-CN')}`, false, 22));
-  bullets.push(P('提示：每题题干均保留完整原文语境，请先独立作答，再看下方“正确答案”。'));
-  bullets.push(P(''));
-
   const strip = (t: string) => String(t || '').replace(/<[^>]*>/g, '').replace(/\\\(|\\\[|\\\)|\\\]/g, '');
 
-  rows.forEach((r, idx) => {
+  // 解析每题的 tips 与分组键
+  const items = rows.map((r) => {
     let tip: any = {};
     try { tip = JSON.parse(r.tips || '{}'); } catch { /* ignore */ }
     const status = String(tip.status || '');
     const statusLabel = status === 'correct' ? '正确' : status === 'attention' ? '重点' : status === 'blank' ? '未答' : '错误';
-    bullets.push(H2(`第 ${idx + 1} 题${r.subject ? '　【' + r.subject + '】' : ''}`));
+    let group: string;
+    if (groupBy === 'subject') group = r.subject || '其他';
+    else if (groupBy === 'knowledge') group = tip.knowledge_point || '未分类';
+    else if (groupBy === 'competency') group = tip.core_competency || '未分类';
+    else group = '__all__';
+    return { r, tip, statusLabel, group };
+  });
 
-    // 题干：完整原文语境（question_text 已含三句/整段）
+  const appendQuestion = (it: any, globalIdx: number) => {
+    const { r, tip, statusLabel } = it;
+    bullets.push(H2(`第 ${globalIdx} 题${r.subject ? '　【' + r.subject + '】' : ''}`));
     bullets.push(P('【题干】', true, 24));
     bullets.push(P(strip(r.question_text)));
     if (tip.user_answer) bullets.push(P(`我的答案：${strip(tip.user_answer)}`, false, 22));
     bullets.push(P(`作答状态：${statusLabel}`, false, 22));
     bullets.push(P(''));
-
-    // 答案区（紧凑列出，便于对照）
     bullets.push(P('【答案与解析】', true, 24));
     if (r.answer) bullets.push(P(`正确答案：${strip(r.answer)}`, false, 22));
     if (tip.knowledge_point) bullets.push(P(`知识点：${strip(tip.knowledge_point)}`, false, 22));
@@ -223,7 +225,30 @@ function buildTrainDocx(rows: any[], userName: string): any {
     if (tip.difficulty) bullets.push(P(`难度：${strip(tip.difficulty)}`, false, 22));
     if (r.analysis) bullets.push(P(`错因 / 要点：${strip(r.analysis)}`, false, 22));
     bullets.push(P(''));
-  });
+  };
+
+  bullets.push(H1('错题训练'));
+  bullets.push(P(`学生：${userName}    共 ${rows.length} 道错题    导出时间：${new Date().toLocaleString('zh-CN')}`, false, 22));
+  bullets.push(P('提示：每题题干均保留完整原文语境，请先独立作答，再看下方“正确答案”。'));
+  bullets.push(P(''));
+
+  if (groupBy === 'none' || groupBy === '__all__') {
+    items.forEach((it, i) => appendQuestion(it, i + 1));
+  } else {
+    // 保持出现顺序分组
+    const order: string[] = [];
+    const grouped: Record<string, typeof items> = {};
+    items.forEach((it) => {
+      if (!(it.group in grouped)) { grouped[it.group] = []; order.push(it.group); }
+      grouped[it.group].push(it);
+    });
+    let globalIdx = 1;
+    order.forEach((g, gi) => {
+      const groupLabel = groupBy === 'subject' ? '学科' : groupBy === 'knowledge' ? '知识点' : '核心素养';
+      bullets.push(H2(`${groupLabel}：${g}（${grouped[g].length} 题）`));
+      grouped[g].forEach((it) => { appendQuestion(it, globalIdx); globalIdx += 1; });
+    });
+  }
 
   return new Document({ sections: [{ children: bullets }] });
 }
@@ -256,7 +281,10 @@ router.post('/export', authMiddleware, async (req: AuthRequest, res: Response) =
       return res.status(400).json({ success: false, message: '当前没有可导出的错题' });
     }
 
-    const doc = buildTrainDocx(rows, '学生');
+    const groupBy = ['subject', 'knowledge', 'competency'].includes(String(req.body?.groupBy))
+      ? String(req.body?.groupBy)
+      : 'none';
+    const doc = buildTrainDocx(rows, '学生', groupBy);
     const buffer = await Packer.toBuffer(doc);
     const filename = `错题训练_${userId}.docx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');

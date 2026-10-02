@@ -49,6 +49,7 @@ export default function MyFavoritesScreen() {
   const [failed, setFailed] = useState(false);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [exportVisible, setExportVisible] = useState(false);
 
   const fetchFavorites = useCallback(async () => {
     try {
@@ -104,7 +105,7 @@ export default function MyFavoritesScreen() {
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = async (groupBy: 'subject' | 'knowledge' | 'competency' | 'none' = 'none') => {
     if (Platform.OS !== 'web') {
       setToast('请使用网页端下载');
       return;
@@ -112,10 +113,12 @@ export default function MyFavoritesScreen() {
     try {
       setDownloading(true);
       setToast(null);
+      setExportVisible(false);
       const apiBase = getApiBaseUrl();
       const res = await fetch(`${apiBase}/api/v1/favorites/export`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${user?.token}` },
+        headers: { 'Authorization': `Bearer ${user?.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupBy }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -188,7 +191,7 @@ export default function MyFavoritesScreen() {
           <View style={styles.toolbarRow}>
             <TouchableOpacity
               style={[styles.exportBtn, downloading && styles.exportBtnDisabled]}
-              onPress={handleDownload}
+              onPress={() => { setToast(null); setExportVisible(true); }}
               disabled={downloading}
               activeOpacity={0.7}
             >
@@ -197,6 +200,34 @@ export default function MyFavoritesScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        <Modal visible={exportVisible} transparent animationType="fade" onRequestClose={() => setExportVisible(false)}>
+          <TouchableOpacity style={styles.exportOverlay} activeOpacity={1} onPress={() => setExportVisible(false)}>
+            <TouchableOpacity style={styles.exportPanel} activeOpacity={1} onPress={() => {}}>
+              <Text style={styles.exportPanelTitle}>导出错题</Text>
+              <Text style={styles.exportPanelDesc}>选择导出方式，将已收藏的错题生成训练文档</Text>
+              <TouchableOpacity style={styles.exportOption} activeOpacity={0.7} onPress={() => handleDownload('subject')}>
+                <Ionicons name="book-outline" size={20} color="#3B82F6" />
+                <Text style={styles.exportOptionText}>按学科导出</Text>
+                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.exportOption} activeOpacity={0.7} onPress={() => handleDownload('knowledge')}>
+                <Ionicons name="git-branch-outline" size={20} color="#3B82F6" />
+                <Text style={styles.exportOptionText}>按知识点导出</Text>
+                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.exportOption} activeOpacity={0.7} onPress={() => handleDownload('competency')}>
+                <Ionicons name="diamond-outline" size={20} color="#3B82F6" />
+                <Text style={styles.exportOptionText}>按素养导出</Text>
+                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.exportCancel} activeOpacity={0.7} onPress={() => setExportVisible(false)}>
+                <Text style={styles.exportCancelText}>取消</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
         {toast ? (
           <View style={styles.toast} pointerEvents="none">
             <Ionicons name="checkmark-circle" size={16} color="#34D399" />
@@ -429,6 +460,14 @@ const styles = StyleSheet.create({
   previewScrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   previewImg: { width: '100%', height: '100%' },
   favThumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  exportOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  exportPanel: { width: '100%', maxWidth: 420, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, gap: 4 },
+  exportPanelTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },
+  exportPanelDesc: { fontSize: 13, color: '#6B7280', marginBottom: 12 },
+  exportOption: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, marginBottom: 10 },
+  exportOptionText: { flex: 1, fontSize: 15, color: '#111827', fontWeight: '500' },
+  exportCancel: { alignItems: 'center', paddingVertical: 12, marginTop: 4 },
+  exportCancelText: { fontSize: 15, color: '#6B7280' },
   favContent: { flex: 1, marginLeft: 12 },
   favTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
   statusBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginRight: 6, marginTop: 1 },
